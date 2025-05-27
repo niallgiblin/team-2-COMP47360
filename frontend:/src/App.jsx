@@ -1,18 +1,27 @@
-// import { useState } from 'react';
-import './App.css'; // styling
+import './App.css';
 import NavBar from './components/NavBar';
 import Home from './pages/Home';
-import { FaTrashAlt } from 'react-icons/fa';
+import MapView from './pages/MapView';
+import Recommendations from './pages/Recommendations';
+import VenueDetail from './pages/VenueDetail';
+import About from './pages/About';
 
+
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 function App() {
   return (
-    <div className="App">
+    <Router>
       <NavBar />
-      <Home />
-    </div>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/map" element={<MapView />} />
+        <Route path="/recommendations" element={<Recommendations />} />
+        <Route path="/venue/:id" element={<VenueDetail />} /> {/* :id is a placeholder for individual venues */}
+        <Route path="/about" element={<About />} />
+      </Routes>
+    </Router>
   );
 }
 
 export default App;
-
