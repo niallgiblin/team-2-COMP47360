@@ -1,5 +1,4 @@
-.App {
-  max-width: 500px;
+/* .App {
   margin: 0 auto;
   text-align: center;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -11,8 +10,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-}
+} */
 
+html,body, #root {
+  margin: 0;
+  background-color: #121212; 
+  padding: 0;
+  overflow-x: hidden;
+  width: 100%,
+}
 
 input {
   padding: 10px;

@@ -1,8 +1,16 @@
+import PageWrapper from '../components/PageWrapper';
+import { Typography } from '@mui/material';
+
 export default function About() {
-    return (
-      <div style={{ padding: 20 }}>
-        <h2>About The Urban Gala</h2>
-        <p>Coming soon...</p>
-      </div>
-    );
-  }
+  return (
+    <PageWrapper>
+      <Typography variant="h4" gutterBottom>
+        About The Urban Gala
+      </Typography>
+      <Typography variant="body1" color="text.secondary">
+        Coming soon...
+      </Typography>
+    </PageWrapper>
+  );
+}
+
