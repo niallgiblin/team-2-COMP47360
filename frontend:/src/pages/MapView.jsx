@@ -1,11 +1,13 @@
 import { Typography } from '@mui/material';
+import PageWrapper from '../components/PageWrapper';
+import DemoMap from '../components/DemoMap';
+
 
 export default function MapView() {
   return (
-    <div style={{ padding: 20 }}>
-      <Typography variant="h5">
-        Map View Coming Soon!
-      </Typography>
-    </div>
+    <PageWrapper>
+      <DemoMap />
+    </PageWrapper>
   );
 }
+

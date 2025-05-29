@@ -1,4 +1,6 @@
-import './App.css';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Box } from '@mui/material';
+
 import NavBar from './components/NavBar';
 import Home from './pages/Home';
 import MapView from './pages/MapView';
@@ -6,22 +8,26 @@ import Recommendations from './pages/Recommendations';
 import VenueDetail from './pages/VenueDetail';
 import About from './pages/About';
 
-
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
 function App() {
   return (
     <Router>
-      <NavBar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/map" element={<MapView />} />
-        <Route path="/recommendations" element={<Recommendations />} />
-        <Route path="/venue/:id" element={<VenueDetail />} /> {/* :id is a placeholder for individual venues */}
-        <Route path="/about" element={<About />} />
-      </Routes>
+      {/* Full-width wrapper */}
+      <Box sx={{ width: '100%', minHeight: '100vh', backgroundColor: '#000'}}>
+        <NavBar />
+
+        {/* Routes */}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/map" element={<MapView />} />
+          <Route path="/recommendations" element={<Recommendations />} />
+          <Route path="/venuedetail" element={<VenueDetail />} /> {/* static for preview */}
+          <Route path="/venue/:id" element={<VenueDetail />} />   {/* dynamic ID-based routing */}
+          <Route path="/about" element={<About />} />
+        </Routes>
+      </Box>
     </Router>
   );
 }
 
 export default App;
+
