@@ -15,7 +15,7 @@ export default function Home() {
           color: '#FFFFFF',
           textAlign: 'center',
           pt: 6,
-          pb: 30,
+          pb: {xs: 15, sm: 20, md: 30},
           position: 'relative',
           overflow: 'hidden',
         }}
