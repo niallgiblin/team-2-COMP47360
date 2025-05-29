@@ -12,7 +12,7 @@ function App() {
   return (
     <Router>
       {/* Full-width wrapper */}
-      <Box sx={{ width: '100%', minHeight: '100vh', backgroundColor: '#000'}}>
+      <Box sx={{ width: '100%', minHeight: '100vh', backgroundColor: '#000', }}>
         <NavBar />
 
         {/* Routes */}
@@ -30,4 +30,5 @@ function App() {
 }
 
 export default App;
+
 
