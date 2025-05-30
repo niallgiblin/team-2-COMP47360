@@ -2,7 +2,7 @@ import { Box } from '@mui/material';
 
 export default function PageWrapper({ children }) {
   return (
-    <Box sx={{ width: '100%', overflowX: 'hidden' }}>
+    <Box sx={{ width: '100%', overflowX: 'visible', position: 'static' }}>
       <Box
         sx={{
           paddingTop: 10,         // space below nav

@@ -7,7 +7,7 @@ import FeatureCard from '../components/FeatureCard';
 export default function Home() {
   return (
     <>
-      {/* Full-width hero section */}
+      {/* Hero section */}
       <Box
         sx={{
           width: '100vw',
@@ -20,30 +20,53 @@ export default function Home() {
           overflow: 'hidden',
         }}
       >
+         {/* Hero text content */} 
         <Box sx={{ maxWidth: '800px', mx: 'auto', px: 2, zIndex: 1, position: 'relative' }}>
-          <Typography variant="h3" fontWeight="bold" gutterBottom>
-            Turn Data into Standing Ovations
+          <Typography 
+            variant="h3"
+            gutterBottom
+            sx={{
+              fontWeight: 'bold',
+              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 2,
+            }} 
+            >
+            Find your vibe in NYC Nights
           </Typography>
 
-          <Typography variant="h6" color="#CCCCCC" maxWidth="600px" mx="auto" mb={5}>
-            From quiet nights to city surges, our AI-powered forecasts help you make smarter
-            decisions around staffing, stock, and showtimes.
+          {/* Subheading with soft blue */}
+          <Typography 
+            variant="h6" 
+            sx={{
+              color: '#AEEBFF',
+              maxWidth: '600px',
+              mx: 'auto',
+              mb: 5,
+            }}
+            >
+            Cozy bar? Rooftop club? Wild night out? We'll get you there!
           </Typography>
 
+          {/* CTA button */}
           <Button
             variant="contained"
             sx={{
-              backgroundColor: '#D4AF37',
-              color: '#1A1A1A',
+              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              color: '#121212',
               fontWeight: 'bold',
               px: 4,
               py: 1.5,
+              fontSize: '1rem',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
               '&:hover': {
-                backgroundColor: '#C19A35',
+                background: 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
               },
             }}
           >
-            View the Map
+            Find My Venue
           </Button>
         </Box>
 
@@ -74,16 +97,16 @@ export default function Home() {
             }}
           >
             <FeatureCard
-              title="Smart Planning"
-              description="Choose the optimal time for your event, using real-time crowd forecasts."
+              title="Find Your Vibe"
+              description="Describe your night - we'll math you with the perfect spot."
             />
             <FeatureCard
-              title="Personalised Predictions"
-              description="Forecast attendance for theatres, galleries, gigs. Be ready for every crowd."
+              title="What's Hot"
+              description="Track the buzz and see where the night's heating up."
             />
             <FeatureCard
-              title="Discover Hidden Gems"
-              description="Personalised suggestions beyond the big-name venues."
+              title="Map View"
+              description="Tap the map to explore venues, check vibes and plan your route."
             />
           </Box>
         </Container>
