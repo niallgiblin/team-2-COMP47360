@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  backend:
+    image: urban-gala-backend
+    container_name: urban-gala-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      # Uncomment this when MySQL is ready
+      # - db
+    networks:
+      - app-network
+    environment:
+      # Example - customize later
+      # SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/your_db
+      # SPRING_DATASOURCE_USERNAME: your_user
+      # SPRING_DATASOURCE_PASSWORD: your_password
+      JAVA_OPTS: "-Xmx512m"
+
+  frontend:
+    image: urban-gala-frontend
+    container_name: urban-gala-frontend
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # db:
+  #   image: mysql:8.0
+  #   container_name: urban-gala-db
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3306:3306"
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: your_root_password
+  #     MYSQL_DATABASE: your_db
+  #     MYSQL_USER: your_user
+  #     MYSQL_PASSWORD: your_password
+  #   volumes:
+  #     - db_data:/var/lib/mysql
+  #   networks:
+  #     - app-network
+
+networks:
+  app-network:
+
+# volumes:
+#   db_data:
