@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   backend:
-    image: urban-gala-backend
+    build:
+      context: ./backend
     container_name: urban-gala-backend
     ports:
       - "8080:8080"
@@ -19,7 +20,8 @@ services:
       JAVA_OPTS: "-Xmx512m"
 
   frontend:
-    image: urban-gala-frontend
+    build:
+      context: ./frontend
     container_name: urban-gala-frontend
     ports:
       - "4173:4173"
