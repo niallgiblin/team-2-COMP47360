@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button } from '@mui/material';
-import skyline from '../assets/skyline.svg';
+import nycVideo from '../assets/hero.mp4';
+
 
 // Define and export the HeroSection component
 export default function HeroSection() {
@@ -23,6 +24,7 @@ export default function HeroSection() {
     <Box
       sx={{
         width: '100vw', // Full viewport width
+        height: {xs: '50vw', sm: '30vw', md: '10vw'},
         backgroundColor: '#414141', // fallback background if video doesn't load
         color: '#FFFFFF', // default text colour
         textAlign: 'center', // centre all text
@@ -47,10 +49,11 @@ export default function HeroSection() {
             width: '100%',
             height: '100%',
             objectFit: 'cover', // Ensures video covers area fully
+            objectPosition: 'top', // video stays anchored to top, only bottom is cropped
             zIndex: 0,
           }}
         >
-          <source src="/videos/nyc.mp4" type="video/mp4" />
+          <source src={nycVideo} type="video/mp4" />
         </Box>
       )}
 
@@ -62,6 +65,10 @@ export default function HeroSection() {
           px: 2, // horizontal padding
           zIndex: 1, // Ensure this content appears above the video
           position: 'relative',
+          backgroundColor: 'rgba(0, 0, 0, 0.2)', // semi-transparent black
+          borderRadius: 2,
+          p: 4,
+          boxShadow: 3,
         }}
       >
         {/* Main headline with gradient text */}
@@ -112,20 +119,6 @@ export default function HeroSection() {
           Find My Venue
         </Button>
       </Box>
-
-      {/* Skyline image at the bottom */}
-      <Box
-        component="img" // render as <img>
-        src={skyline} // import from assets
-        alt="NYC skyline"
-        sx={{
-          width: '100%', // stretch across the full width
-          position: 'absolute', // position relative to parent
-          bottom: 0, // stick to the bottom
-          left: 0,
-          zIndex: 0, // behind the text
-        }}
-      />
     </Box>
   );
 }
