@@ -7,6 +7,7 @@ import MapView from './pages/MapView';
 import Recommendations from './pages/Recommendations';
 import VenueDetail from './pages/VenueDetail';
 import About from './pages/About';
+import Skyline from './components/Skyline';
 import Footer from './components/Footer';
 
 
@@ -26,6 +27,7 @@ function App() {
             <Route path="/venue/:id" element={<VenueDetail />} />   {/* dynamic ID-based routing */}
             <Route path="/about" element={<About />} />
           </Routes>
+          <Skyline />
         <Footer />
       </Box>
     </Router>
@@ -33,3 +35,5 @@ function App() {
 }
 
 export default App;
+
+

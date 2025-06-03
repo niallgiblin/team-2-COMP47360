@@ -1,34 +1,49 @@
 import { Box, Typography } from '@mui/material';
 
-export default function FeatureCard({ title, description }) {
+export default function FeatureCard({ iconSrc, title, description }) {
   return (
     <Box
       sx={{
         flex: 1,
-        minWidth: 250,
+        minWidth: 200,
         textAlign: 'center',
-        padding: 3,
-        backgroundColor: '#fff',
-        borderRadius: 2,
-        boxShadow: 3,
-        mx: 2,
+        px: { xs: 2, md: 3 },
+        py: 4,
+        backgroundColor: 'transparent', // No box
+        color: '#fff',
       }}
     >
+      {/* Icon */}
       <Box
+        component="img"
+        src={iconSrc}
+        alt={`${title} icon`}
         sx={{
-          width: 60,
-          height: 60,
-          backgroundColor: '#ccc',
-          borderRadius: 1,
-          margin: '0 auto 1rem',
+          width: 48,
+          height: 48,
+          mb: 2,
         }}
       />
-      <Typography variant="h6" fontWeight="bold" gutterBottom>
+
+      {/* Title */}
+      <Typography
+        variant="h6"
+        fontWeight="bold"
+        gutterBottom
+        sx={{ color: '#fff' }}
+      >
         {title}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+
+      {/* Description */}
+      <Typography
+        variant="body2"
+        sx={{ color: '#ccc' }}
+      >
         {description}
       </Typography>
     </Box>
   );
 }
+
+
