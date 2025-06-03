@@ -22,7 +22,7 @@ export default function NavBar() {
       <AppBar
         position="sticky"
         sx={{
-          backgroundColor: '#121212',
+          backgroundColor: '#000000',
           boxShadow: 'none',
           width: '100%',
           zIndex: 1100,
