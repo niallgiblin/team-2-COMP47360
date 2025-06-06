@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import PageWrapper from '../components/PageWrapper';
 import VenueCard from '../components/VenueCard';
 import DemoMap from '../components/DemoMap';
+
 // import venueData from '../data/mockVenues'; // mock JSON data for now
 
 // Map View page 
