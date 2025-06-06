@@ -5,7 +5,7 @@ import NavBar from './components/NavBar';
 import Home from './pages/Home';
 import MapView from './pages/MapView';
 import Recommendations from './pages/Recommendations';
-import VenueDetail from './pages/VenueDetail';
+import FindMyVibe from './pages/FindMyVibe';
 import About from './pages/About';
 import Skyline from './components/Skyline';
 import Footer from './components/Footer';
@@ -23,8 +23,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/map" element={<MapView />} />
             <Route path="/recommendations" element={<Recommendations />} />
-            <Route path="/venuedetail" element={<VenueDetail />} /> {/* static for preview */}
-            <Route path="/venue/:id" element={<VenueDetail />} />   {/* dynamic ID-based routing */}
+            <Route path="/vibe" element={<FindMyVibe />} />
             <Route path="/about" element={<About />} />
           </Routes>
           <Skyline />

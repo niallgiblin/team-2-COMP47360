@@ -13,6 +13,7 @@ const navItems = [
   { label: 'About', to: '/about' },
 ];
 
+// Main nav bar component
 export default function NavBar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -25,12 +26,12 @@ export default function NavBar() {
           backgroundColor: '#000000',
           boxShadow: 'none',
           width: '100%',
-          zIndex: 1100,
+          zIndex: 1100, // makes sure nav bar stays on top
         }}
       >
         <Toolbar
           sx={{
-            justifyContent: 'space-between',
+            justifyContent: 'space-between', // space between logo and nav links
             width: '100%',
             maxWidth: '1200px',
             mx: 'auto',
@@ -50,19 +51,19 @@ export default function NavBar() {
               textDecoration: 'none', // remove underline from the Link
             }}
           >
-            <img src={logo} alt="Urban Gala logo" style={{ height: 60 }} />
+            <img src={logo} alt="Urban Gala logo" style={{ height: 76 }} />
 
-            <Box sx={{ lineHeight: 1 }}>
+            <Box sx={{ lineHeight: 1, mt: 0.5  }}>
               {/* Title */}
               <Typography
                 variant="h6"
                 sx={{
-                  fontWeight: 'bold',
                   textTransform: 'uppercase',
-                  letterSpacing: 1,
                   background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
+                  mt: 0.5,
+                  lineHeight: 1,
                 }}
               >
                 The Urban Gala
@@ -73,7 +74,6 @@ export default function NavBar() {
                 variant="caption"
                 sx={{
                   fontSize: '0.6rem',
-                  letterSpacing: 1,
                   textTransform: 'uppercase',
                   background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                   WebkitBackgroundClip: 'text',
@@ -89,7 +89,7 @@ export default function NavBar() {
           {/* Desktop Navigation Links */}
           <Box
             sx={{
-              display: { xs: 'none',md: 'flex' },
+              display: { xs: 'none',md: 'flex' }, // nav links hidden on mobile
               gap: { md: 2.5, lg: 3.5 },
               flexWrap: 'wrap',
             }}
@@ -107,6 +107,8 @@ export default function NavBar() {
                 textTransform: 'uppercase',
                 color: '#FFFFFF',
                 px: 1,
+                
+                // hover underline animation
                 '&::after': {
                   content: '""',
                   position: 'absolute',
@@ -179,6 +181,7 @@ export default function NavBar() {
                 borderBottom: '1px solid #333',
               }}
             >
+              {/* Nav items */}
               <Typography
                 component="span"
                 sx={{
