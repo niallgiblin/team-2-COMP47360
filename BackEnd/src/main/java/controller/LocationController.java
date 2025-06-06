@@ -68,3 +68,4 @@ public class LocationController {
         List<Location> trending = locationService.getTrendingLocations();
         return ResponseEntity.ok(trending);
     }
+}
