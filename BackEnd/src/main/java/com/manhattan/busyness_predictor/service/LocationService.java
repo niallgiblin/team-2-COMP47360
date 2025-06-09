@@ -1,4 +1,13 @@
-package service;
+package com.manhattan.busyness_predictor.service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.manhattan.busyness_predictor.model.Location;
+import com.manhattan.busyness_predictor.repository.LocationRepository;
 
 @Service
 public class LocationService {
@@ -16,18 +25,8 @@ public class LocationService {
     }
 
     public List<Location> getLocationsByType(String type) {
-        switch (type.toLowerCase()) {
-            case "restaurant":
-                return locationRepository.findByIsRestaurantTrue();
-            case "bar":
-                return locationRepository.findByIsBarTrue();
-            case "club":
-                return locationRepository.findByIsClubTrue();
-            case "landmark":
-                return locationRepository.findByIsLandmarkTrue();
-            default:
-                return locationRepository.findAll();
-        }
+        // Use the unified type query from repository
+        return locationRepository.findByType(type.toLowerCase());
     }
 
     public List<Location> getLocationsNearby(Double lat, Double lng, Double radius) {
@@ -39,16 +38,12 @@ public class LocationService {
         if (type == null) {
             return getLocationsNearby(lat, lng, radius);
         }
-
-        // Get nearby locations first, then filter by type
-        List<Location> nearby = getLocationsNearby(lat, lng, radius);
-        return nearby.stream()
-                .filter(location -> matchesType(location, type))
-                .collect(Collectors.toList());
+        // Use the combined nearby + type query from repository
+        return locationRepository.findNearbyLocationsByType(lat, lng, radius, type.toLowerCase());
     }
 
     public List<Location> getTrendingLocations() {
-        // For now, return locations with most reviews in last 30 days
+        // Return locations with most reviews in last 30 days
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
         return locationRepository.findMostReviewedSince(thirtyDaysAgo);
     }
