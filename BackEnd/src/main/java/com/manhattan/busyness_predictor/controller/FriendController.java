@@ -153,7 +153,7 @@ public class FriendController {
     @GetMapping("/count")
     public ResponseEntity<Map<String, Object>> getFriendCount(@RequestParam Integer userId) {
         try {
-            long friendCount = friendService.getFriendCount(userId);
+            Integer friendCount = friendService.getFriendCount(userId);
             
             Map<String, Object> response = new HashMap<>();
             response.put("userId", userId);
