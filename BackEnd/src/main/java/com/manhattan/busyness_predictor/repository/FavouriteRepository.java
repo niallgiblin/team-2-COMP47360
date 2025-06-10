@@ -22,5 +22,5 @@ public interface FavouriteRepository extends JpaRepository<Favourite, Integer> {
     void deleteByUserIdAndLocationId(Integer userId, Integer locationId);
 
     // Count how many users favourited a location
-    long countByLocationId(Integer locationId);
+    Integer countByLocationId(Integer locationId);
 }
