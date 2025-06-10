@@ -9,18 +9,18 @@ import org.springframework.stereotype.Repository;
 import com.manhattan.busyness_predictor.model.Favourite;
 
 @Repository
-public interface FavouriteRepository extends JpaRepository<Favourite, Long> {
+public interface FavouriteRepository extends JpaRepository<Favourite, Integer> {
 
-    List<Favourite> findByUserId(Long userId);
+    List<Favourite> findByUserId(Integer userId);
 
-    List<Favourite> findByLocationId(Long locationId);
+    List<Favourite> findByLocationId(Integer locationId);
 
-    Optional<Favourite> findByUserIdAndLocationId(Long userId, Long locationId);
+    Optional<Favourite> findByUserIdAndLocationId(Integer userId, Integer locationId);
 
-    boolean existsByUserIdAndLocationId(Long userId, Long locationId);
+    boolean existsByUserIdAndLocationId(Integer userId, Integer locationId);
 
-    void deleteByUserIdAndLocationId(Long userId, Long locationId);
+    void deleteByUserIdAndLocationId(Integer userId, Integer locationId);
 
     // Count how many users favourited a location
-    long countByLocationId(Long locationId);
+    long countByLocationId(Integer locationId);
 }

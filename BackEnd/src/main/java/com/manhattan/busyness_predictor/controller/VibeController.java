@@ -55,7 +55,7 @@ public class VibeController {
     // Find Similar Locations - Based on location vector similarity
     @PostMapping("/similar")
     public ResponseEntity<Map<String, Object>> findSimilarLocations(
-            @RequestParam Long locationId,
+            @RequestParam Integer locationId,
             @RequestParam(defaultValue = "5") Integer limit) {
         try {
             List<Location> similarLocations = vibeService.findSimilarLocations(locationId, limit);
@@ -76,7 +76,7 @@ public class VibeController {
 
     // Get location details by ID (for LLM fallback)
     @GetMapping("/location/{id}")
-    public ResponseEntity<Map<String, Object>> getLocationById(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> getLocationById(@PathVariable Integer id) {
         try {
             Location location = vibeService.getLocationById(id);
 
@@ -94,7 +94,7 @@ public class VibeController {
     // Get multiple locations by IDs (for batch LLM responses)
     @PostMapping("/locations/batch")
     public ResponseEntity<Map<String, Object>> getLocationsByIds(
-            @RequestBody List<Long> locationIds) {
+            @RequestBody List<Integer> locationIds) {
         try {
             List<Location> locations = vibeService.getLocationsByIds(locationIds);
 
@@ -112,7 +112,7 @@ public class VibeController {
 
     // Generate vibe profile for a location (for vector creation)
     @PostMapping("/generate-profile/{locationId}")
-    public ResponseEntity<Map<String, Object>> generateVibeProfile(@PathVariable Long locationId) {
+    public ResponseEntity<Map<String, Object>> generateVibeProfile(@PathVariable Integer locationId) {
         try {
             String vibeProfile = vibeService.generateLocationVibeProfile(locationId);
 

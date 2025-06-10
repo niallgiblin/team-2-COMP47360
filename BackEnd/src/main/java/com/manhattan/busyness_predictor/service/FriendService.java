@@ -22,7 +22,7 @@ public class FriendService {
     private UserRepository userRepository;
 
     @Transactional
-    public Friend addFriendByUsername(Long userId, String username) {
+    public Friend addFriendByUsername(Integer userId, String username) {
         // Find user making the request
         User currentUser = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -47,7 +47,7 @@ public class FriendService {
     }
 
     @Transactional
-    public void removeFriend(Long userId, Long friendId) {
+    public void removeFriend(Integer userId, Integer friendId) {
         // Verify both users exist
         userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -64,7 +64,7 @@ public class FriendService {
     }
 
     @Transactional
-    public void removeFriendByUsername(Long userId, String username) {
+    public void removeFriendByUsername(Integer userId, String username) {
         // Find the friend by username
         User friendUser = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User with username '" + username + "' not found"));
@@ -73,13 +73,13 @@ public class FriendService {
         removeFriend(userId, friendUser.getId());
     }
 
-    public List<User> getFriendsList(Long userId) {
+    public List<User> getFriendsList(Integer userId) {
         // Verify user exists
         userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Get friend IDs
-        List<Long> friendIds = friendRepository.findFriendIdsByUserId(userId);
+        List<Integer> friendIds = friendRepository.findFriendIdsByUserId(userId);
         
         // Get friend user objects
         List<User> friends = userRepository.findAllById(friendIds);
@@ -90,9 +90,9 @@ public class FriendService {
                 .collect(Collectors.toList());
     }
 
-    public List<User> searchUsersByUsername(String query, Long currentUserId) {
+    public List<User> searchUsersByUsername(String query, Integer currentUserId) {
         // Search users by username (excluding current user and existing friends)
-        List<Long> friendIds = friendRepository.findFriendIdsByUserId(currentUserId);
+        List<Integer> friendIds = friendRepository.findFriendIdsByUserId(currentUserId);
         friendIds.add(currentUserId); // Also exclude current user
         
         List<User> users = userRepository.findAll().stream()
@@ -107,11 +107,11 @@ public class FriendService {
                 .collect(Collectors.toList());
     }
 
-    public boolean areFriends(Long userId1, Long userId2) {
+    public boolean areFriends(Integer userId1, Integer userId2) {
         return friendRepository.existsFriendshipBetweenUsers(userId1, userId2);
     }
 
-    public long getFriendCount(Long userId) {
+    public Integer getFriendCount(Integer userId) {
         // Verify user exists
         userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -119,7 +119,7 @@ public class FriendService {
         return friendRepository.countFriendsByUserId(userId);
     }
 
-    public List<User> getMutualFriends(Long userId1, Long userId2) {
+    public List<User> getMutualFriends(Integer userId1, Integer userId2) {
         // Verify both users exist
         userRepository.findById(userId1)
                 .orElseThrow(() -> new RuntimeException("First user not found"));
@@ -127,11 +127,11 @@ public class FriendService {
                 .orElseThrow(() -> new RuntimeException("Second user not found"));
 
         // Get friend lists for both users
-        List<Long> user1Friends = friendRepository.findFriendIdsByUserId(userId1);
-        List<Long> user2Friends = friendRepository.findFriendIdsByUserId(userId2);
+        List<Integer> user1Friends = friendRepository.findFriendIdsByUserId(userId1);
+        List<Integer> user2Friends = friendRepository.findFriendIdsByUserId(userId2);
 
         // Find mutual friends
-        List<Long> mutualFriendIds = user1Friends.stream()
+        List<Integer> mutualFriendIds = user1Friends.stream()
                 .filter(user2Friends::contains)
                 .collect(Collectors.toList());
 
@@ -144,13 +144,13 @@ public class FriendService {
                 .collect(Collectors.toList());
     }
 
-    public List<User> getSuggestedFriends(Long userId, int limit) {
+    public List<User> getSuggestedFriends(Integer userId, int limit) {
         // Get user's current friends
-        List<Long> currentFriends = friendRepository.findFriendIdsByUserId(userId);
+        List<Integer> currentFriends = friendRepository.findFriendIdsByUserId(userId);
         currentFriends.add(userId); // Exclude self
 
         // Find friends of friends who are not already friends
-        List<Long> suggestedIds = currentFriends.stream()
+        List<Integer> suggestedIds = currentFriends.stream()
                 .flatMap(friendId -> friendRepository.findFriendIdsByUserId(friendId).stream())
                 .filter(id -> !currentFriends.contains(id))
                 .distinct()

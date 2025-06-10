@@ -71,7 +71,7 @@ public class LocationController {
 
     // Click on location - fetch location information & busyness prediction
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getLocationDetails(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> getLocationDetails(@PathVariable Integer id) {
         try {
             Location location = locationService.getLocationById(id);
 
@@ -109,8 +109,8 @@ public class LocationController {
     // Add to favourites - alter user profile with API
     @PostMapping("/{id}/favourite")
     public ResponseEntity<Map<String, String>> addToFavourites(
-            @PathVariable Long id,
-            @RequestParam Long userId) {
+            @PathVariable Integer id,
+            @RequestParam Integer userId) {
 
         try {
             favouriteService.addToFavourites(userId, id);
@@ -128,8 +128,8 @@ public class LocationController {
     // Remove from favourites
     @DeleteMapping("/{id}/favourite")
     public ResponseEntity<Map<String, String>> removeFromFavourites(
-            @PathVariable Long id,
-            @RequestParam Long userId) {
+            @PathVariable Integer id,
+            @RequestParam Integer userId) {
 
         try {
             favouriteService.removeFromFavourites(userId, id);
@@ -147,8 +147,8 @@ public class LocationController {
     // Leave a review - Simple post request to update Locations DB
     @PostMapping("/{id}/reviews")
     public ResponseEntity<Map<String, Object>> leaveReview(
-            @PathVariable Long id,
-            @RequestParam Long userId,
+            @PathVariable Integer id,
+            @RequestParam Integer userId,
             @Valid @RequestBody ReviewRequest reviewRequest) {
 
         try {
@@ -168,8 +168,8 @@ public class LocationController {
     // Update a review
     @PutMapping("/reviews/{reviewId}")
     public ResponseEntity<Map<String, Object>> updateReview(
-            @PathVariable Long reviewId,
-            @RequestParam Long userId,
+            @PathVariable Integer reviewId,
+            @RequestParam Integer userId,
             @Valid @RequestBody ReviewRequest reviewRequest) {
 
         try {
@@ -189,8 +189,8 @@ public class LocationController {
     // Share with a friend - Request that updates a table "shared"
     @PostMapping("/{id}/share")
     public ResponseEntity<Map<String, String>> shareLocation(
-            @PathVariable Long id,
-            @RequestParam Long senderId,
+            @PathVariable Integer id,
+            @RequestParam Integer senderId,
             @Valid @RequestBody ShareRequest shareRequest) {
 
         try {
@@ -208,7 +208,7 @@ public class LocationController {
 
     // Get user's favourite locations
     @GetMapping("/favourites")
-    public ResponseEntity<List<Location>> getFavouriteLocations(@RequestParam Long userId) {
+    public ResponseEntity<List<Location>> getFavouriteLocations(@RequestParam Integer userId) {
         try {
             List<Location> favourites = favouriteService.getFavouriteLocations(userId);
             return ResponseEntity.ok(favourites);
@@ -219,7 +219,7 @@ public class LocationController {
 
     // Get user's search history
     @GetMapping("/history")
-    public ResponseEntity<List<Location>> getSearchHistory(@RequestParam Long userId) {
+    public ResponseEntity<List<Location>> getSearchHistory(@RequestParam Integer userId) {
         try {
             List<Location> history = historyService.getSearchHistory(userId);
             return ResponseEntity.ok(history);

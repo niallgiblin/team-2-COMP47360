@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 import com.manhattan.busyness_predictor.model.Location;
 
 @Repository
-public interface LocationRepository extends JpaRepository<Location, Long> {
+public interface LocationRepository extends JpaRepository<Location, Integer> {
 
         // Basic type queries
         List<Location> findByIsRestaurantTrue();
