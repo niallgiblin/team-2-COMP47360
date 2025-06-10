@@ -78,7 +78,7 @@ public class AuthService {
     }
 
     @Transactional
-    public User updateProfile(Long userId, UpdateProfileRequest request) {
+    public User updateProfile(Integer userId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -135,7 +135,7 @@ public class AuthService {
         return user;
     }
 
-    public User getUserById(Long userId) {
+    public User getUserById(Integer userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         

@@ -22,7 +22,7 @@ public class ReviewService {
     private LocationRepository locationRepository;
 
     @Transactional
-    public Review createReview(Long userId, Long locationId, ReviewRequest request) {
+    public Review createReview(Integer userId, Integer locationId, ReviewRequest request) {
         // Check if location exists
         locationRepository.findById(locationId)
                 .orElseThrow(() -> new RuntimeException("Location not found"));
@@ -42,7 +42,7 @@ public class ReviewService {
     }
 
     @Transactional
-    public Review updateReview(Long reviewId, Long userId, ReviewRequest request) {
+    public Review updateReview(Integer reviewId, Integer userId, ReviewRequest request) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new RuntimeException("Review not found"));
 
@@ -62,15 +62,15 @@ public class ReviewService {
         return review;
     }
 
-    public List<Review> getLocationReviews(Long locationId) {
+    public List<Review> getLocationReviews(Integer locationId) {
         return reviewRepository.findByLocationIdOrderByTimestampDesc(locationId);
     }
 
-    public List<Review> getUserReviews(Long userId) {
+    public List<Review> getUserReviews(Integer userId) {
         return reviewRepository.findByUserIdOrderByTimestampDesc(userId);
     }
 
-    private void updateLocationRating(Long locationId) {
+    private void updateLocationRating(Integer locationId) {
         List<Review> reviews = reviewRepository.findByLocationId(locationId);
 
         if (!reviews.isEmpty()) {

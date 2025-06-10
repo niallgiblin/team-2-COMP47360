@@ -10,25 +10,25 @@ import org.springframework.stereotype.Repository;
 import com.manhattan.busyness_predictor.model.Review;
 
 @Repository
-public interface ReviewRepository extends JpaRepository<Review, Long> {
+public interface ReviewRepository extends JpaRepository<Review, Integer> {
 
-    List<Review> findByLocationId(Long locationId);
+    List<Review> findByLocationId(Integer locationId);
 
-    List<Review> findByLocationIdOrderByTimestampDesc(Long locationId);
+    List<Review> findByLocationIdOrderByTimestampDesc(Integer locationId);
 
-    List<Review> findByUserId(Long userId);
+    List<Review> findByUserId(Integer userId);
 
-    List<Review> findByUserIdOrderByTimestampDesc(Long userId);
+    List<Review> findByUserIdOrderByTimestampDesc(Integer userId);
 
-    boolean existsByUserIdAndLocationId(Long userId, Long locationId);
+    boolean existsByUserIdAndLocationId(Integer userId, Integer locationId);
 
     // Find reviews by rating range
-    List<Review> findByLocationIdAndReviewValBetween(Long locationId, Float minRating, Float maxRating);
+    List<Review> findByLocationIdAndReviewValBetween(Integer locationId, Float minRating, Float maxRating);
 
     // Count reviews for a location
-    long countByLocationId(Long locationId);
+    Integer countByLocationId(Integer locationId);
 
     // Get average rating for a location
     @Query("SELECT AVG(r.reviewVal) FROM Review r WHERE r.locationId = :locationId")
-    Double getAverageRatingByLocationId(@Param("locationId") Long locationId);
+    Double getAverageRatingByLocationId(@Param("locationId") Integer locationId);
 }

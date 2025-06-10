@@ -16,16 +16,16 @@ public class Shared {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "Id")
-    private Long id;
+    private Integer id;
 
     @Column(name = "sender")
-    private Long senderId;
+    private Integer senderId;
 
     @Column(name = "receiver")
-    private Long receiverId;
+    private Integer receiverId;
 
     @Column(name = "LocationId")
-    private Long locationId;
+    private Integer locationId;
 
     @Column(name = "SharedAt")
     private LocalDateTime sharedAt;
@@ -34,7 +34,7 @@ public class Shared {
     public Shared() {
     }
 
-    public Shared(Long senderId, Long receiverId, Long locationId) {
+    public Shared(Integer senderId, Integer receiverId, Integer locationId) {
         this.senderId = senderId;
         this.receiverId = receiverId;
         this.locationId = locationId;
@@ -42,35 +42,35 @@ public class Shared {
     }
 
     // Getters and Setters
-    public Long getId() {
+    public Integer getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(Integer id) {
         this.id = id;
     }
 
-    public Long getSenderId() {
+    public Integer getSenderId() {
         return senderId;
     }
 
-    public void setSenderId(Long senderId) {
+    public void setSenderId(Integer senderId) {
         this.senderId = senderId;
     }
 
-    public Long getReceiverId() {
+    public Integer getReceiverId() {
         return receiverId;
     }
 
-    public void setReceiverId(Long receiverId) {
+    public void setReceiverId(Integer receiverId) {
         this.receiverId = receiverId;
     }
 
-    public Long getLocationId() {
+    public Integer getLocationId() {
         return locationId;
     }
 
-    public void setLocationId(Long locationId) {
+    public void setLocationId(Integer locationId) {
         this.locationId = locationId;
     }
 

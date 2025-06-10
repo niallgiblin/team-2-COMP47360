@@ -8,27 +8,25 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Favourites")
-public class Favourite {
-
+@Table(name = "plan_shared")
+public class PlanShared {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
     private Integer id;
 
-    @Column(name = "UserId")
+    @Column(name = "plan_id")
+    private Integer planId;
+
+    @Column(name = "user_id")
     private Integer userId;
 
-    @Column(name = "LocId")
-    private Integer locationId;
-
     // Constructors
-    public Favourite() {
+    public PlanShared() {
     }
 
-    public Favourite(Integer userId, Integer locationId) {
+    public PlanShared(Integer planId, Integer userId) {
+        this.planId = planId;
         this.userId = userId;
-        this.locationId = locationId;
     }
 
     // Getters and Setters
@@ -40,19 +38,19 @@ public class Favourite {
         this.id = id;
     }
 
+    public Integer getPlanId() {
+        return planId;
+    }
+
+    public void setPlanId(Integer planId) {
+        this.planId = planId;
+    }
+
     public Integer getUserId() {
         return userId;
     }
 
     public void setUserId(Integer userId) {
         this.userId = userId;
-    }
-
-    public Integer getLocationId() {
-        return locationId;
-    }
-
-    public void setLocationId(Integer locationId) {
-        this.locationId = locationId;
     }
 }

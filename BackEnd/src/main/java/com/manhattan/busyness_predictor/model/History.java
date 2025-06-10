@@ -16,13 +16,13 @@ public class History {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "Id")
-    private Long id;
+    private Integer id;
 
     @Column(name = "UserId")
-    private Long userId;
+    private Integer userId;
 
     @Column(name = "LocId")
-    private Long locationId;
+    private Integer locationId;
 
     @Column(name = "TimeStamp")
     private LocalDateTime timestamp;
@@ -31,34 +31,34 @@ public class History {
     public History() {
     }
 
-    public History(Long userId, Long locationId) {
+    public History(Integer userId, Integer locationId) {
         this.userId = userId;
         this.locationId = locationId;
         this.timestamp = LocalDateTime.now();
     }
 
     // Getters and Setters
-    public Long getId() {
+    public Integer getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(Integer id) {
         this.id = id;
     }
 
-    public Long getUserId() {
+    public Integer getUserId() {
         return userId;
     }
 
-    public void setUserId(Long userId) {
+    public void setUserId(Integer userId) {
         this.userId = userId;
     }
 
-    public Long getLocationId() {
+    public Integer getLocationId() {
         return locationId;
     }
 
-    public void setLocationId(Long locationId) {
+    public void setLocationId(Integer locationId) {
         this.locationId = locationId;
     }
 
