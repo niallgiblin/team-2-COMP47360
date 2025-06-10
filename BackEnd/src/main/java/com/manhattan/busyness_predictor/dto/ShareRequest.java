@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 public class ShareRequest {
 
     @NotNull(message = "Receiver ID is required")
-    private Long receiverId;
+    private Integer receiverId;
 
     private String message; // Optional message with the share
 
@@ -13,17 +13,17 @@ public class ShareRequest {
     public ShareRequest() {
     }
 
-    public ShareRequest(Long receiverId, String message) {
+    public ShareRequest(Integer receiverId, String message) {
         this.receiverId = receiverId;
         this.message = message;
     }
 
     // Getters and Setters
-    public Long getReceiverId() {
+    public Integer getReceiverId() {
         return receiverId;
     }
 
-    public void setReceiverId(Long receiverId) {
+    public void setReceiverId(Integer receiverId) {
         this.receiverId = receiverId;
     }
 

@@ -27,7 +27,7 @@ public class LLMService {
         return callLLMAPI(prompt);
     }
 
-    public List<Long> findSimilarLocationsByVector(String locationVector, Integer limit, Long excludeId) {
+    public List<Integer> findSimilarLocationsByVector(String locationVector, Integer limit, Integer excludeId) {
         // Find similar locations based on vector similarity
         String prompt = buildSimilaritySearchPrompt(locationVector, limit, excludeId);
         String response = callLLMAPI(prompt);
@@ -87,7 +87,7 @@ public class LLMService {
         );
     }
 
-    private String buildSimilaritySearchPrompt(String locationVector, Integer limit, Long excludeId) {
+    private String buildSimilaritySearchPrompt(String locationVector, Integer limit, Integer excludeId) {
         return String.format("""
                              Given this location vector: %s
                              
@@ -123,10 +123,10 @@ public class LLMService {
         return "{\"locationIds\": [1, 2, 3], \"explanation\": \"These locations match your vibe because they offer a vibrant atmosphere with great ambiance.\", \"confidence\": 0.85}";
     }
 
-    private List<Long> parseLocationIdsFromResponse(String response) {
+    private List<Integer> parseLocationIdsFromResponse(String response) {
         // Parse location IDs from LLM response
         // Implementation would depend on response format
-        return List.of(1L, 2L, 3L); // Placeholder
+        return List.of(1, 2, 3); // Placeholder
     }
 
     private String getLocationCategory(Location location) {

@@ -33,7 +33,7 @@ public class FriendController {
     // Add friend by username
     @PostMapping("/add")
     public ResponseEntity<Map<String, Object>> addFriendByUsername(
-            @RequestParam Long userId,
+            @RequestParam Integer userId,
             @Valid @RequestBody AddFriendRequest request) {
         try {
             Friend friendship = friendService.addFriendByUsername(userId, request.getUsername());
@@ -54,8 +54,8 @@ public class FriendController {
     // Remove friend
     @DeleteMapping("/remove")
     public ResponseEntity<Map<String, Object>> removeFriend(
-            @RequestParam Long userId,
-            @RequestParam Long friendId) {
+            @RequestParam Integer userId,
+            @RequestParam Integer friendId) {
         try {
             friendService.removeFriend(userId, friendId);
             
@@ -73,7 +73,7 @@ public class FriendController {
     // Remove friend by username
     @DeleteMapping("/remove-by-username")
     public ResponseEntity<Map<String, Object>> removeFriendByUsername(
-            @RequestParam Long userId,
+            @RequestParam Integer userId,
             @RequestParam String username) {
         try {
             friendService.removeFriendByUsername(userId, username);
@@ -92,7 +92,7 @@ public class FriendController {
 
     // Get user's friends list
     @GetMapping("/list")
-    public ResponseEntity<Map<String, Object>> getFriendsList(@RequestParam Long userId) {
+    public ResponseEntity<Map<String, Object>> getFriendsList(@RequestParam Integer userId) {
         try {
             List<User> friends = friendService.getFriendsList(userId);
             
@@ -112,7 +112,7 @@ public class FriendController {
     @GetMapping("/search")
     public ResponseEntity<Map<String, Object>> searchUsers(
             @RequestParam String query,
-            @RequestParam Long currentUserId) {
+            @RequestParam Integer currentUserId) {
         try {
             List<User> users = friendService.searchUsersByUsername(query, currentUserId);
             
@@ -131,8 +131,8 @@ public class FriendController {
     // Check if two users are friends
     @GetMapping("/check")
     public ResponseEntity<Map<String, Object>> checkFriendship(
-            @RequestParam Long userId,
-            @RequestParam Long otherUserId) {
+            @RequestParam Integer userId,
+            @RequestParam Integer otherUserId) {
         try {
             boolean areFriends = friendService.areFriends(userId, otherUserId);
             
@@ -151,7 +151,7 @@ public class FriendController {
 
     // Get friend count
     @GetMapping("/count")
-    public ResponseEntity<Map<String, Object>> getFriendCount(@RequestParam Long userId) {
+    public ResponseEntity<Map<String, Object>> getFriendCount(@RequestParam Integer userId) {
         try {
             long friendCount = friendService.getFriendCount(userId);
             
@@ -170,8 +170,8 @@ public class FriendController {
     // Get mutual friends between two users
     @GetMapping("/mutual")
     public ResponseEntity<Map<String, Object>> getMutualFriends(
-            @RequestParam Long userId,
-            @RequestParam Long otherUserId) {
+            @RequestParam Integer userId,
+            @RequestParam Integer otherUserId) {
         try {
             List<User> mutualFriends = friendService.getMutualFriends(userId, otherUserId);
             

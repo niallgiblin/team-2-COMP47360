@@ -63,7 +63,7 @@ public class VibeService {
         }
     }
 
-    public List<Location> findSimilarLocations(Long locationId, Integer limit) {
+    public List<Location> findSimilarLocations(Integer locationId, Integer limit) {
         try {
             // Step 1: Get the base location
             Location baseLocation = locationRepository.findById(locationId)
@@ -73,7 +73,7 @@ public class VibeService {
             String locationVector = llmService.generateLocationVector(baseLocation);
 
             // Step 3: Find similar locations using vector similarity
-            List<Long> similarLocationIds = llmService.findSimilarLocationsByVector(
+            List<Integer> similarLocationIds = llmService.findSimilarLocationsByVector(
                 locationVector, limit, locationId
             );
 
@@ -85,7 +85,7 @@ public class VibeService {
         }
     }
 
-    public String generateLocationVibeProfile(Long locationId) {
+    public String generateLocationVibeProfile(Integer locationId) {
         try {
             Location location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new RuntimeException("Location not found"));
@@ -97,12 +97,12 @@ public class VibeService {
         }
     }
 
-    public Location getLocationById(Long id) {
+    public Location getLocationById(Integer id) {
         return locationRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Location not found"));
     }
 
-    public List<Location> getLocationsByIds(List<Long> locationIds) {
+    public List<Location> getLocationsByIds(List<Integer> locationIds) {
         return locationRepository.findAllById(locationIds);
     }
 
@@ -174,9 +174,9 @@ public class VibeService {
     }
 
     // Helper methods for parsing LLM response
-    private List<Long> extractLocationIds(String response) {
+    private List<Integer> extractLocationIds(String response) {
         // Implementation for extracting location IDs from LLM response
-        List<Long> ids = new ArrayList<>();
+        List<Integer> ids = new ArrayList<>();
         // Add parsing logic here
         return ids;
     }
@@ -193,13 +193,13 @@ public class VibeService {
 
     // Inner class for LLM result parsing
     private static class LLMVibeResult {
-        private List<Long> locationIds;
+        private List<Integer> locationIds;
         private String explanation;
         private Double confidence;
 
         // Getters and setters
-        public List<Long> getLocationIds() { return locationIds; }
-        public void setLocationIds(List<Long> locationIds) { this.locationIds = locationIds; }
+        public List<Integer> getLocationIds() { return locationIds; }
+        public void setLocationIds(List<Integer> locationIds) { this.locationIds = locationIds; }
         
         public String getExplanation() { return explanation; }
         public void setExplanation(String explanation) { this.explanation = explanation; }

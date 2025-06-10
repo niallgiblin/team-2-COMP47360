@@ -16,22 +16,22 @@ public class Friend {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "Id")
-    private Long id;
+    private Integer id;
 
     @Column(name = "Timestamp")
     private LocalDateTime timestamp;
 
     @Column(name = "User1")
-    private Long user1;
+    private Integer user1;
 
     @Column(name = "User2")
-    private Long user2;
+    private Integer user2;
 
     // Constructors
     public Friend() {
     }
 
-    public Friend(Long user1, Long user2) {
+    public Friend(Integer user1, Integer user2) {
         // 确保 user1 总是较小的ID，保持一致性
         if (user1 < user2) {
             this.user1 = user1;
@@ -44,11 +44,11 @@ public class Friend {
     }
 
     // Getters and Setters
-    public Long getId() {
+    public Integer getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(Integer id) {
         this.id = id;
     }
 
@@ -60,24 +60,24 @@ public class Friend {
         this.timestamp = timestamp;
     }
 
-    public Long getUser1() {
+    public Integer getUser1() {
         return user1;
     }
 
-    public void setUser1(Long user1) {
+    public void setUser1(Integer user1) {
         this.user1 = user1;
     }
 
-    public Long getUser2() {
+    public Integer getUser2() {
         return user2;
     }
 
-    public void setUser2(Long user2) {
+    public void setUser2(Integer user2) {
         this.user2 = user2;
     }
 
     // Helper methods
-    public Long getOtherUser(Long userId) {
+    public Integer getOtherUser(Integer userId) {
         if (userId.equals(user1)) {
             return user2;
         } else if (userId.equals(user2)) {
@@ -86,7 +86,7 @@ public class Friend {
         return null;
     }
 
-    public boolean containsUser(Long userId) {
+    public boolean containsUser(Integer userId) {
         return userId.equals(user1) || userId.equals(user2);
     }
 }

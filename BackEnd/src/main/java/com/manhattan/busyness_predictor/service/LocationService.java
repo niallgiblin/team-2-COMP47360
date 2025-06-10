@@ -19,7 +19,7 @@ public class LocationService {
         return locationRepository.findAll();
     }
 
-    public Location getLocationById(Long id) {
+    public Location getLocationById(Integer id) {
         return locationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Location not found"));
     }
