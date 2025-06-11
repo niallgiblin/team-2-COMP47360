@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+dist/
+.env
+.env.*.local
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+Thumbs.db
+Desktop.ini
+*.log
