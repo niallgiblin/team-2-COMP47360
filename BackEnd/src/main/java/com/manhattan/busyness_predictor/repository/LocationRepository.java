@@ -68,6 +68,6 @@ public interface LocationRepository extends JpaRepository<Location, Integer> {
         List<Location> findMostReviewedSince(@Param("since") LocalDateTime since);
 
         @Query("SELECT l FROM Location l WHERE " +
-                        "(SELECT AVG(r.rating) FROM Review r WHERE r.locationId = l.id) >= :minRating")
+                        "(SELECT AVG(r.reviewVal) FROM Review r WHERE r.locationId = l.id) >= :minRating")
         List<Location> findByReview(@Param("minRating") Float minRating);
 }
