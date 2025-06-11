@@ -70,7 +70,7 @@ public class AuthController {
     
     @PutMapping("/profile")
     public ResponseEntity<Map<String, Object>> alterProfile(
-            @RequestParam Long userId,
+            @RequestParam Integer userId,
             @Valid @RequestBody UpdateProfileRequest request) {
         try {
             User updatedUser = authService.updateProfile(userId, request);
@@ -89,7 +89,7 @@ public class AuthController {
 
     @PutMapping("/profile/{userId}")
     public ResponseEntity<Map<String, Object>> alterProfileById(
-            @PathVariable Long userId,
+            @PathVariable Integer userId,
             @Valid @RequestBody UpdateProfileRequest request) {
         try {
             User updatedUser = authService.updateProfile(userId, request);
@@ -107,7 +107,7 @@ public class AuthController {
     }
     
     @GetMapping("/profile")
-    public ResponseEntity<Map<String, Object>> getProfile(@RequestParam Long userId) {
+    public ResponseEntity<Map<String, Object>> getProfile(@RequestParam Integer userId) {
         try {
             User user = authService.getUserById(userId);
             

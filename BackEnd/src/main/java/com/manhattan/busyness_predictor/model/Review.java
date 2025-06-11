@@ -16,16 +16,16 @@ public class Review {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "Id")
-    private Long id;
+    private Integer id;
 
     @Column(name = "Timestamp")
     private LocalDateTime timestamp;
 
     @Column(name = "UserId")
-    private Long userId;
+    private Integer userId;
 
     @Column(name = "LocId")
-    private Long locationId;
+    private Integer locationId;
 
     @Column(name = "ReviewText")
     private String reviewText;
@@ -38,7 +38,7 @@ public class Review {
     }
 
     // Constructor
-    public Review(Long userId, Long locationId, String reviewText, Float reviewVal) {
+    public Review(Integer userId, Integer locationId, String reviewText, Float reviewVal) {
         this.userId = userId;
         this.locationId = locationId;
         this.reviewText = reviewText;
@@ -47,11 +47,11 @@ public class Review {
     }
 
     // Getters and Setters
-    public Long getId() {
+    public Integer getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(Integer id) {
         this.id = id;
     }
 
@@ -63,19 +63,19 @@ public class Review {
         this.timestamp = timestamp;
     }
 
-    public Long getUserId() {
+    public Integer getUserId() {
         return userId;
     }
 
-    public void setUserId(Long userId) {
+    public void setUserId(Integer userId) {
         this.userId = userId;
     }
 
-    public Long getLocationId() {
+    public Integer getLocationId() {
         return locationId;
     }
 
-    public void setLocationId(Long locationId) {
+    public void setLocationId(Integer locationId) {
         this.locationId = locationId;
     }
 

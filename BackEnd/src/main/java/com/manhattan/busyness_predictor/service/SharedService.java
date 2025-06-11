@@ -18,7 +18,7 @@ public class SharedService {
     @Autowired
     private LocationRepository locationRepository;
 
-    public void shareLocation(Long senderId, Long receiverId, Long locationId) {
+    public void shareLocation(Integer senderId, Integer receiverId, Integer locationId) {
         // Check if location exists
         locationRepository.findById(locationId)
                 .orElseThrow(() -> new RuntimeException("Location not found"));
@@ -30,11 +30,11 @@ public class SharedService {
         sharedRepository.save(shared);
     }
 
-    public List<Shared> getSharedWithUser(Long userId) {
+    public List<Shared> getSharedWithUser(Integer userId) {
         return sharedRepository.findByReceiverIdOrderBySharedAtDesc(userId);
     }
 
-    public List<Shared> getSharedByUser(Long userId) {
+    public List<Shared> getSharedByUser(Integer userId) {
         return sharedRepository.findBySenderIdOrderBySharedAtDesc(userId);
     }
 }
