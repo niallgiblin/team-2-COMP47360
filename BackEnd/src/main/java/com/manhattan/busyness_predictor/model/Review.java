@@ -10,27 +10,27 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Reviews")
+@Table(name = "review")
 public class Review {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
+    @Column(name = "id")
     private Integer id;
 
-    @Column(name = "Timestamp")
+    @Column(name = "timestamp")
     private LocalDateTime timestamp;
 
-    @Column(name = "UserId")
+    @Column(name = "user_id")
     private Integer userId;
 
-    @Column(name = "LocId")
+    @Column(name = "location_id")
     private Integer locationId;
 
-    @Column(name = "ReviewText")
+    @Column(name = "review_text")
     private String reviewText;
 
-    @Column(name = "ReviewVal")
+    @Column(name = "review_value")
     private Float reviewVal;
 
     // Default constructor

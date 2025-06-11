@@ -8,51 +8,51 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Location")
+@Table(name = "location")
 public class Location {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
+    @Column(name = "id")
     private Integer id;
 
-    @Column(name = "Lat")
+    @Column(name = "latitude")
     private Double lat;
 
-    @Column(name = "Long")
+    @Column(name = "longitude")
     private Double lng;
 
-    @Column(name = "Name")
+    @Column(name = "name")
     private String name;
 
-    @Column(name = "Address")
+    @Column(name = "address")
     private String address;
 
-    @Column(name = "URI")
+    @Column(name = "uri")
     private String uri;
 
-    @Column(name = "Review")
+    @Column(name = "review")
     private Float review;
 
-    @Column(name = "NumReviews")
+    @Column(name = "num_reviews")
     private Integer numReviews;
 
-    @Column(name = "isRestaurant")
+    @Column(name = "is_restaurant")
     private Boolean isRestaurant;
 
-    @Column(name = "isLandmark")
+    @Column(name = "is_landmark")
     private Boolean isLandmark;
 
-    @Column(name = "isClub")
+    @Column(name = "is_club")
     private Boolean isClub;
 
-    @Column(name = "isBar")
+    @Column(name = "is_bar")
     private Boolean isBar;
 
     @Column(name = "description")
     private String description;
 
-    @Column(name = "Price")
+    @Column(name = "price")
     private Integer price;
 
     // Constructors
