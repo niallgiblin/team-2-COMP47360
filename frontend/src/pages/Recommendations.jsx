@@ -9,7 +9,7 @@ export default function Recommendations() {
 
   // Fetch venue data from mock JSON file
   useEffect(() => {
-    fetch('/mock/venues.json')
+    fetch('http://localhost:8080/api/locations/trending')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch venue data');
         return res.json();

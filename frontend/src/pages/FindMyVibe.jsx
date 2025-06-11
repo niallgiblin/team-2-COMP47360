@@ -1,44 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, MenuItem, FormControl, Select, InputLabel } from '@mui/material';
 import PageWrapper from '../components/PageWrapper';
 import TrendingVenueCard from '../components/TrendingVenueCard';
-import mockVenues from '../data/mockVenues'; // replace later with real fetch API call
+// import mockVenues from '../data/mockVenues'; // replace later with real fetch API call
+import { useNavigate } from 'react-router-dom';
 
 export default function FindMyVibe() {
+  // stat hooks for fomr inputs and results
   const [input, setInput] = useState('');
   const [results, setResults] = useState([]);
   const [vibe, setVibe] = useState('');
   const [venueType, setVenueType] = useState('');
   const [cuisine, setCuisine] = useState('');
+  const navigate = useNavigate(); // used to navigate to other routes eg /map-view
 
+  // Fetch venues matching the selected filters
   const handleSearch = () => {
-    const filtered = mockVenues.filter(venue => {
-      const tags = venue.tags.map(tag => tag.toLowerCase());
-      
-      const inputMatch = input
-        ? tags.some(tag => tag.includes(input.toLowerCase()))
-        : false;
-  
-      const vibeMatch = vibe
-        ? tags.some(tag => tag.includes(vibe.toLowerCase()))
-        : false;
-  
-      const typeMatch = venueType
-        ? tags.some(tag => tag.includes(venueType.toLowerCase()))
-        : false;
-  
-      const cuisineMatch = cuisine
-        ? tags.some(tag => tag.includes(cuisine.toLowerCase()))
-        : false;
-  
-      // Show venues that match ANY filter (OR logic)
-      return inputMatch || vibeMatch || typeMatch || cuisineMatch;
+    
+    // build quert string using URLSearchParams
+    const queryParams = new URLSearchParams({
+      input,
+      vibe,
+      type: venueType,
+      cuisine
     });
   
-    setResults(filtered);
+    // Make API request to the backend
+    fetch(`http://localhost:8080/api/locations/search?${queryParams}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Search failed');
+        return res.json();
+      })
+      .then((data) => setResults(data)) // store search results
+      .catch((err) => console.error('Error fetching search results:', err));
   };
   
+  // trigger search automatically when any filter input changes
+  useEffect(() => {
+    if (input||vibe||venueType||cuisine) {
+      handleSearch();
+    } else {
+      setResults([]); // clear results if all filters are empty
+    }
+  }, [input, vibe, venueType, cuisine]);
+  
+  
 
+  // log selected venue when "Get Directions" is clicked
   const handleGetDirections = (venue) => {
     console.log('User wants directions to:', venue.name);
     // Future: route to /map with selected venue
@@ -128,6 +136,7 @@ export default function FindMyVibe() {
           </Button>
         </Box>
 
+        {/* Dropdown filters */}
         <Box 
             sx={{ 
                 display: 'flex', 
@@ -214,20 +223,23 @@ export default function FindMyVibe() {
         </Box>
 
 
-        {/* No Results */}
+        {/* Display message if no results match search */}
         {results.length === 0 && (input || vibe || venueType || cuisine) && (
           <Typography align="center" sx={{ color: '#aaa', mb: 4 }}>
             No matching venues found.
           </Typography>
         )}
 
-        {/* Results */}
+        {/* Render results card */}
         {results.map((venue, index) => (
           <TrendingVenueCard
             key={venue.id}
             venue={venue}
             rank={index + 1}
             onGetDirections={handleGetDirections}
+            onClick={() =>
+              navigate('/map-view', { state: { selectedVenue: venue } })
+            }
           />
         ))}
       </Box>
