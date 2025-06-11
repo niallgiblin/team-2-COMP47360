@@ -5,38 +5,41 @@ import VenueCard from '../components/VenueCard';
 import DemoMap from '../components/DemoMap';
 // import venueData from '../data/mockVenues'; // mock JSON data for now
 
+// import venueData from '../data/mockVenues'; // mock JSON data for now
+
 // Map View page 
-// fetches and displays a list of venues
+// fetches and displays venue data
 // allows the user to interact with a map and venue details
 
 export default function MapView() {
 
-  // array of venue obejects, fetched from mock API
+  // state for venue list
   const [venues, setVenues] = useState([]);
   
-  // currently selected venue, displayed in the left panel
+  // state for selected venue, displayed in the left panel
   const [selectedVenue, setSelectedVenue] = useState(null);
   
-  // whether the app is currently loading venue data
+  // state to manage loading screen
   const [loading, setLoading] = useState(true);
 
   
   // Data Fetching
-  // fetch venue data from mock JSON file
   useEffect(() => {
-    fetch('/mock/venues.json')
+    fetch('http://localhost:8080/api/locations')
       .then(res => {
         if (!res.ok) throw new Error('Network response was not ok');
-        return res.json(); // convert response to JSON
+        return res.json(); // parse JSON from response
       })
       .then(data => {
-        setVenues(data); // store venue array
-        setSelectedVenue(data[0]); // default to first venue in list
-        setLoading(false); // turn off loading state
+        setVenues(data); // Save venues
+        if (data.length > 0) {
+          setSelectedVenue(data[0]); // Select the first venue by default
+        }
+        setLoading(false); // Done loading
       })
       .catch(err => {
         console.error('Failed to fetch venue data:', err);
-        setLoading(false); // also stop loading if there's an error
+        setLoading(false); // stop loading if there's an error
       });
   }, []);
   
