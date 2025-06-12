@@ -127,6 +127,42 @@ export default function NavBar() {
                 {item.label}
               </Button>
             ))}
+            <Button
+              component={Link}
+              to="/login"
+              sx={{
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                color: '#FFFFFF',
+                border: '1px solid #FF4ECD',
+                px: 2,
+                ml: 2,
+                '&:hover': {
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  color: '#000',
+                },
+              }}
+            >
+              Log In
+            </Button>
+            <Button
+              component={Link}
+              to="/signup"
+              sx={{
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                color: '#FFFFFF',
+                border: '1px solid #FF4ECD',
+                px: 2,
+                ml: 2,
+                '&:hover': {
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  color: '#000',
+                },
+              }}
+            >
+              Sign Up
+            </Button>
           </Box>
 
           {/* Mobile Menu Button */}
@@ -211,6 +247,80 @@ export default function NavBar() {
 
             </ListItem>
           ))}
+          <ListItem
+            button
+            component={Link}
+            to="/login"
+            onClick={() => setDrawerOpen(false)}
+            sx={{
+              py: 1.5,
+              borderBottom: '1px solid #333',
+            }}
+          >
+            <Typography
+              component="span"
+              sx={{
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                fontSize: '0.9rem',
+                letterSpacing: 1,
+                width: '100%',
+                position: 'relative',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: -4,
+                  left: 0,
+                  height: '2px',
+                  width: '0%',
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  transition: 'width 0.3s ease',
+                },
+                '&:hover::after': {
+                  width: '100%',
+                },
+              }}
+            >
+              Log In
+            </Typography>
+          </ListItem>
+          <ListItem
+            button
+            component={Link}
+            to="/signup"
+            onClick={() => setDrawerOpen(false)}
+            sx={{
+              py: 1.5,
+              borderBottom: '1px solid #333',
+            }}
+          >
+            <Typography
+              component="span"
+              sx={{
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                fontSize: '0.9rem',
+                letterSpacing: 1,
+                width: '100%',
+                position: 'relative',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: -4,
+                  left: 0,
+                  height: '2px',
+                  width: '0%',
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  transition: 'width 0.3s ease',
+                },
+                '&:hover::after': {
+                  width: '100%',
+                },
+              }}
+            >
+              Sign Up
+            </Typography>
+          </ListItem>
         </List>
       </Drawer>
     </>
