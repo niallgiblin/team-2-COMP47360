@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   Box,
   TextField,
@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 
 export default function Signup() {
-  const navigate = useNavigate();
+    const { login } = useAuth();
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -54,13 +54,14 @@ export default function Signup() {
         const data = await res.json();
         throw new Error(data.message || 'Signup failed');
       }
+        // Auto-login after successful signup
+         await login(form.email, form.password);
 
-      // Optionally log in right after signup
-      navigate('/login');
-    } catch (err) {
-      setError(err.message || 'Something went wrong');
-    }
-  };
+        } catch (err) {
+        setError(err.message || 'Something went wrong');
+        }
+    };
+
 
   return (
     <Container maxWidth="sm">

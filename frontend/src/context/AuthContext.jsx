@@ -13,6 +13,7 @@ export const AuthProvider = ({ children }) => {
 
   const [user, setUser] = useState(null); // e.g. { email: '', name: '' }
   const [token, setToken] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // On first load, check if user is already logged in (via localStorage)
   useEffect(() => {
@@ -22,6 +23,7 @@ export const AuthProvider = ({ children }) => {
     if (savedUser && savedToken) {
       setUser(savedUser);
       setToken(savedToken);
+      setIsAuthenticated(true);
     }
   }, []);
 
@@ -42,6 +44,8 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('token', data.token);
+
+      setIsAuthenticated(true);
 
       navigate('/'); // Go to home page after login
     } catch (err) {
@@ -68,6 +72,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('token', data.token);
 
+      setIsAuthenticated(true);
+
       navigate('/'); // Go to home page after signup
     } catch (err) {
       console.error('Signup failed:', err);
@@ -79,13 +85,23 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setIsAuthenticated(false);
+
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     navigate('/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, signup }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        token, 
+        login, 
+        logout, 
+        signup,
+        isAuthenticated 
+      }}>
       {children}
     </AuthContext.Provider>
   );
