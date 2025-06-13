@@ -1,18 +1,26 @@
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet'; // Components for rendering the map and it's elements
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet'; // Components for rendering the map and it's elements
 import { Box } from '@mui/material'; // Box is a layout component from MUI
 import { useEffect, useState } from 'react';
 
+
 // Main Map component, displays venue markers and polygon zones
-export default function DemoMap({ venues = [], onSelectVenue }) {
+export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
   
   // state to hold GeoJSON data for Manhattan zones
   const [zoneData, setZoneData] = useState(null);
+  const [zoneDataLoaded, setZoneDataLoaded] = useState(false);
+
+  const [userTriggeredFly, setUserTriggeredFly] = useState(false);
+
 
   // load the GeoJSON zone data when component mounts
   useEffect(() => {
-    fetch('/data/manhattanZones.geojson')
+    fetch('/manhattanZones.geojson')
       .then(res => res.json())
-      .then(setZoneData)
+      .then(data => {
+        setZoneData(data);
+        setZoneDataLoaded(true); //
+      })
       .catch(console.error);
   }, []);
 
@@ -48,6 +56,30 @@ export default function DemoMap({ venues = [], onSelectVenue }) {
     });
   };
 
+  function FlyToVenue({ venue }) {
+    const map = useMap();
+  
+    useEffect(() => {
+      if (
+        userTriggeredFly &&
+        zoneDataLoaded &&
+        venue && 
+        venue.latitude && 
+        venue.longitude
+      ) {
+        // small time delay to ensure map is ready
+        const timeout = setTimeout(() => {
+          map.flyTo([venue.latitude, venue.longitude], 15); // fly to venue at zoom level 15
+        }, 300); // delay by 300ms
+  
+        return () => clearTimeout(timeout); // clean up
+      }
+    }, [venue, map, zoneDataLoaded, userTriggeredFly]);
+  
+    return null; // doesn't render anything
+  }
+  
+
   return (
     // Use MUI's box component as a containere
     <Box 
@@ -62,6 +94,10 @@ export default function DemoMap({ venues = [], onSelectVenue }) {
         zoom={14} // Set initial zoom level
         style={{ height: '100%', width: '100%' }} // Ensure the map takes up the full size of the box container
       >
+      {selectedVenue && (
+        <FlyToVenue venue={selectedVenue} zoneDataLoaded={zoneDataLoaded} />
+        )}
+
         
         {/* Base map layer from OpenStreetMap */}
         <TileLayer
@@ -84,7 +120,11 @@ export default function DemoMap({ venues = [], onSelectVenue }) {
             key={venue.id}
             position={[venue.latitude, venue.longitude]} // plot by coordinates
             eventHandlers={{
-              click: () => onSelectVenue(venue),
+              click: () => 
+                {
+                  setUserTriggeredFly(true);
+                  onSelectVenue(venue);
+                },
             }}
           >
             
