@@ -1,10 +1,10 @@
 // Define an array of venues, to be used as mock data
-const venues = [
+const mockVenues = [
     {
       id: '1',
       name: 'Astoria Rooftop Bar',
-      lat: 40.7612,
-      lng: -73.9249,
+      latitude: 40.7228,
+      longitude: -74.0010,
       rating: 4.5,
       price: 'Moderate',
       tags: ['Chill', 'Rooftop', 'Underground'],
@@ -14,8 +14,8 @@ const venues = [
     {
       id: '2',
       name: 'Cosy Rest.',
-      lat: 40.7321,
-      lng: -73.9877,
+      latitude: 40.7128,
+      longitude: -74.0060,
       rating: 4.2,
       price: 'Low',
       tags: ['Cozy', 'Jazz'],
@@ -23,5 +23,5 @@ const venues = [
       vibePrediction: [0.3, 0.4, 0.6, 0.9, 0.9],
     },
   ];
-  export default venues;
+  export default mockVenues;
   
