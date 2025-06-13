@@ -10,21 +10,21 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Friends")
+@Table(name = "friend")
 public class Friend {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
+    @Column(name = "id")
     private Integer id;
 
-    @Column(name = "Timestamp")
+    @Column(name = "timestamp")
     private LocalDateTime timestamp;
 
-    @Column(name = "User1")
+    @Column(name = "user1_id")
     private Integer user1;
 
-    @Column(name = "User2")
+    @Column(name = "user2_id")
     private Integer user2;
 
     // Constructors

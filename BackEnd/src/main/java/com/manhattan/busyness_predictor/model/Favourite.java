@@ -8,18 +8,18 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Favourites")
+@Table(name = "favourite")
 public class Favourite {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
+    @Column(name = "id")
     private Integer id;
 
-    @Column(name = "UserId")
+    @Column(name = "user_id")
     private Integer userId;
 
-    @Column(name = "LocId")
+    @Column(name = "location_id")
     private Integer locationId;
 
     // Constructors
