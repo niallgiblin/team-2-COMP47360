@@ -3,24 +3,29 @@ FROM eclipse-temurin:17-jdk-jammy AS builder
 
 WORKDIR /app
 
-COPY mvnw* ./
-COPY .mvn/wrapper/ .mvn/wrapper/
+# Layer 1: Cache Maven wrapper and dependencies
+COPY mvnw ./
+COPY .mvn/ .mvn/
 COPY pom.xml .
 RUN chmod +x mvnw && \
     ./mvnw dependency:go-offline -B
 
+# Layer 2: Build application
 COPY src/ ./src/
 RUN ./mvnw clean package -DskipTests
 
 # ===== RUNTIME STAGE =====
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:17-jre-jammy AS runtime
 WORKDIR /app
 
+# Copy built artifact
 COPY --from=builder /app/target/*.jar app.jar
 
-# Security
-RUN groupadd -r spring && useradd -r -g spring spring \
-    && chown spring:spring /app/app.jar
+# Security setup
+RUN groupadd -r spring && \
+    useradd -r -g spring spring && \
+    chown spring:spring /app/app.jar
+
 USER spring
 
 EXPOSE 8080
