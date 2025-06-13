@@ -3,15 +3,20 @@ import { Box } from '@mui/material';
 import PageWrapper from '../components/PageWrapper';
 import VenueCard from '../components/VenueCard';
 import DemoMap from '../components/DemoMap';
-// import venueData from '../data/mockVenues'; // mock JSON data for now
+import { useLocation } from 'react-router-dom';
 
-// import venueData from '../data/mockVenues'; // mock JSON data for now
+
+import mockVenues from '../data/mockVenues'; // fallback mock JSON data
+
 
 // Map View page 
 // fetches and displays venue data
 // allows the user to interact with a map and venue details
 
 export default function MapView() {
+
+  // const location = useLocation();
+  // const selectedVenueFromState = location.state?.selectedVenue;
 
   // state for venue list
   const [venues, setVenues] = useState([]);
@@ -22,25 +27,32 @@ export default function MapView() {
   // state to manage loading screen
   const [loading, setLoading] = useState(true);
 
-  
+  // state to track if mock data is being used
+  const [isMock, setIsMock] = useState(false);
+
   // Data Fetching
   useEffect(() => {
-    fetch('http://localhost:8080/api/locations')
-      .then(res => {
-        if (!res.ok) throw new Error('Network response was not ok');
-        return res.json(); // parse JSON from response
-      })
-      .then(data => {
-        setVenues(data); // Save venues
-        if (data.length > 0) {
-          setSelectedVenue(data[0]); // Select the first venue by default
-        }
-        setLoading(false); // Done loading
-      })
-      .catch(err => {
-        console.error('Failed to fetch venue data:', err);
-        setLoading(false); // stop loading if there's an error
-      });
+    const fetchData = async () => {
+      try {
+        const res = await fetch('http://localhost:8080/api/locations');
+  
+        if (!res.ok) throw new Error('Server error');
+  
+        const data = await res.json();
+  
+        setVenues(data);
+        setSelectedVenue(data[0]);
+      } catch (err) {
+        console.warn('Falling back to mock data due to fetch error:', err);
+        setVenues(mockVenues);
+        setSelectedVenue(mockVenues[0]);
+        setIsMock(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+  
+    fetchData();
   }, []);
   
   // Loading screen
@@ -91,8 +103,17 @@ export default function MapView() {
             height: { xs: '400px', md: 'calc(100% - 32px)' },
             p: { xs: 1, md: 2 }
             }}>
+          {isMock && (
+          <Box sx={{ color: 'orange', p: 1 }}>
+            You are viewing mock venue data. Backend not connected.
+          </Box>
+        )}
+
           {/* When a marker is clicked, calls setSelectedVenue to update the left*/}
-          <DemoMap venues={venues} onSelectVenue={setSelectedVenue} /> 
+          <DemoMap 
+            venues={venues} 
+            selectedVenue={selectedVenue}
+            onSelectVenue={setSelectedVenue} /> 
         </Box>
       </Box>
     </PageWrapper>
