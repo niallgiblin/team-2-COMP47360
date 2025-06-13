@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import nycVideo from '../assets/hero.mp4';
+import { Link } from 'react-router-dom';
 
 
 // Define and export the HeroSection component
@@ -101,6 +102,8 @@ export default function HeroSection() {
 
         {/* Call-to-action button */}
         <Button
+          component={Link}
+          to="/vibe"
           variant="contained"
           sx={{
             background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)', //background colour
