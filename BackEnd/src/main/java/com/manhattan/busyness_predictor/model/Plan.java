@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 public class Plan {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Integer id;
 
     @Column(name = "date")
@@ -25,13 +26,13 @@ public class Plan {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "loc_1")
+    @Column(name = "location_1")
     private Integer loc1;
 
-    @Column(name = "loc_2")
+    @Column(name = "location_2")
     private Integer loc2;
 
-    @Column(name = "loc_3")
+    @Column(name = "location_3")
     private Integer loc3;
 
     // Constructors

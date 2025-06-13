@@ -30,7 +30,7 @@ import com.manhattan.busyness_predictor.service.SharedService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/locations")
+@RequestMapping("/api/location")
 @CrossOrigin(origins = "http://localhost:4137") // Vite/React url
 public class LocationController {
 
@@ -145,7 +145,7 @@ public class LocationController {
     }
 
     // Leave a review - Simple post request to update Locations DB
-    @PostMapping("/{id}/reviews")
+    @PostMapping("/{id}/review")
     public ResponseEntity<Map<String, Object>> leaveReview(
             @PathVariable Integer id,
             @RequestParam Integer userId,
@@ -166,7 +166,7 @@ public class LocationController {
     }
 
     // Update a review
-    @PutMapping("/reviews/{reviewId}")
+    @PutMapping("/review/{id}")
     public ResponseEntity<Map<String, Object>> updateReview(
             @PathVariable Integer reviewId,
             @RequestParam Integer userId,
@@ -207,7 +207,7 @@ public class LocationController {
     }
 
     // Get user's favourite locations
-    @GetMapping("/favourites")
+    @GetMapping("/favourite")
     public ResponseEntity<List<Location>> getFavouriteLocations(@RequestParam Integer userId) {
         try {
             List<Location> favourites = favouriteService.getFavouriteLocations(userId);

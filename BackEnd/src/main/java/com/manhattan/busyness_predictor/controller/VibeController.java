@@ -92,7 +92,7 @@ public class VibeController {
     }
 
     // Get multiple locations by IDs (for batch LLM responses)
-    @PostMapping("/locations/batch")
+    @PostMapping("/location/batch")
     public ResponseEntity<Map<String, Object>> getLocationsByIds(
             @RequestBody List<Integer> locationIds) {
         try {

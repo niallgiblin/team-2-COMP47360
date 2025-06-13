@@ -10,12 +10,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "Shared")
+@Table(name = "shared")
 public class Shared {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "Id")
+    @Column(name = "id")
     private Integer id;
 
     @Column(name = "sender")
@@ -24,10 +24,10 @@ public class Shared {
     @Column(name = "receiver")
     private Integer receiverId;
 
-    @Column(name = "LocationId")
+    @Column(name = "location_id")
     private Integer locationId;
 
-    @Column(name = "SharedAt")
+    @Column(name = "shared_at")
     private LocalDateTime sharedAt;
 
     // Constructors
