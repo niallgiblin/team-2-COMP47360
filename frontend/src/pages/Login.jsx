@@ -52,73 +52,84 @@ export default function Login() {
   };
 
   return (
+    // centre login form in container
     <Container maxWidth="sm">
-      <Paper elevation={4} sx={{ mt: 8, p: 4, borderRadius: 2 }}>
-        <Typography variant="h4" align="center" gutterBottom>
+      <Paper 
+        elevation={4}            // shadow effect
+        sx={{ 
+            mt: 8,              // top margin
+            p: 4,               // padding
+            borderRadius: 2     // rounded corners
+        }}
+    >
+        {/* heading text*/}
+        <Typography 
+            variant="h4" 
+            align="center" 
+            gutterBottom
+        >
           Log In
         </Typography>
 
+        {/* show error message if login fails*/}
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography 
+            color="error" 
+            align="center" 
+            sx={{ 
+                mb: 2 
+            }}
+            >
             {error}
-          </Alert>
+          </Typography>
         )}
 
         <Box 
-          component="form" 
-          onSubmit={handleSubmit} 
-          sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+            component="form" 
+            onSubmit={handleSubmit} 
+            sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: 3 
+            }}
         >
+
+        {/* email input */}
           <TextField
-            label="Username or Email"
-            name="usernameOrEmail"
-            type="text"
+            label="Email"
+            type="email"
             required
             fullWidth
-            value={formData.usernameOrEmail}
-            onChange={handleChange}
-            disabled={loading}
-            placeholder="Enter your username or email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
 
+          {/* password input */}
           <TextField
             label="Password"
-            name="password"
             type="password"
             required
             fullWidth
-            value={formData.password}
-            onChange={handleChange}
-            disabled={loading}
-            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
 
+          {/* submit button */}
           <Button
             type="submit"
             variant="contained"
             size="large"
-            disabled={loading}
             sx={{
               background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
               fontWeight: 'bold',
               color: '#121212',
               '&:hover': {
                 background: 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
-              },
-              '&:disabled': {
-                background: '#ccc',
               }
             }}
           >
-            {loading ? <CircularProgress size={24} /> : 'Log In'}
+            Log In
           </Button>
-
-          <Typography align="center" sx={{ mt: 2 }}>
-            Don't have an account?{' '}
-            <Link to="/signup" style={{ color: '#3ABEFF', textDecoration: 'none' }}>
-              Sign up here
-            </Link>
-          </Typography>
         </Box>
       </Paper>
     </Container>

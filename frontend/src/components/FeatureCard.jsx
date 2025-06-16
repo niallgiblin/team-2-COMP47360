@@ -1,19 +1,23 @@
 import { Box, Typography } from '@mui/material';
 
+// Feature Card component
+// reusable UI for displaying icon, title and description
 export default function FeatureCard({ iconSrc, title, description }) {
   return (
+    
+    // outer container for the card
     <Box
       sx={{
-        flex: 1,
-        minWidth: 200,
-        textAlign: 'center',
-        px: { xs: 2, md: 3 },
-        py: 4,
+        flex: 1,                        // allows cards to grow/ shrink evenly
+        minWidth: 200,                  // ensures min width for responsive layout
+        textAlign: 'center',            // centre-align all child content
+        px: { xs: 2, md: 3 },           // horizontal padding
+        py: 4,                          // vertical padding
         backgroundColor: 'transparent', // No box
-        color: '#fff',
+        color: '#fff',                  // default text colour
       }}
     >
-      {/* Icon */}
+      {/* Icon image at top of the card */}
       <Box
         component="img"
         src={iconSrc}
@@ -29,13 +33,13 @@ export default function FeatureCard({ iconSrc, title, description }) {
       <Typography
         variant="h6"
         fontWeight="bold"
-        gutterBottom
+        gutterBottom              // adds spacing below title
         sx={{ color: '#fff' }}
       >
         {title}
       </Typography>
 
-      {/* Description */}
+      {/* Description text */}
       <Typography
         variant="body2"
         sx={{ color: '#ccc' }}
