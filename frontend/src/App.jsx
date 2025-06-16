@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Box } from '@mui/material';
 
 // Import existing components
@@ -46,6 +46,23 @@ function AppLayout({ children }) {
 // Main App component wrapped with AuthProvider
 function App() {
   return (
+    <Box sx={{ width: '100%', minHeight: '100vh', backgroundColor: '#000' }}>
+      <NavBar />
+
+      {/* Routes */}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/map" element={<MapView />} />
+        <Route path="/recommendations" element={<Recommendations />} />
+        <Route path="/vibe" element={<FindMyVibe />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+      </Routes>
+
+      <Skyline />
+      <Footer />
+    </Box>
     <AuthProvider>
       <AppContent />
     </AuthProvider>
@@ -126,6 +143,7 @@ function AppContent() {
     </AppLayout>
   );
 }
+
 
 export default App;
 

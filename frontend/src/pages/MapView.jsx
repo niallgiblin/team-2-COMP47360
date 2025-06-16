@@ -15,14 +15,14 @@ import mockVenues from '../data/mockVenues'; // fallback mock JSON data
 
 export default function MapView() {
 
-  // const location = useLocation();
-  // const selectedVenueFromState = location.state?.selectedVenue;
+  const location = useLocation();
+  const selectedVenueFromState = location.state?.selectedVenue || null;
 
   // state for venue list
   const [venues, setVenues] = useState([]);
   
   // state for selected venue, displayed in the left panel
-  const [selectedVenue, setSelectedVenue] = useState(null);
+  const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
   
   // state to manage loading screen
   const [loading, setLoading] = useState(true);
@@ -41,11 +41,17 @@ export default function MapView() {
         const data = await res.json();
   
         setVenues(data);
-        setSelectedVenue(data[0]);
+        if (!selectedVenueFromState) {
+          setSelectedVenue(data[0]);
+        }
       } catch (err) {
         console.warn('Falling back to mock data due to fetch error:', err);
+  
         setVenues(mockVenues);
-        setSelectedVenue(mockVenues[0]);
+        if (!selectedVenueFromState) {
+          setSelectedVenue(mockVenues[0]);
+        }
+  
         setIsMock(true);
       } finally {
         setLoading(false);
@@ -53,7 +59,8 @@ export default function MapView() {
     };
   
     fetchData();
-  }, []);
+  }, [selectedVenueFromState]);
+  
   
   // Loading screen
   // Show placeholder message while data is being fetched

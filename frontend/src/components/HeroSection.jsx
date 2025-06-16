@@ -11,7 +11,7 @@ export default function HeroSection() {
 
   // Run once on component mount to check screen size and connection speed
   useEffect(() => {
-    const isDesktop = window.innerWidth >= 768;
+    const isDesktop = window.innerWidth >= 768; // avoid loading the video on small screens, to save on mobile bandwidth
     const isFastConnection =
       navigator.connection?.effectiveType === '4g' || !navigator.connection;
 
