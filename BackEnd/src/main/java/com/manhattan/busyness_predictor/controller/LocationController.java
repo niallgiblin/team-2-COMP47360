@@ -5,8 +5,11 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +34,6 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/location")
-@CrossOrigin(origins = "http://localhost:4137") // Vite/React url
 public class LocationController {
 
     @Autowired
@@ -69,6 +71,11 @@ public class LocationController {
         return ResponseEntity.ok(locations);
     }
 
+    @GetMapping("/")
+    public ResponseEntity<String> home() {
+        return ResponseEntity.ok("Busyness Predictor API - Access /api/location for endpoints");
+    }
+    
     // Click on location - fetch location information & busyness prediction
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getLocationDetails(@PathVariable Integer id) {
@@ -226,5 +233,33 @@ public class LocationController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<Page<Location>> searchLocations(
+            @RequestParam(required = false) String input,
+            @RequestParam(required = false) Boolean isRestaurant,
+            @RequestParam(required = false) Boolean isLandmark,
+            @RequestParam(required = false) Boolean isClub,
+            @RequestParam(required = false) Boolean isBar,
+            @RequestParam(required = false) Integer maxPrice,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "name") String sort,
+            @RequestParam(defaultValue = "asc") String direction) {
+
+        Sort.Direction sortDirection = "desc".equalsIgnoreCase(direction)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(sortDirection, sort));
+
+        Page<Location> results = locationService.searchLocations(
+                input, isRestaurant, isLandmark, isClub, isBar, maxPrice, pageable);
+
+        return ResponseEntity.ok(results);
     }
 }

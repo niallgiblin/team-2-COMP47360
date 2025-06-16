@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Repository;
 import com.manhattan.busyness_predictor.model.Location;
 
 @Repository
-public interface LocationRepository extends JpaRepository<Location, Integer> {
+public interface LocationRepository extends JpaRepository<Location, Integer>, JpaSpecificationExecutor<Location> {
 
         // Basic type queries
         List<Location> findByIsRestaurantTrue();
@@ -70,4 +71,10 @@ public interface LocationRepository extends JpaRepository<Location, Integer> {
         @Query("SELECT l FROM Location l WHERE " +
                         "(SELECT AVG(r.reviewVal) FROM Review r WHERE r.locationId = l.id) >= :minRating")
         List<Location> findByReview(@Param("minRating") Float minRating);
+
+        // Text search queries
+        @Query("SELECT l FROM Location l WHERE " +
+                        "LOWER(l.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                        "LOWER(l.address) LIKE LOWER(CONCAT('%', :query, '%'))")
+        List<Location> searchByText(@Param("query") String query);
 }
