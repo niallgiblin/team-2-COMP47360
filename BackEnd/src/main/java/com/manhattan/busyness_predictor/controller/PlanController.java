@@ -1,17 +1,30 @@
 package com.manhattan.busyness_predictor.controller;
 
-import com.manhattan.busyness_predictor.dto.*;
-import com.manhattan.busyness_predictor.model.User;
-import com.manhattan.busyness_predictor.service.PlanService;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.manhattan.busyness_predictor.dto.AddPlaceToPlanRequest;
+import com.manhattan.busyness_predictor.dto.CreatePlanRequest;
+import com.manhattan.busyness_predictor.dto.ErrorResponse;
+import com.manhattan.busyness_predictor.dto.PlanResponse;
+import com.manhattan.busyness_predictor.dto.SharePlanRequest;
+import com.manhattan.busyness_predictor.model.User;
+import com.manhattan.busyness_predictor.service.PlanService;
 
 @RestController
-@RequestMapping("/api/plans")
+@RequestMapping("/api/plan")
 @CrossOrigin(origins = "*")
 public class PlanController {
 
@@ -84,7 +97,7 @@ public class PlanController {
         }
     }
 
-    @GetMapping("/{planId}")
+    @GetMapping("/{id}")
     public ResponseEntity<?> getPlanById(@PathVariable Integer planId, @RequestAttribute User user) {
         try {
             PlanResponse plan = planService.getPlanById(planId, user.getId());
@@ -95,7 +108,7 @@ public class PlanController {
         }
     }
 
-    @DeleteMapping("/{planId}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<?> deletePlan(@PathVariable Integer planId, @RequestAttribute User user) {
         try {
             planService.deletePlan(planId, user.getId());

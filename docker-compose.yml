@@ -1,21 +1,42 @@
 services:
+  db:
+    image: mysql:8.0  # Use official image instead of building
+    container_name: urban-gala-db
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}  # Default value if env var not set
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-urban_gala}
+      MYSQL_USER: ${MYSQL_USER:-urbanuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-urbanpass}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./backend/docker/db-init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
   backend:
     build:
       context: ./backend
     container_name: urban-gala-backend
     ports:
       - "8080:8080"
-  # depends_on:
-      # Uncomment this when MySQL is ready
-      # - db
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-urban_gala}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-urbanuser}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-urbanpass}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
     networks:
       - app-network
-    environment:
-      # Example - customize later
-      # SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/your_db
-      # SPRING_DATASOURCE_USERNAME: your_user
-      # SPRING_DATASOURCE_PASSWORD: your_password
-      JAVA_OPTS: "-Xmx512m"
 
   frontend:
     build:
@@ -28,24 +49,8 @@ services:
     networks:
       - app-network
 
-  # db:
-  #   image: mysql:8.0
-  #   container_name: urban-gala-db
-  #   restart: unless-stopped
-  #   ports:
-  #     - "3306:3306"
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: your_root_password
-  #     MYSQL_DATABASE: your_db
-  #     MYSQL_USER: your_user
-  #     MYSQL_PASSWORD: your_password
-  #   volumes:
-  #     - db_data:/var/lib/mysql
-  #   networks:
-  #     - app-network
-
 networks:
   app-network:
 
-# volumes:
-#   db_data:
+volumes:
+  db_data:

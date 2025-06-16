@@ -1,35 +1,53 @@
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Box,
   TextField,
   Button,
   Typography,
   Container,
-  Paper
+  Paper,
+  Alert,
+  CircularProgress
 } from '@mui/material';
 
-// Login component
-// handles user authentication
 export default function Login() {
-  const { login } = useAuth();      // get the login function from auth context
-  
-  // form field state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  
-  // state for error messsage display
+  const { login, loading } = useAuth();
+  const [formData, setFormData] = useState({
+    usernameOrEmail: '',
+    password: ''
+  });
   const [error, setError] = useState('');
 
-  // form submission
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+    // Clear error when user starts typing
+    if (error) setError('');
+  };
+
   const handleSubmit = async (e) => {
-    e.preventDefault();         // prevent page reload
-    setError('');               // clear any existing error message
+    e.preventDefault();
+    setError('');
+
+    // Basic validation
+    if (!formData.usernameOrEmail.trim()) {
+      setError('Please enter your username or email');
+      return;
+    }
+    
+    if (!formData.password) {
+      setError('Please enter your password');
+      return;
+    }
 
     try {
-      await login(email, password);             // attempt login
+      await login(formData.usernameOrEmail.trim(), formData.password);
     } catch (err) {
-      setError('Invalid login credentials.');   // show error if fail
+      setError(err.message || 'Invalid login credentials');
     }
   };
 
