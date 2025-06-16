@@ -2,10 +2,16 @@ import { useState, useEffect } from 'react';
 import PageWrapper from '../components/PageWrapper';
 import { Typography, Box } from '@mui/material';
 import TrendingVenueCard from '../components/TrendingVenueCard';
+import { useNavigate } from 'react-router-dom';
 
 export default function Recommendations() {
   const [venues, setVenues] = useState([]);         // Store fetched venue data
   const [loading, setLoading] = useState(true);     // Track loading state
+  const [isMock, setIsMock] = useState(false);      // Flag to show if using mock fallback
+  const navigate = useNavigate();
+  const handleGetDirections = (venue) => {
+  navigate('/map', { state: { selectedVenue: venue } });
+  };
 
   // Fetch venue data from mock JSON file
   useEffect(() => {
@@ -18,17 +24,31 @@ export default function Recommendations() {
         setVenues(data);         // Save data to state
         setLoading(false);       // Stop showing loading message
       })
-      .catch((err) => {
-        console.error('Error fetching data:', err);
+      .catch(async (err) => {
+        console.warn('Falling back to mock data de to fetch error:', err);
+        
+        try {
+          const res = await fetch('/mock/venues.json');
+          const mockData = await res.json();
+
+          // Transform fields to match what your components expect
+          const transformed = mockData.map((v) => ({
+            ...v,
+            latitude: v.lat,
+            longitude: v.lng,
+            address: v.address || 'No address provided',
+          }));
+
+          setVenues(transformed);
+          setIsMock(true);
+        } catch (mockErr) {
+          console.error('Error loading mock data:', mockErr);
+        }
+        
         setLoading(false);
       });
   }, []);
 
-  // Handle "Get Directions" click
-  const handleGetDirections = (venue) => {
-    console.log('User clicked Get Directions for:', venue.name);
-    // Later navigate to MapView
-  };
 
   if (loading) {
     return (
@@ -76,6 +96,20 @@ export default function Recommendations() {
           See the top trending venues based on footfall, reviews, and vibe activity.
         </Typography>
 
+        {/* Notice if mock data is being used */}
+        {isMock && (
+          <Typography
+            variant="body2"
+            sx={{ 
+              color: 'orange', 
+              mb: 2, 
+              textAlign: 'center' 
+            }}
+          >
+            (Mock data displayed — backend unavailable)
+          </Typography>
+        )}
+        
         {/* Display trending venues */}
         {venues.map((venue, index) => (
           <TrendingVenueCard

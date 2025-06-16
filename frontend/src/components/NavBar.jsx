@@ -24,13 +24,14 @@ const navItems = [
   { label: 'About', to: '/about' },
 ];
 
+// main NavBar component
 export default function NavBar() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuth();
+  const [drawerOpen, setDrawerOpen] = useState(false);  // tracks mobile menu state
+  const { isAuthenticated, user, logout } = useAuth();  // auth state from context
 
   return (
     <>
-      {/* === Top App Bar === */}
+      {/* Top App Bar */}
       <AppBar
         position="sticky"
         sx={{
@@ -63,6 +64,7 @@ export default function NavBar() {
             }}
           >
             <img src={logo} alt="Urban Gala logo" style={{ height: 76 }} />
+            
             <Box sx={{ lineHeight: 1, mt: 0.5 }}>
               <Typography
                 variant="h6"
@@ -77,6 +79,7 @@ export default function NavBar() {
               >
                 The Urban Gala
               </Typography>
+              
               <Typography
                 variant="caption"
                 sx={{
@@ -133,6 +136,7 @@ export default function NavBar() {
               </Button>
             ))}
 
+            {/* show user and logout buttons if logged in */}
             {isAuthenticated ? (
               <>
                 <Typography sx={{ color: '#fff', ml: 2 }}>
@@ -157,6 +161,7 @@ export default function NavBar() {
               </>
             ) : (
               <>
+                {/* Log In / Sign Up buttons */}
                 <Button
                   component={Link}
                   to="/login"
@@ -291,6 +296,7 @@ export default function NavBar() {
                 </Typography>
               </ListItem>
 
+              {/* Log in / sign up buttons for mobile */}
               <ListItem
                 button
                 onClick={() => {

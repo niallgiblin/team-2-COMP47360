@@ -4,14 +4,16 @@ import logo from '../assets/urban-gala-logo.svg';
 
 export default function Footer() {
   return (
+    
+    // outer footer container
     <Box
       component="footer"
       sx={{
-        backgroundColor: '#000000',
-        color: '#FFFFFF',
-        py: 4,
-        px: 2,
-        mt: 8,
+        backgroundColor: '#000000', // solid black background
+        color: '#FFFFFF',           // default text colour
+        py: 4,                      // vertical padding
+        px: 2,                      // horizontal padding
+        mt: 8,                      // top margin
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -20,17 +22,21 @@ export default function Footer() {
     >
       {/* Logo + Name */}
       <Box
-        component={Link}
-        to="/"
+        component={Link}    // turn box into clickable link
+        to="/"              // link target (homepage)
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1.5,
-          textDecoration: 'none',
-          mb: 1,
+          gap: 1.5,                 // space between logo and text
+          textDecoration: 'none',   // remove underline
+          mb: 1,                    // margin below
         }}
       >
+        
+        {/* logo image */}
         <img src={logo} alt="Urban Gala logo" style={{ height: 40 }} />
+        
+        {/* Name */}
         <Typography
           variant="h6"
           sx={{
@@ -47,7 +53,12 @@ export default function Footer() {
       </Box>
 
       {/* Copyright */}
-      <Typography variant="caption" sx={{ color: '#888', mt: 1 }}>
+      <Typography variant="caption" 
+        sx={{ 
+          color: '#888', 
+          mt: 1 
+        }}
+      >
         © 2025 The Urban Gala. All rights reserved.
       </Typography>
     </Box>
