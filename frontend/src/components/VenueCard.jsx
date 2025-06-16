@@ -102,7 +102,7 @@ export default function VenueCard({ venue }) {
             mt: 1 
             }}
         >
-        {venue.tags.map((tag) => (
+        {(venue.tags || []).map((tag) => (
           <Chip 
             key={tag} 
             label={tag} 

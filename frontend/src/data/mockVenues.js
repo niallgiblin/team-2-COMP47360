@@ -3,8 +3,8 @@ const mockVenues = [
     {
       id: '1',
       name: 'Astoria Rooftop Bar',
-      latitude: 40.7228,
-      longitude: -74.0010,
+      lat: 40.7228,
+      lng: -74.0010,
       rating: 4.5,
       price: 'Moderate',
       tags: ['Chill', 'Rooftop', 'Underground'],
@@ -14,8 +14,8 @@ const mockVenues = [
     {
       id: '2',
       name: 'Cosy Rest.',
-      latitude: 40.7128,
-      longitude: -74.0060,
+      lat: 40.7128,
+      lng: -74.0060,
       rating: 4.2,
       price: 'Low',
       tags: ['Cozy', 'Jazz'],
