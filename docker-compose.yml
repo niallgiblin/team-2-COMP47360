@@ -4,7 +4,7 @@ services:
     container_name: urban-gala-db
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}  # Default value if env var not set
       MYSQL_DATABASE: ${MYSQL_DATABASE:-urban_gala}
