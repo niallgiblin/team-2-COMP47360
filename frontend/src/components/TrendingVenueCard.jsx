@@ -3,6 +3,21 @@ import WhatshotIcon from '@mui/icons-material/Whatshot';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 
 export default function TrendingVenueCard({ venue, onGetDirections }) {
+  const priceLevels = {
+    'very cheap': 1,
+    'cheap': 2,
+    'moderate': 3,
+    'expensive': 4,
+    'very expensive': 5,
+  };
+  
+  const normalizedPrice = typeof venue.price === 'string' 
+  ? venue.price.trim().toLowerCase() 
+  : '';
+
+  const level = priceLevels[normalizedPrice] || 0;
+
+  
   return (
     <Card
       sx={{
@@ -109,18 +124,15 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
           <Box 
             sx={{ 
                 display: 'flex', 
-                gap: '2px' // gap between each money icon 
+                gap: '0.5px' // gap between each money icon 
                 }}
             >
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3, 4, 5].map((i) => (
               <AttachMoneyIcon
                 key={i}
                 sx={{
                   fontSize: 16,
-                  color:
-                    i <= (venue.price === 'Low' ? 1 : venue.price === 'Moderate' ? 2 : 3)
-                      ? '#FFD700'
-                      : '#555555',
+                  color: i <= level ? '#FFD700' : '#555555',
                 }}
               />
             ))}

@@ -78,13 +78,13 @@ export default function VenueCard({ venue }) {
         >
             
             {/* Display 3 money icons, fill them based on price level */}
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3, 4, 5].map((i) => (
             <AttachMoneyIcon
                 key={i}
                 sx={{
                 fontSize: 16,  // size of money icons
                 color:
-                    i <= (venue.price === 'Low' ? 1 : venue.price === 'Moderate' ? 2 : 3)
+                    i <= Number(venue.price) // === 'Low' ? 1 : venue.price === 'Moderate' ? 2 : 3)
                     ? '#FFD700' // filled in gold if part of price level
                     : '#555555', // greyed out if not filled
                 }}

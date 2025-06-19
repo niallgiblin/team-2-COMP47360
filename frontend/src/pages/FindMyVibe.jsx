@@ -30,6 +30,10 @@ export default function FindMyVibe() {
   const [totalElements, setTotalElements] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
+  const handleGetDirections = (venue) => {
+    navigate("/map", { state: { selectedVenue: venue } });
+  };
+
   // Memoized search function
   const handleSearch = useCallback(() => {
     if (!input && !vibe && !venueType && !cuisine) {
@@ -84,9 +88,7 @@ export default function FindMyVibe() {
     handleSearch();
   }, [handleSearch]);
 
-  const handleGetDirections = (venue) => {
-    console.log("User wants directions to:", venue.name);
-  };
+
 
   return (
     <PageWrapper>
