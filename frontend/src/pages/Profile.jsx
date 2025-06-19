@@ -203,7 +203,7 @@ export default function Profile() {
             </Grid>
 
             <TextField
-                label="Phone Number"
+                label="Phone Number (optional)"
                 name="phoneNumber"
                 type="tel"
                 value={formData.phoneNumber}
