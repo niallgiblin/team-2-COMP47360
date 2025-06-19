@@ -12,6 +12,7 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
+// Override Leaflet's default marker icon paths
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -19,8 +20,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+// Main map component
 export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
+  
+  // GeoJSON zone boundaries
   const [zoneData, setZoneData] = useState(null);
+
+  // busyness values from the backend API
+  const [busynessData, setBusynessData] = useState([]);
 
   // tracks if the zone data has finished loading
   const [zoneDataLoaded, setZoneDataLoaded] = useState(false);
@@ -28,9 +35,39 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
   // tracks if the user has manually selected a venue
   const [userTriggeredFly, setUserTriggeredFly] = useState(false);
 
+  // stores user's geolocation
   const [userLocation, setUserLocation] = useState(null);
+  
+  // manual address input for start location
   const [manualStart, setManualStart] = useState("");
-  const [routeKey, setRouteKey] = useState(0); // Force re-render of RouteDisplay
+  
+  // Force re-render of RouteDisplay
+  const [routeKey, setRouteKey] = useState(0);
+
+  // Function to get colour based busyness score
+  const getColorForBusyness = (busyness) => {
+    if (busyness >= 75) return "#FF0000"; // High - Red
+    if (busyness >= 50) return "#FFA500"; // Medium - Orange
+    if (busyness >= 25) return "#FFFF00"; // Low - Yellow
+    return "#00FF00"; // Very low - Green
+  };
+  
+  // Dynamically determine zone styling based on busyness data
+  const getZoneStyle = (feature) => {
+    const locationId = feature.properties.LocationID;
+    const match = busynessData.find((z) => z.LocationID === locationId);
+    const fillColor = match ? getColorForBusyness(match.busyness * 100) : "#CCCCCC"; // Grey if no data
+  
+    return {
+      fillColor,
+      weight: 2,
+      opacity: 1,
+      color: "#3ABEFF",
+      fillOpacity: 0.5,
+    };
+  };
+  
+  
 
   // load the GeoJSON zone data when component mounts
   useEffect(() => {
@@ -43,30 +80,39 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
       .catch(console.error);
   }, []);
 
-  // Define a style for the GeoJSON polygons
-  const zoneStyle = {
-    fillColor: "#FF4ECD",
-    weight: 2,
-    opacity: 1,
-    color: "#3ABEFF",
-    fillOpacity: 0.5,
-  };
+  // retrieve live busyness data
+  useEffect(() => {
+    fetch("/api/zones/busyness")
+      .then((res) => res.json())
+      .then((data) => setBusynessData(data))
+      .catch(console.error);
+  }, []);
+  
 
+  // Set interactivity for each zone feature (mouseover, mouseout, click) 
   const onEachZone = (feature, layer) => {
     layer.on({
       mouseover: (e) => {
-        e.target.setStyle({ weight: 3, color: "#fff", fillOpacity: 0.7 });
+        // highlight on hover
+        e.target.setStyle({
+          weight: 3,
+          color: "#ffffff",
+          fillOpacity: 0.7,
+        });
       },
       mouseout: (e) => {
-        e.target.setStyle(zoneStyle);
+        // reset to default style when mouse leaves
+        const originalStyle = getZoneStyle(feature);
+        e.target.setStyle(originalStyle);
       },
       click: () => {
         alert(
-          `You clicked on zone: ${feature.properties.name || "Unnamed Area"}`
+          `You clicked on zone: ${feature.properties.zone || feature.properties.name || "Unnamed Area"}`
         );
       },
     });
   };
+  
 
   // component to fly to a selected venue
   function FlyToVenue({ venue }) {
@@ -107,6 +153,7 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
     );
   }, []);
 
+  // attempt to get user's geoloaction on page load
   const handleGeocodeStart = () => {
     if (!manualStart.trim()) return;
 
@@ -131,6 +178,7 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
       });
   };
 
+  // Main render
   return (
     // Use MUI's box component as a container
     <Box
@@ -181,7 +229,7 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
         {zoneData && (
           <GeoJSON
             data={zoneData}
-            style={zoneStyle}
+            style={getZoneStyle}
             onEachFeature={onEachZone}
           />
         )}
