@@ -43,7 +43,14 @@ services:
       context: ./frontend
     container_name: urban-gala-frontend
     ports:
-      - "4173:4173"
+      - "5173:5173"
+      - "24678:24678"        # Vite HMR (Hot Module Replacement) websocket
+    volumes:
+      - ./frontend:/app      # Mount code into the container
+      - /app/node_modules    # Avoid conflict with local node_modules
+    command: npm run dev     # Start dev server instead of production build
+    environment:
+    - HOST=0.0.0.0
     depends_on:
       - backend
     networks:
