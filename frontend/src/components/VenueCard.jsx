@@ -6,6 +6,20 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 export default function VenueCard({ venue }) {
   if (!venue) return null; // return nothing if the venue is not provided
 
+  const priceLevels = {
+    'very cheap': 1,
+    'cheap': 2,
+    'moderate': 3,
+    'expensive': 4,
+    'very expensive': 5,
+  };
+  
+  const normalizedPrice = typeof venue.price === 'string' 
+  ? venue.price.trim().toLowerCase() 
+  : '';
+
+  const level = priceLevels[normalizedPrice] || 0;
+  
   return (
     // Outer card containner
     <Card 
@@ -77,16 +91,13 @@ export default function VenueCard({ venue }) {
                 }}
         >
             
-            {/* Display 3 money icons, fill them based on price level */}
+            {/* Display 5 money icons, fill them based on price level */}
             {[1, 2, 3, 4, 5].map((i) => (
             <AttachMoneyIcon
                 key={i}
                 sx={{
                 fontSize: 16,  // size of money icons
-                color:
-                    i <= Number(venue.price) // === 'Low' ? 1 : venue.price === 'Moderate' ? 2 : 3)
-                    ? '#FFD700' // filled in gold if part of price level
-                    : '#555555', // greyed out if not filled
+                color: i <= level ? '#FFD700' : '#555555',
                 }}
             />
             ))}
