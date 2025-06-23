@@ -12,7 +12,8 @@ import {
   Typography,
   Button,
   Box,
-  TextField
+  TextField,
+  Slider
 } from '@mui/material';
 
 import { useEffect, useState } from 'react';
@@ -42,6 +43,15 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
   const [routeKey, setRouteKey] = useState(0); 
   const [zoneCenter, setZoneCenter] = useState(null); // holds clicked zone's center
 
+  // set up state for prediction dat and time control
+  const [predictionData, setPredictionData] = useState([]);       // holds full prediction dataset
+  const [selectedTimestamp, setSelectedTimestamp] = useState(null); // current time on slider
+  
+  // Extract available timestamps from the first zone’s prediction list
+  const availableTimestamps = predictionData[0]?.predictions?.map(p => p.timestamp) || [];
+
+  // state to track the current mode (live or predicted)
+  const [mode, setMode] = useState('forecast'); // or 'live'
 
   // colour zones by busyness
   const getColorForBusyness = (busyness) => {
@@ -51,19 +61,35 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
     return '#00FF00'; // green - quiet
   };
 
+  // assign style to zones based on selected mode (live or forecast)
   const getZoneStyle = (feature) => {
     const locationId = feature.properties.LocationID;
-    const match = busynessData.find((z) => z.LocationID === locationId);
-    const fillColor = match ? getColorForBusyness(match.busyness * 100) : '#CCCCCC'; // default grey
+  
+    if (mode === 'forecast') {
+      const zone = predictionData.find(z => z.LocationID === locationId);
+      const match = zone?.predictions?.find(p => p.timestamp === selectedTimestamp);
+      const fillColor = match ? getColorForBusyness(match.busyness * 100) : '#CCCCCC';
+      return {
+        fillColor,
+        weight: 2,
+        opacity: 1,
+        color: '#3ABEFF',
+        fillOpacity: 0.5
+      };
+    }
+  
+    // fallback to live data
+    const match = busynessData.find(z => z.LocationID === locationId);
+    const fillColor = match ? getColorForBusyness(match.busyness * 100) : '#CCCCCC';
     return {
       fillColor,
       weight: 2,
       opacity: 1,
-      color: '#3ABEFF', // blue border
+      color: '#3ABEFF',
       fillOpacity: 0.5
     };
   };
-
+  
   // load GeoJSON zone shapes
   useEffect(() => {
     fetch('/manhattanZones.geojson')
@@ -83,6 +109,51 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
         .catch(console.error);
   }, []);
 
+// TEMPORARY: use dummy prediction data until backend is ready
+useEffect(() => {
+  // const fetchPredictionData = async () => {
+  //   try {
+  //     const res = await fetch('/cached/predictions.json');
+  //     const data = await res.json();
+  //     setPredictionData(data);
+  //     if (data.length > 0 && data[0].predictions?.length > 0) {
+  //       setSelectedTimestamp(data[0].predictions[0].timestamp);
+  //     }
+  //   } catch (err) {
+  //     console.error('Failed to load prediction data:', err);
+  //   }
+  // };
+  // fetchPredictionData();
+
+  // Load dummy data for testing
+  const dummy = [
+    {
+      LocationID: 'zone_001',
+      predictions: [
+        { timestamp: '2025-06-23T18:00:00Z', busyness: 0.1 },
+        { timestamp: '2025-06-23T19:00:00Z', busyness: 0.3 },
+        { timestamp: '2025-06-23T20:00:00Z', busyness: 0.5 },
+        { timestamp: '2025-06-23T21:00:00Z', busyness: 0.75 },
+        { timestamp: '2025-06-23T22:00:00Z', busyness: 0.9 },
+      ],
+    },
+    {
+      LocationID: 'zone_002',
+      predictions: [
+        { timestamp: '2025-06-23T18:00:00Z', busyness: 0.2 },
+        { timestamp: '2025-06-23T19:00:00Z', busyness: 0.4 },
+        { timestamp: '2025-06-23T20:00:00Z', busyness: 0.6 },
+        { timestamp: '2025-06-23T21:00:00Z', busyness: 0.8 },
+        { timestamp: '2025-06-23T22:00:00Z', busyness: 1.0 },
+      ],
+    },
+  ];
+
+  setPredictionData(dummy);
+  setSelectedTimestamp(dummy[0].predictions[0].timestamp);
+}, []);
+
+  // Map behaviour
   const onEachZone = (feature, layer) => {
     // set up mouse interaction
     layer.on({
@@ -118,6 +189,7 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
     );
   };
 
+  // zoom into selected venue
   function FlyToVenue({ venue }) {
     const map = useMap();
     useEffect(() => {
@@ -138,6 +210,7 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
     return null;
   }
 
+  // zoom into clicked zone
   function FlyToZone({ center }) {
     const map = useMap();
   
@@ -149,6 +222,75 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
   
     return null;
   }
+  
+  // legend to interpret busyness colours
+  function ChoroplethLegend() {
+    const map = useMap();
+  
+    useEffect(() => {
+      // custom CSS for the legend
+      const styleTagId = 'leaflet-legend-style';
+      if (!document.getElementById(styleTagId)) {
+        const style = document.createElement('style');
+        style.id = styleTagId;
+        
+        // legend styling
+        style.innerHTML = `
+        .leaflet-control.legend {
+          background: #1e1e1e; /* dark background */
+          padding: 12px;
+          font-size: 13px;
+          line-height: 20px;
+          border-radius: 8px;
+          box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+          color: rgba(255, 255, 255, 0.87); /* text colour */
+          font-family: 'Urbanist', sans-serif; 
+        }
+        .leaflet-control.legend i {
+          width: 18px;
+          height: 18px;
+          display: inline-block;
+          margin-right: 8px;
+          opacity: 0.8;
+          border-radius: 4px;
+        }
+      `;
+        document.head.appendChild(style);
+      }
+  
+      // create and attach legend control
+      const legend = L.control({ position: 'bottomright' });
+  
+      legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'leaflet-control legend');
+        const levels = [
+          { label: 'Quiet', color: getColorForBusyness(1) },
+          { label: 'Moderate', color: getColorForBusyness(26) },
+          { label: 'Busy', color: getColorForBusyness(51) },
+          { label: 'Very Busy', color: getColorForBusyness(76) },
+        ];
+        
+        const labels = levels.map(
+          (level) => `<i style="background:${level.color}"></i> ${level.label}`
+        );
+        
+        div.innerHTML = labels.join('<br>');
+        
+  
+        div.innerHTML = labels.join('<br>');
+        return div;
+      };
+  
+      legend.addTo(map);
+  
+      return () => {
+        legend.remove();
+      };
+    }, [map]);
+  
+    return null;
+  }
+  
   
 
   // get user's current location
@@ -190,8 +332,127 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
         });
   };
 
+  // Map page UI
   return (
-      <Box sx={{ width: '100%', height: '100%' }}>
+      <Box 
+        sx={{ 
+          width: '100%', 
+          height: '100%' 
+        }}
+      >
+        
+        {/* Toggle */}
+        <Box 
+          sx={{ 
+            px: 2, 
+            py: 1, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2 
+          }}
+        >
+          
+          <Typography 
+            sx={{ 
+              color: '#fff' 
+              }}
+            >Mode:
+          </Typography>
+          
+          <Button
+            onClick={() => setMode('live')}
+            sx={{
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              color: mode === 'live' ? '#000' : '#FFFFFF',
+              background: mode === 'live' ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)' : 'transparent',
+              border: '1px solid #FF4ECD',
+              px: 2,
+              '&:hover': {
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#000',
+              },
+            }}
+          >
+            Live
+          </Button>
+
+          <Button
+            onClick={() => setMode('forecast')}
+            sx={{
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              color: mode === 'forecast' ? '#000' : '#FFFFFF',
+              background: mode === 'forecast' ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)' : 'transparent',
+              border: '1px solid #FF4ECD',
+              px: 2,
+              '&:hover': {
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#000',
+              },
+            }}
+          >
+            Forecast
+          </Button>
+
+        </Box>
+
+      {/* Prediction slider */}
+        {mode === 'forecast' && availableTimestamps.length > 0 && (
+          <Box 
+            sx={{ 
+              px: 2, 
+              py: 1,
+              backgroundColor: '#000',
+              borderRadius: 2 
+            }}
+          >
+            <Typography 
+              sx={{ 
+                color: '#fff', 
+                mb: 1 
+              }}
+            >
+              Forecast for: {new Date(selectedTimestamp).toLocaleString()}
+            </Typography>
+            
+            <Slider
+              value={availableTimestamps.findIndex(ts => ts === selectedTimestamp)}
+              min={0}
+              max={availableTimestamps.length - 1}
+              step={1}
+              onChange={(e, index) => setSelectedTimestamp(availableTimestamps[index])}
+              marks
+              sx={{
+                height: 8,
+                '& .MuiSlider-thumb': {
+                  width: 18,
+                  height: 18,
+                  backgroundColor: '#FF4ECD',
+                  border: '2px solid #fff',
+                },
+                '& .MuiSlider-track': {
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  border: 'none',
+                },
+                '& .MuiSlider-rail': {
+                  backgroundColor: '#555', // lighter for visibility
+                  opacity: 0.6,
+                },
+                '& .MuiSlider-mark': {
+                  backgroundColor: '#ccc',
+                  height: 6,
+                  width: 2,
+                },
+                '& .MuiSlider-markActive': {
+                  opacity: 1,
+                  backgroundColor: '#fff',
+                },
+              }}
+            />
+          </Box>
+        )}
+
         <Box
             sx={{
               display: 'flex',
@@ -230,15 +491,30 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
                 shrink: true
               }}
           />
-          <Button variant="contained" onClick={handleGeocodeStart}>
+          <Button
+            onClick={handleGeocodeStart}
+            sx={{
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              color: '#000',
+              px: 3,
+              py: 1,
+              borderRadius: '8px',
+              '&:hover': {
+                background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+              },
+            }}
+          >
             Set Start
           </Button>
+
         </Box>
 
         <MapContainer
             center={[40.72, -73.95]}
             zoom={12}
-            style={{ height: '80vh', width: '100%', borderRadius: 12 }}
+            style={{ height: 'calc(120vh - 300px)', width: '100%', borderRadius: 12 }}
         >
           {selectedVenue && <FlyToVenue venue={selectedVenue} />}
 
@@ -246,6 +522,9 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution="&copy; OpenStreetMap contributors"
           />
+
+          <ChoroplethLegend />
+
 
           {zoneCenter && <FlyToZone center={zoneCenter} />}
 
