@@ -65,12 +65,12 @@ export default function MapView() {
   }
 
   return (
-    <PageWrapper>
+    <PageWrapper fullWidth fullHeight>
       <Box
         sx={{
           display: "flex",
           flexDirection: { xs: "column", md: "row" },
-          height: { xs: "auto", md: "calc(100vh - 64px)" },
+          height: { xs: 'auto', md: 'calc(120vh - 64px)' },
           border: "3px solid #822869",
           borderRadius: 2,
           overflow: "hidden",
@@ -82,7 +82,7 @@ export default function MapView() {
         {/* Left panel - venue details */}
         <Box
           sx={{
-            width: { xs: "100%", md: "30%" },
+            width: { xs: "100%", md: "24%" },
             maxHeight: { xs: "60vh", md: "100%" },
             p: { xs: 1, md: 2 },
             pr: { xs: 1 },
@@ -97,7 +97,7 @@ export default function MapView() {
         <Box
           sx={{
             flexGrow: 1,
-            height: { xs: "400px", md: "calc(100% - 32px)" },
+            height: { xs: "400px", md: "calc(100vh - 32px)" },
             p: { xs: 1, md: 2 },
           }}
         >
