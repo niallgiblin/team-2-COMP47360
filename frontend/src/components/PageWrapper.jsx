@@ -2,22 +2,34 @@ import { Box } from '@mui/material';
 
 
 // provides consistent spacing/ layout for all top-level pages
-export default function PageWrapper({ children }) {
+export default function PageWrapper({ children, fullWidth = false, fullHeight = false }) {
   return (
     // outer container, acts as a layout bondary
     <Box 
       sx={{ 
         width: '100%',            // take up full horizontal space
         overflowX: 'visible',     // prevent horizontal scroll hiding
-        position: 'static' 
+        position: 'static', 
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: fullHeight ? '100vh' : 'auto',
       }}
     >
       <Box
         sx={{
           paddingTop: 10,         // space below nav bar
           paddingX: 4,            // horizontal padding
-          maxWidth: '1200px',     // constrain readable content
-          mx: 'auto',             // center the content
+          ...(fullWidth
+            ? {  
+                maxWidth: '1150px',   // allow wider views
+                width: '100%',
+                mx: 'auto',           // center the content again
+              }  
+            : { 
+                maxWidth: '1200px', 
+                mx: 'auto' 
+              }),
+          flexGrow: 1             // Let the inner content stretch vertically
         }}
       >
         {children}        {/* injected page content */}

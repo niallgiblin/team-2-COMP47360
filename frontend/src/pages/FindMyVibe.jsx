@@ -91,7 +91,7 @@ export default function FindMyVibe() {
 
 
   return (
-    <PageWrapper>
+    <PageWrapper fullWidth>
       <Box sx={{ maxWidth: 800, mx: "auto", mb: 10, px: 2 }}>
         <Typography
           variant="h4"
