@@ -58,19 +58,12 @@ function AppContent() {
     <AppLayout>
       <Routes>
         {/* Public routes - pages that don't require login */}
+        <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/about" element={<About />} />
         
         {/* Protected routes - pages that require login */}
-        <Route 
-          path="/" 
-          element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
-          } 
-        />
         
         <Route 
           path="/map" 
