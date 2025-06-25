@@ -1,15 +1,16 @@
 services:
   db:
-    image: mysql:8.0  # Use official image instead of building
+    image: mysql:8.0
     container_name: urban-gala-db
     restart: unless-stopped
     ports:
       - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}  # Default value if env var not set
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-urban_gala}
-      MYSQL_USER: ${MYSQL_USER:-urbanuser}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-urbanpass}
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: urban_gala
+      MYSQL_USER: urbanuser
+      MYSQL_PASSWORD: urbanpass
+      MYSQL_LOCAL_INFILE: '1'
     volumes:
       - db_data:/var/lib/mysql
       - ./backend/docker/db-init:/docker-entrypoint-initdb.d
@@ -20,6 +21,9 @@ services:
       interval: 5s
       timeout: 10s
       retries: 10
+    # Light MySQL optimizations - only the essential ones
+    command: --secure-file-priv= --local-infile=1
+
 
   backend:
     build:
