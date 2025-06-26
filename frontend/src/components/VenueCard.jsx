@@ -1,4 +1,4 @@
-import { Box, Typography, Chip, Button, Card, CardMedia } from '@mui/material';
+import { Box, Typography, Chip, Button, Card, CardMedia, Tooltip } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import { getCategory, categoryImages } from '../utils/tagMapping';
@@ -7,7 +7,7 @@ import { getCategory, categoryImages } from '../utils/tagMapping';
 import { usePlan } from '../context/PlanContext';
 
 // Functional component that displays information about a venue
-export default function VenueCard({ venue }) {
+export default function VenueCard({ venue, variant = 'default' }) {
   const { plan, addToPlan, removeFromPlan } = usePlan();  
   if (!venue) return null; // return nothing if the venue is not provided
   const isInPlan = plan.some(v => v.id === venue.id);
@@ -31,14 +31,21 @@ export default function VenueCard({ venue }) {
 
 
   return (
-    <Card 
-        sx={{ 
-            color: '#fff', 
-            backgroundColor: '#222', 
-            p: 2,
-            boxSizing: 'border-box', 
-        }}
+    <Card
+    sx={{
+        color: '#fff',
+        backgroundColor: '#222',
+        boxSizing: 'border-box',
+        p: variant === 'compact' ? 1 : 2,
+        width: variant === 'compact' ? 200 : '100%',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        height: variant === 'compact' ? 300 : 'auto', // control card height in compact
+    }}
     >
+
 
       {/* Display the venue's image using CardMedia */}
       <CardMedia
@@ -47,8 +54,8 @@ export default function VenueCard({ venue }) {
         alt={venue.name}
         sx={{ 
             borderRadius: 2, 
-            mb: 2,
-            maxHeight: {xs: '140px', md: '200px'},
+            mb: variant === 'compact' ? 1 : 2,
+            height: variant === 'compact' ? 100 : { xs: '140px', md: '200px' },
             objectFit: 'cover', // keep aspect ratio 
             width: '100%',
         }}
@@ -153,31 +160,46 @@ export default function VenueCard({ venue }) {
             mt: 2
         }}
     >
-        <Button
-            onClick={() => isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)}
+        <Tooltip
+        title={
+            !isInPlan && isPlanFull
+            ? 'You can only add up to 3 venues to your plan.'
+            : ''
+        }
+        arrow
+        placement="top"
+        >
+        <span>
+            <Button
+            onClick={() =>
+                isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)
+            }
             disabled={!isInPlan && isPlanFull}
             variant="contained"
             sx={{
-            background: isInPlan
+                background: isInPlan
                 ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)'
                 : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-            color: '#000',
-            fontWeight: 'bold',
-            textTransform: 'none',
-            px: 4,
-            py: 1.5,
-            fontSize: '1rem',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-            '&:hover': {
+                color: '#000',
+                fontWeight: 'bold',
+                textTransform: 'none',
+                px: variant === 'compact' ? 2 : 4,
+                py: variant === 'compact' ? 0.5 : 1.5,
+                fontSize: variant === 'compact' ? '0.8rem' : '1rem',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                '&:hover': {
                 background: isInPlan
-                ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
-                : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
-            },
+                    ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
+                    : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
+                },
             }}
-        >
+            >
             {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
-        </Button>
+            </Button>
+        </span>
+        </Tooltip>
+
     </Box>
     </Card>
   );

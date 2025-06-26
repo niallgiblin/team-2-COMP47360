@@ -16,7 +16,7 @@ import {
   Slider
 } from '@mui/material';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import RouteDisplay from './RouteDisplay';
 import L from 'leaflet';
 
@@ -24,6 +24,10 @@ import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import { point as turfPoint } from '@turf/helpers';
+
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -33,7 +37,7 @@ L.Icon.Default.mergeOptions({
 });
 
 // Main map component
-export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
+export default function DemoMap({ venues = [], selectedVenue, onSelectVenue, fromPlan = false }) {
   const [zoneData, setZoneData] = useState(null); // Stores GeoJSON zone features
   const [busynessData, setBusynessData] = useState([]); // stores real-time busyness, by zone
   const [zoneDataLoaded, setZoneDataLoaded] = useState(false); // whether zones are fully loaded
@@ -47,11 +51,16 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
   const [predictionData, setPredictionData] = useState([]);       // holds full prediction dataset
   const [selectedTimestamp, setSelectedTimestamp] = useState(null); // current time on slider
   
-  // Extract available timestamps from the first zone’s prediction list
+  // Extract available timestamps from the first zone's prediction list
   const availableTimestamps = predictionData[0]?.predictions?.map(p => p.timestamp) || [];
 
   // state to track the current mode (live or predicted)
   const [mode, setMode] = useState('forecast'); // or 'live'
+
+  const [activeZoneVenues, setActiveZoneVenues] = useState([]);
+
+  const allVenuesRef = useRef([]);
+
 
   // colour zones by busyness
   const getColorForBusyness = (busyness) => {
@@ -93,13 +102,18 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
   // load GeoJSON zone shapes
   useEffect(() => {
     fetch('/manhattanZones.geojson')
-        .then((res) => res.json())
-        .then((data) => {
-          setZoneData(data);
-          setZoneDataLoaded(true);
-        })
-        .catch(console.error);
+      .then(async (res) => {
+        const text = await res.text(); // read the full response as raw text
+        console.log('📦 FULL raw response:', text); // log it
+        const json = JSON.parse(text); // try to parse it as JSON
+        setZoneData(json);
+        setZoneDataLoaded(true);
+      })
+      .catch((err) => {
+        console.error('❌ Failed to load or parse GeoJSON:', err.message);
+      });
   }, []);
+  
 
   // fetch busyness levels
   useEffect(() => {
@@ -108,6 +122,38 @@ export default function DemoMap({ venues = [], selectedVenue, onSelectVenue }) {
         .then((data) => setBusynessData(data))
         .catch(console.error);
   }, []);
+
+  // fetch all venues
+  useEffect(() => {
+    if (!zoneData) return;
+  
+    fetch('http://localhost:8080/api/location')
+      .then((res) => res.json())
+      .then((data) => {
+        const enriched = data.map((venue) => {
+          const venuePoint = turfPoint([venue.lng, venue.lat]);
+  
+          const match = zoneData.features.filter((feature) =>
+            booleanPointInPolygon(venuePoint, feature.geometry)
+          );
+  
+          console.log("🧪 Venue matches these zones:", match.map(f => f.properties.LocationID));
+  
+          return {
+            ...venue,
+            zone: match.length > 0 ? match[0].properties.LocationID : null
+          };
+        });
+  
+        console.log("🧩 Sample enriched venue:", enriched[0]);
+        console.log("🧩 All enriched venue zone values:", enriched.map(v => v.zone));
+  
+        allVenuesRef.current = enriched; // ✅ Store latest venue list in ref
+      })
+      .catch((err) => console.error('❌ Failed to preload all venues:', err));
+  }, [zoneData]);
+  
+  
 
 // TEMPORARY: use dummy prediction data until backend is ready
 useEffect(() => {
@@ -153,7 +199,27 @@ useEffect(() => {
   setSelectedTimestamp(dummy[0].predictions[0].timestamp);
 }, []);
 
-  // Map behaviour
+  // Map behaviour - FIXED: Single click handler that uses the ref
+  const handleZoneClick = (feature) => {
+    const zoneId = feature.properties.LocationID;
+  
+    console.log('🧭 Clicked zone ID:', zoneId);
+    console.log('📦 All venue zone IDs:', allVenuesRef.current.map(v => v.zone));
+    console.log('📛 ZoneId type:', typeof zoneId);
+  
+    try {
+      const data = allVenuesRef.current.filter(
+        v => String(v.zone) === String(zoneId)
+      );
+      console.log('✅ Filtered venues:', data);
+      setActiveZoneVenues(data);
+    } catch (err) {
+      console.error('❌ Failed to load venues for zone:', err);
+      setActiveZoneVenues([]);
+    }
+  };
+  
+  
   const onEachZone = (feature, layer) => {
     // set up mouse interaction
     layer.on({
@@ -169,11 +235,15 @@ useEffect(() => {
         const originalStyle = getZoneStyle(feature);
         e.target.setStyle(originalStyle);
       },
-      click: (e) => {
-        const bounds = e.target.getBounds(); // get coordinated of the clicked polygon
-        const center = bounds.getCenter(); // calculate center of zone
-        setZoneCenter(center);             // store it in state
-      }      
+      click: async (e) => {
+        const bounds = e.target.getBounds();
+        const center = bounds.getCenter();
+        setZoneCenter(center);
+        
+        // FIXED: Use the single handleZoneClick function
+        handleZoneClick(feature);
+      }
+            
     });
 
     // find the corresponding busyness data for the zone
@@ -267,7 +337,7 @@ useEffect(() => {
           { label: 'Quiet', color: getColorForBusyness(1) },
           { label: 'Moderate', color: getColorForBusyness(26) },
           { label: 'Busy', color: getColorForBusyness(51) },
-          { label: 'Very Busy', color: getColorForBusyness(76) },
+          { label: 'Very busy', color: getColorForBusyness(76) },
         ];
         
         const labels = levels.map(
@@ -341,117 +411,6 @@ useEffect(() => {
         }}
       >
         
-        {/* Toggle */}
-        <Box 
-          sx={{ 
-            px: 2, 
-            py: 1, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 2 
-          }}
-        >
-          
-          <Typography 
-            sx={{ 
-              color: '#fff' 
-              }}
-            >Mode:
-          </Typography>
-          
-          <Button
-            onClick={() => setMode('live')}
-            sx={{
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              color: mode === 'live' ? '#000' : '#FFFFFF',
-              background: mode === 'live' ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)' : 'transparent',
-              border: '1px solid #FF4ECD',
-              px: 2,
-              '&:hover': {
-                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                color: '#000',
-              },
-            }}
-          >
-            Live
-          </Button>
-
-          <Button
-            onClick={() => setMode('forecast')}
-            sx={{
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              color: mode === 'forecast' ? '#000' : '#FFFFFF',
-              background: mode === 'forecast' ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)' : 'transparent',
-              border: '1px solid #FF4ECD',
-              px: 2,
-              '&:hover': {
-                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                color: '#000',
-              },
-            }}
-          >
-            Forecast
-          </Button>
-
-        </Box>
-
-      {/* Prediction slider */}
-        {mode === 'forecast' && availableTimestamps.length > 0 && (
-          <Box 
-            sx={{ 
-              px: 2, 
-              py: 1,
-              backgroundColor: '#000',
-              borderRadius: 2 
-            }}
-          >
-            <Typography 
-              sx={{ 
-                color: '#fff', 
-                mb: 1 
-              }}
-            >
-              Forecast for: {new Date(selectedTimestamp).toLocaleString()}
-            </Typography>
-            
-            <Slider
-              value={availableTimestamps.findIndex(ts => ts === selectedTimestamp)}
-              min={0}
-              max={availableTimestamps.length - 1}
-              step={1}
-              onChange={(e, index) => setSelectedTimestamp(availableTimestamps[index])}
-              marks
-              sx={{
-                height: 8,
-                '& .MuiSlider-thumb': {
-                  width: 18,
-                  height: 18,
-                  backgroundColor: '#FF4ECD',
-                  border: '2px solid #fff',
-                },
-                '& .MuiSlider-track': {
-                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                  border: 'none',
-                },
-                '& .MuiSlider-rail': {
-                  backgroundColor: '#555', // lighter for visibility
-                  opacity: 0.6,
-                },
-                '& .MuiSlider-mark': {
-                  backgroundColor: '#ccc',
-                  height: 6,
-                  width: 2,
-                },
-                '& .MuiSlider-markActive': {
-                  opacity: 1,
-                  backgroundColor: '#fff',
-                },
-              }}
-            />
-          </Box>
-        )}
 
         <Box
             sx={{
@@ -545,28 +504,28 @@ useEffect(() => {
               />
           )}
 
-          {Array.isArray(venues) &&
-              venues
-                  .filter((v) => v?.lat && v?.lng)
-                  .map((venue) => (
-                      <Marker
-                          key={venue.id}
-                          position={[venue.lat, venue.lng]}
-                          eventHandlers={{
-                            click: () => {
-                              setUserTriggeredFly(true);
-                              onSelectVenue(venue);
-                              setRouteKey((prev) => prev + 1);
-                            }
-                          }}
-                      >
-                        <Popup>
-                          <strong>{venue.name || 'Unnamed Venue'}</strong>
-                          <br />
-                          {venue.address || 'No address provided'}
-                        </Popup>
-                      </Marker>
-                  ))}
+          {(fromPlan ? venues : activeZoneVenues)
+            .filter((v) => v?.lat && v?.lng)
+            .map((venue) => (
+              <Marker
+                key={venue.id}
+                position={[venue.lat, venue.lng]}
+                eventHandlers={{
+                  click: () => {
+                    setUserTriggeredFly(true);
+                    onSelectVenue(venue);
+                    setRouteKey((prev) => prev + 1);
+                  }
+                }}
+              >
+                <Popup>
+                  <strong>{venue.name || 'Unnamed Venue'}</strong>
+                  <br />
+                  {venue.address || 'No address provided'}
+                </Popup>
+              </Marker>
+          ))}
+
 
           {userLocation && selectedVenue && (
               <RouteDisplay

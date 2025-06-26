@@ -266,19 +266,43 @@ export default function FindMyVibe() {
           </Typography>
         ) : null}
 
-        {results.map((venue, index) => (
-          <TrendingVenueCard
-            key={venue.id}
-            venue={venue}
-            rank={index + 1}
-            onGetDirections={handleGetDirections}
-            onClick={() =>
-              navigate("/map-view", { state: { selectedVenue: venue } })
-            }
-          />
-        ))}
-        
-        <PlanSummary />
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: 'flex-start',
+            gap: 3,
+          }}
+        >
+          {/* Left: Sidebar PlanSummary */}
+          <Box
+            sx={{
+              width: { xs: '100%', md: 320 },
+              position: { md: 'sticky' },
+              top: { md: 80 },
+              alignSelf: 'flex-start',
+            }}
+          >
+            <PlanSummary />
+          </Box>
+
+          {/* Right: Venue list */}
+          <Box sx={{ flex: 1 }}>
+            {results.map((venue, index) => (
+              <TrendingVenueCard
+                key={venue.id}
+                venue={venue}
+                rank={index + 1}
+                onGetDirections={handleGetDirections}
+                onClick={() =>
+                  navigate("/map-view", { state: { selectedVenue: venue } })
+                }
+              />
+            ))}
+          </Box>
+        </Box>
+
+
 
         {totalPages > 1 && (
           <Box
