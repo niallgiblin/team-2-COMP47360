@@ -15,7 +15,7 @@ import { useState } from 'react';
 import logo from '../assets/urban-gala-logo.svg';
 import { useAuth } from '../context/AuthContext';
 
-// Navigation items
+// Navigation items used in both desktop and mobile menus
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Find Your Vibe', to: '/vibe' },
@@ -24,14 +24,13 @@ const navItems = [
   { label: 'About', to: '/about' },
 ];
 
-// main NavBar component
 export default function NavBar() {
-  const [drawerOpen, setDrawerOpen] = useState(false);  // tracks mobile menu state
-  const { isAuthenticated, user, logout } = useAuth();  // auth state from context
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { isAuthenticated, user, logout } = useAuth();
 
   return (
     <>
-      {/* Top App Bar */}
+      {/* Top black navigation bar */}
       <AppBar
         position="sticky"
         sx={{
@@ -41,187 +40,214 @@ export default function NavBar() {
           zIndex: 1100,
         }}
       >
+        {/* Toolbar with internal container for layout */}
         <Toolbar
           sx={{
-            justifyContent: 'space-between',
             width: '100%',
-            maxWidth: '1200px',
-            mx: 'auto',
-            height: 110,
             px: { xs: 2, sm: 4 },
+            height: 110,
             boxSizing: 'border-box',
+            backgroundColor: 'transparent',
           }}
         >
-          {/* Logo + Title */}
           <Box
-            component={Link}
-            to="/"
             sx={{
+              width: '100%',
+              maxWidth: { md: '100%', lg: '1200px' },
+              mx: 'auto',
               display: 'flex',
               alignItems: 'center',
-              gap: 1,
-              textDecoration: 'none',
-            }}
-          >
-            <img src={logo} alt="Urban Gala logo" style={{ height: 76 }} />
-            
-            <Box sx={{ lineHeight: 1, mt: 0.5 }}>
-              <Typography
-                variant="h6"
-                sx={{
-                  textTransform: 'uppercase',
-                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  mt: 0.5,
-                  lineHeight: 1,
-                }}
-              >
-                The Urban Gala
-              </Typography>
-              
-              <Typography
-                variant="caption"
-                sx={{
-                  fontSize: '0.6rem',
-                  textTransform: 'uppercase',
-                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
-                Navigate the Big Apple - One Gala At A Time
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Desktop Navigation Links */}
-          <Box
-            sx={{
-              display: { xs: 'none', md: 'flex' },
-              gap: { md: 2.5, lg: 3.5 },
+              justifyContent: 'space-between',
               flexWrap: 'wrap',
-              alignItems: 'center',
             }}
           >
-            {navItems.map((item) => (
-              <Button
-                key={item.to}
-                component={Link}
-                to={item.to}
-                sx={{
-                  position: 'relative',
-                  fontWeight: 'bold',
-                  letterSpacing: 1,
-                  fontSize: '0.9rem',
-                  textTransform: 'uppercase',
-                  color: '#FFFFFF',
-                  px: 1,
-                  '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    bottom: -4,
-                    left: 0,
-                    height: '2px',
-                    width: '0%',
-                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                    transition: 'width 0.3s ease',
-                  },
-                  '&:hover::after': {
-                    width: '100%',
-                  },
-                }}
-              >
-                {item.label}
-              </Button>
-            ))}
-
-            {/* show user and logout buttons if logged in */}
-            {isAuthenticated ? (
-              <>
-                <Typography sx={{ color: '#fff', ml: 2 }}>
-                  Welcome, {user?.name || 'User'}
-                </Typography>
-                <Button
-                  onClick={logout}
-                  sx={{
-                    ml: 2,
-                    fontWeight: 'bold',
-                    color: '#FFFFFF',
-                    border: '1px solid #FF4ECD',
-                    px: 2,
-                    '&:hover': {
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      color: '#000',
-                    },
-                  }}
-                >
-                  Log Out
-                </Button>
-              </>
-            ) : (
-              <>
-                {/* Log In / Sign Up buttons */}
-                <Button
-                  component={Link}
-                  to="/login"
-                  sx={{
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    color: '#FFFFFF',
-                    border: '1px solid #FF4ECD',
-                    px: 2,
-                    ml: 2,
-                    '&:hover': {
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      color: '#000',
-                    },
-                  }}
-                >
-                  Log In
-                </Button>
-                <Button
-                  component={Link}
-                  to="/signup"
-                  sx={{
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    color: '#FFFFFF',
-                    border: '1px solid #FF4ECD',
-                    px: 2,
-                    ml: 1,
-                    '&:hover': {
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      color: '#000',
-                    },
-                  }}
-                >
-                  Sign Up
-                </Button>
-              </>
-            )}
-          </Box>
-
-          {/* Mobile Menu Button */}
-          <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-            <IconButton
-              edge="end"
-              onClick={() => setDrawerOpen(true)}
+            {/* Logo + title */}
+            <Box
+              component={Link}
+              to="/"
               sx={{
-                color: '#3ABEFF',
-                backgroundColor: 'transparent',
-                '&:hover': { backgroundColor: 'transparent' },
-                '&:focus': { outline: 'none' },
-                padding: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                textDecoration: 'none',
               }}
             >
-              <MenuIcon />
-            </IconButton>
+              <img src={logo} alt="Urban Gala logo" style={{ height: 76 }} />
+              <Box sx={{ lineHeight: 1, mt: 0.5, whiteSpace: 'nowrap' }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    textTransform: 'uppercase',
+                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  The Urban Gala
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.6rem',
+                    textTransform: 'uppercase',
+                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  Navigate the Big Apple - One Gala At A Time
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Desktop nav links + auth actions (only visible on md+) */}
+            <Box
+              sx={{
+                display: { xs: 'none', md: 'flex' },
+                alignItems: 'center',
+                gap: 2.5,
+                flexWrap: 'wrap',
+              }}
+            >
+              {navItems.map((item) => (
+                <Button
+                  key={item.to}
+                  component={Link}
+                  to={item.to}
+                  sx={{
+                    position: 'relative',
+                    fontWeight: 'bold',
+                    letterSpacing: 1,
+                    fontSize: '0.9rem',
+                    textTransform: 'uppercase',
+                    color: '#FFFFFF',
+                    px: 1,
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      bottom: -4,
+                      left: 0,
+                      height: '2px',
+                      width: '0%',
+                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                      transition: 'width 0.3s ease',
+                    },
+                    '&:hover::after': {
+                      width: '100%',
+                    },
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+
+              {/* Authenticated user: Welcome + Logout */}
+              {isAuthenticated ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Button
+                    component={Link}
+                    to="/profile"
+                    sx={{
+                      position: 'relative',
+                      fontWeight: 'bold',
+                      letterSpacing: 1,
+                      fontSize: '0.9rem',
+                      textTransform: 'uppercase',
+                      color: '#FFFFFF',
+                      px: 1,
+                      '&::after': {
+                        content: '""',
+                        position: 'absolute',
+                        bottom: -4,
+                        left: 0,
+                        height: '2px',
+                        width: '0%',
+                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                        transition: 'width 0.3s ease',
+                      },
+                      '&:hover::after': {
+                        width: '100%',
+                      },
+                    }}
+                  >
+                    Welcome, {user?.name || 'User'}
+                  </Button>
+                  <Button
+                    onClick={logout}
+                    sx={{
+                      fontWeight: 'bold',
+                      color: '#FFFFFF',
+                      border: '1px solid #FF4ECD',
+                      px: 2,
+                      '&:hover': {
+                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                        color: '#000',
+                      },
+                    }}
+                  >
+                    Log Out
+                  </Button>
+                </Box>
+              ) : (
+                // Not logged in: Log in + Sign up
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button
+                    component={Link}
+                    to="/login"
+                    sx={{
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      color: '#FFFFFF',
+                      border: '1px solid #FF4ECD',
+                      px: 2,
+                      '&:hover': {
+                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                        color: '#000',
+                      },
+                    }}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    component={Link}
+                    to="/signup"
+                    sx={{
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      color: '#FFFFFF',
+                      border: '1px solid #FF4ECD',
+                      px: 2,
+                      '&:hover': {
+                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                        color: '#000',
+                      },
+                    }}
+                  >
+                    Sign Up
+                  </Button>
+                </Box>
+              )}
+            </Box>
+
+            {/* Mobile hamburger icon (right-aligned, only visible on xs/sm) */}
+            <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
+              <IconButton
+                edge="end"
+                onClick={() => setDrawerOpen(true)}
+                sx={{
+                  color: '#3ABEFF',
+                  '&:hover': { backgroundColor: 'transparent' },
+                  padding: 1,
+                }}
+              >
+                <MenuIcon />
+              </IconButton>
+            </Box>
           </Box>
         </Toolbar>
       </AppBar>
 
-      {/* Drawer Menu for Mobile */}
+      {/* Drawer for mobile menu */}
       <Drawer
         anchor="right"
         open={drawerOpen}
@@ -229,7 +255,7 @@ export default function NavBar() {
         PaperProps={{
           sx: {
             backgroundColor: '#121212',
-            color: '#D4AF37',
+            color: '#FFFFFF', // fix: prevent unwanted yellow
             width: '250px',
             px: 2,
             pt: 4,
@@ -237,7 +263,7 @@ export default function NavBar() {
         }}
       >
         <List>
-          {/* Always show navigation items */}
+          {/* Nav links */}
           {navItems.map((item) => (
             <ListItem
               button
@@ -245,10 +271,7 @@ export default function NavBar() {
               component={Link}
               to={item.to}
               onClick={() => setDrawerOpen(false)}
-              sx={{
-                py: 1.5,
-                borderBottom: '1px solid #333',
-              }}
+              sx={{ py: 1.5, borderBottom: '1px solid #333' }}
             >
               <Typography
                 component="span"
@@ -269,9 +292,7 @@ export default function NavBar() {
                     background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                     transition: 'width 0.3s ease',
                   },
-                  '&:hover::after': {
-                    width: '100%',
-                  },
+                  '&:hover::after': { width: '100%' },
                 }}
               >
                 {item.label}
@@ -279,24 +300,35 @@ export default function NavBar() {
             </ListItem>
           ))}
 
-          {/* Auth-based drawer buttons */}
+          {/* Auth area */}
           {isAuthenticated ? (
             <>
-              <ListItem sx={{ py: 2 }}>
+              {/* Welcome button (now clickable!) */}
+              <ListItem
+                button
+                component={Link}
+                to="/profile"
+                onClick={() => setDrawerOpen(false)}
+                sx={{
+                  py: 1.5,
+                  borderBottom: '1px solid #333',
+                }}
+              >
                 <Typography
-                  variant="body1"
                   sx={{
-                    color: '#fff',
                     fontWeight: 'bold',
                     textTransform: 'uppercase',
+                    fontSize: '0.9rem',
                     letterSpacing: 1,
+                    width: '100%',
+                    color: '#FFFFFF',
                   }}
                 >
                   Welcome, {user?.name || 'User'}
                 </Typography>
               </ListItem>
 
-              {/* Log in / sign up buttons for mobile */}
+              {/* Log out */}
               <ListItem
                 button
                 onClick={() => {
@@ -316,20 +348,8 @@ export default function NavBar() {
                     fontSize: '0.9rem',
                     letterSpacing: 1,
                     width: '100%',
-                    position: 'relative',
-                    '&::after': {
-                      content: '""',
-                      position: 'absolute',
-                      bottom: -4,
-                      left: 0,
-                      height: '2px',
-                      width: '0%',
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      transition: 'width 0.3s ease',
-                    },
-                    '&:hover::after': {
-                      width: '100%',
-                    },
+                    color: '#FFFFFF',
+                    '&:hover': { color: '#3ABEFF' },
                   }}
                 >
                   Log Out
@@ -338,78 +358,28 @@ export default function NavBar() {
             </>
           ) : (
             <>
+              {/* Login */}
               <ListItem
                 button
                 component={Link}
                 to="/login"
                 onClick={() => setDrawerOpen(false)}
-                sx={{
-                  py: 1.5,
-                  borderBottom: '1px solid #333',
-                }}
+                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
               >
-                <Typography
-                  component="span"
-                  sx={{
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    fontSize: '0.9rem',
-                    letterSpacing: 1,
-                    width: '100%',
-                    position: 'relative',
-                    '&::after': {
-                      content: '""',
-                      position: 'absolute',
-                      bottom: -4,
-                      left: 0,
-                      height: '2px',
-                      width: '0%',
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      transition: 'width 0.3s ease',
-                    },
-                    '&:hover::after': {
-                      width: '100%',
-                    },
-                  }}
-                >
+                <Typography sx={{ ...drawerLinkStyles }}>
                   Log In
                 </Typography>
               </ListItem>
 
+              {/* Signup */}
               <ListItem
                 button
                 component={Link}
                 to="/signup"
                 onClick={() => setDrawerOpen(false)}
-                sx={{
-                  py: 1.5,
-                  borderBottom: '1px solid #333',
-                }}
+                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
               >
-                <Typography
-                  component="span"
-                  sx={{
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    fontSize: '0.9rem',
-                    letterSpacing: 1,
-                    width: '100%',
-                    position: 'relative',
-                    '&::after': {
-                      content: '""',
-                      position: 'absolute',
-                      bottom: -4,
-                      left: 0,
-                      height: '2px',
-                      width: '0%',
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      transition: 'width 0.3s ease',
-                    },
-                    '&:hover::after': {
-                      width: '100%',
-                    },
-                  }}
-                >
+                <Typography sx={{ ...drawerLinkStyles }}>
                   Sign Up
                 </Typography>
               </ListItem>
@@ -420,3 +390,27 @@ export default function NavBar() {
     </>
   );
 }
+
+// Reusable style for drawer items
+const drawerLinkStyles = {
+  fontWeight: 'bold',
+  textTransform: 'uppercase',
+  fontSize: '0.9rem',
+  letterSpacing: 1,
+  width: '100%',
+  color: '#FFFFFF',
+  position: 'relative',
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    bottom: -4,
+    left: 0,
+    height: '2px',
+    width: '0%',
+    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+    transition: 'width 0.3s ease',
+  },
+  '&:hover::after': {
+    width: '100%',
+  },
+};
