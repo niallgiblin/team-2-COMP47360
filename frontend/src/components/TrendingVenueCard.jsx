@@ -1,6 +1,10 @@
 import { Card, CardMedia, Typography, Box, Button, Chip } from '@mui/material';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import { usePlan } from '../context/PlanContext';
+import { getCategory, categoryImages } from '../utils/tagMapping';
+
+
 
 export default function TrendingVenueCard({ venue, onGetDirections }) {
   const priceLevels = {
@@ -16,6 +20,13 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
   : '';
 
   const level = priceLevels[normalizedPrice] || 0;
+
+  const { plan, addToPlan, removeFromPlan } = usePlan();
+  const isInPlan = plan.some(v => v.id === venue.id);
+  const isPlanFull = plan.length >= 3;
+
+  const category = getCategory(venue.description || '');
+  const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
   
   return (
@@ -37,7 +48,7 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
       {/* Venue Image */}
       <CardMedia
         component="img"
-        image={venue.imageUrl || '/default-placeholder.png'}
+        image={imageUrl}
         alt={venue.name}
         sx={{
           width: 80,
@@ -121,6 +132,8 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
               height: 24,
             }}
           />
+          
+          {/* Money icons */}
           <Box 
             sx={{ 
                 display: 'flex', 
@@ -137,6 +150,28 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
               />
             ))}
           </Box>
+          
+          {/* Add to plan button */}
+          <Button
+            onClick={() => isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)}
+            disabled={!isInPlan && isPlanFull}
+            variant="outlined"
+            size="small"
+            sx={{
+              mt: 1,
+              textTransform: 'none',
+              fontWeight: 'bold',
+              borderRadius: 2,
+              borderColor: '#FF4ECD',
+              color: '#FF4ECD',
+              '&:hover': {
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#000',
+              },
+            }}
+          >
+            {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
+          </Button>
         </Box>
       </Box>
     </Card>

@@ -1,10 +1,17 @@
 import { Box, Typography, Chip, Button, Card, CardMedia } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import { getCategory, categoryImages } from '../utils/tagMapping';
+
+
+import { usePlan } from '../context/PlanContext';
 
 // Functional component that displays information about a venue
 export default function VenueCard({ venue }) {
+  const { plan, addToPlan, removeFromPlan } = usePlan();  
   if (!venue) return null; // return nothing if the venue is not provided
+  const isInPlan = plan.some(v => v.id === venue.id);
+  const isPlanFull = plan.length >= 3;
 
   const priceLevels = {
     'very cheap': 1,
@@ -14,14 +21,16 @@ export default function VenueCard({ venue }) {
     'very expensive': 5,
   };
   
-  const normalizedPrice = typeof venue.price === 'string' 
-  ? venue.price.trim().toLowerCase() 
-  : '';
+  const normalizedPrice = 
+    typeof venue.price === 'string' ? venue.price.trim().toLowerCase() : '';
 
   const level = priceLevels[normalizedPrice] || 0;
-  
+
+  const category = getCategory(venue.description || '');
+  const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
+
+
   return (
-    // Outer card containner
     <Card 
         sx={{ 
             color: '#fff', 
@@ -34,7 +43,7 @@ export default function VenueCard({ venue }) {
       {/* Display the venue's image using CardMedia */}
       <CardMedia
         component="img"
-        image={venue.imageUrl || '/default-placeholder.png'}
+        image={imageUrl}
         alt={venue.name}
         sx={{ 
             borderRadius: 2, 
@@ -144,23 +153,30 @@ export default function VenueCard({ venue }) {
             mt: 2
         }}
     >
-        <Button variant="contained" 
+        <Button
+            onClick={() => isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)}
+            disabled={!isInPlan && isPlanFull}
+            variant="contained"
             sx={{
-                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)', //background colour
-                color: '#ffffff', // text colour
-                fontWeight: 'bold',
-                textTransform: 'none',
-                px: 4, // horizontal padding inside the button
-                py: 1.5, // vertical padding
-                fontSize: '1rem',
-                borderRadius: '8px', // rounded corners
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', //soft shadow
-                '&:hover': {
-                background: 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
-                }
+            background: isInPlan
+                ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)'
+                : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+            color: '#000',
+            fontWeight: 'bold',
+            textTransform: 'none',
+            px: 4,
+            py: 1.5,
+            fontSize: '1rem',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+            '&:hover': {
+                background: isInPlan
+                ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
+                : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
+            },
             }}
-            >
-            Add to Route
+        >
+            {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
         </Button>
     </Box>
     </Card>

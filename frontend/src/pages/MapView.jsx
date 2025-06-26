@@ -70,7 +70,7 @@ export default function MapView() {
         sx={{
           display: "flex",
           flexDirection: { xs: "column", md: "row" },
-          height: { xs: 'auto', md: 'calc(120vh - 64px)' },
+          height: 'calc(120vh - 64px)',
           border: "3px solid #822869",
           borderRadius: 2,
           overflow: "hidden",
@@ -97,7 +97,7 @@ export default function MapView() {
         <Box
           sx={{
             flexGrow: 1,
-            height: { xs: "400px", md: "calc(100vh - 32px)" },
+            height: { xs: "300px", md: "calc(100vh - 32px)" },
             p: { xs: 1, md: 2 },
           }}
         >

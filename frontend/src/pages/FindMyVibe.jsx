@@ -13,6 +13,7 @@ import {
 import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
+import PlanSummary from '../components/PlanSummary';
 
 export default function FindMyVibe() {
   // State hooks
@@ -92,7 +93,7 @@ export default function FindMyVibe() {
 
   return (
     <PageWrapper fullWidth>
-      <Box sx={{ maxWidth: 800, mx: "auto", mb: 10, px: 2 }}>
+      <Box sx={{ maxWidth: 1000, mx: "auto", mb: 10, px: 2 }}>
         <Typography
           variant="h4"
           align="center"
@@ -276,6 +277,8 @@ export default function FindMyVibe() {
             }
           />
         ))}
+        
+        <PlanSummary />
 
         {totalPages > 1 && (
           <Box
