@@ -40,4 +40,13 @@ public class LLMRecommendationResponse {
     public void setConfidence(Double confidence) {
         this.confidence = confidence;
     }
+
+    @Override
+    public String toString() {
+        return "LLMRecommendationResponse{" +
+               "locationIds=" + locationIds +
+               ", explanation='" + explanation + '\'' +
+               ", confidence=" + confidence +
+               '}';
+    }
 }
