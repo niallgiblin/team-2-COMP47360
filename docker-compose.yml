@@ -11,16 +11,17 @@ services:
       MYSQL_USER: urbanuser
       MYSQL_PASSWORD: urbanpass
       MYSQL_LOCAL_INFILE: '1'
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
     volumes:
       - db_data:/var/lib/mysql
       - ./backend/docker/db-init:/docker-entrypoint-initdb.d
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 10s
-      retries: 10
     # Light MySQL optimizations - only the essential ones
     command: --secure-file-priv= --local-infile=1
 
@@ -31,16 +32,31 @@ services:
     container_name: urban-gala-backend
     ports:
       - "8080:8080"
-    depends_on:
+    depends_on: # The backend now depends on both the DB and the ML service
       db:
         condition: service_healthy
+      ml-service:
+        condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-urban_gala}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-urbanuser}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-urbanpass}
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/urban_gala?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: urbanuser
+      SPRING_DATASOURCE_PASSWORD: urbanpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      # Add retry parameters
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
+      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: 60000
+      ML_SERVICE_URL: http://ml-service:5000 # Explicitly set ML service URL
+    env_file:
+      - .env # Load environment variables from .env file
     networks:
       - app-network
+    # Add health check and retry mechanism
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   frontend:
     build:
@@ -59,6 +75,33 @@ services:
       - backend
     networks:
       - app-network
+
+  ml-service:
+    platform: linux/amd64
+    build:
+      context: ./backend/ml-service
+    container_name: urban-gala-ml
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./backend/ml-service:/app # Mount local code for development
+    environment:
+      - MODEL_PATH=/app/models/sentence-transformer
+      - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
+      - DATA_PATH=/app/data/locations.csv
+    networks:
+      - app-network
+    # Use Gunicorn with its reloader for a stable development server.
+    # This command correctly overrides the CMD in the new Dockerfile.
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "8", "--timeout", "0", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s # Give it time to initialize model and data
+    depends_on:
+      - db
 
 networks:
   app-network:

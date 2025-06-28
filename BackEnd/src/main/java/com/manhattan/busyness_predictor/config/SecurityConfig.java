@@ -41,7 +41,7 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/actuator/**", "/vibe/**").permitAll()
                         .requestMatchers("/api/**").permitAll()
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.disable());
