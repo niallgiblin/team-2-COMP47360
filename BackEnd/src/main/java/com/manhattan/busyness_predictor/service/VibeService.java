@@ -52,7 +52,7 @@ public class VibeService {
     // Main entry for vibe search
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
         if (isMLServiceAvailable()) {
-            List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), request.getMaxResults());
+            List<Location> mlLocations = fetchMLRecommendations(request);
             if (!mlLocations.isEmpty()) {
                 return buildResponse(mlLocations, "ML-powered recommendations based on your vibe description", 0.9);
             }
@@ -77,18 +77,27 @@ public class VibeService {
 
     // Calls the ML service with vibe query, expects a JSON response containing
     // results
-    private List<Location> fetchMLRecommendations(String vibeDescription, Integer maxResults) {
+    private List<Location> fetchMLRecommendations(VibeSearchRequest request) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            Map<String, Object> payload = Map.of(
-                    "vibeDescription", vibeDescription,
-                    "maxResults", maxResults != null ? maxResults : 10);
+            Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("vibeDescription", request.getVibeDescription());
+            payload.put("maxResults", request.getMaxResults() != null ? request.getMaxResults() : 10);
+            if (request.getLocation() != null) {
+                payload.put("location", request.getLocation());
+            }
+            if (request.getPriceRange() != null) {
+                payload.put("priceRange", request.getPriceRange());
+            }
+            if (request.getTimeOfDay() != null) {
+                payload.put("timeOfDay", request.getTimeOfDay());
+            }
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
-            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", mlServiceUrl, vibeDescription, maxResults);
+            logger.info("Calling ML service at {}/search with payload: {}", mlServiceUrl, payload);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     mlServiceUrl + "/search",
@@ -106,7 +115,7 @@ public class VibeService {
                 logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}", response.getStatusCode(), response.getBody());
             }
         } catch (Exception e) {
-            logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
+            logger.error("Error calling ML service for vibe '{}': {}", request.getVibeDescription(), e.getMessage(), e);
         }
         return Collections.emptyList();
     }
@@ -164,7 +173,7 @@ public class VibeService {
             location.setNumReviews(parseInteger(locMap.get("num_reviews")));
             return location;
         } catch (Exception e) {
-            // Log parse error here
+            logger.error("Failed to parse location from ML response map: {}. Error: {}", locMap, e.getMessage());
             return null;
         }
     }
@@ -199,34 +208,10 @@ public class VibeService {
 
     // Fallback to LLM recommendations if ML unavailable or empty
     private VibeSearchResponse findLocationsUsingLLM(VibeSearchRequest request) {
-        try {
-            final LLMRecommendationResponse llmResponse = llmService.findLocationsByVibe(
-                    request.getVibeDescription(),
-                    request.getMaxResults(),
-                    request.getLocation(),
-                    request.getPriceRange(),
-                    request.getTimeOfDay());
-
-            if (llmResponse == null || llmResponse.getLocationIds() == null || llmResponse.getLocationIds().isEmpty()) {
-                logger.warn("LLMService returned null or empty location IDs for vibe: {}. Falling back to keyword search.", request.getVibeDescription());
-                // If LLM service failed or returned no IDs, fall back to keyword search
-                return keywordFallback(request);
-            }
-
-            logger.info("LLMService returned {} location IDs. Fetching locations from repository.", llmResponse.getLocationIds().size());
-            logger.debug("LLM Location IDs: {}", llmResponse.getLocationIds());
-            List<Location> locations = locationRepository.findAllById(llmResponse.getLocationIds());
-
-            if (locations.isEmpty()) { // If IDs from LLM didn't map to actual locations
-                return keywordFallback(request);
-            }
-
-            return buildResponse(locations, llmResponse.getExplanation(), llmResponse.getConfidence());
-
-        } catch (Exception e) {
-            logger.error("Error during LLM fallback for vibe {}: {}", request.getVibeDescription(), e.getMessage(), e);
-            return keywordFallback(request);
-        }
+        // This method is now the fallback when the primary ML service fails.
+        // Instead of calling an external LLM, we will use the simple keyword search.
+        logger.warn("ML service failed or returned no results. Falling back to simple keyword search for vibe: {}", request.getVibeDescription());
+        return keywordFallback(request);
     }
 
     public List<Location> getLocationsByIds(List<Integer> locationIds) {
