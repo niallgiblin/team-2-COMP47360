@@ -22,7 +22,7 @@ import com.manhattan.busyness_predictor.service.VibeService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/vibe")
+@RequestMapping("/vibe")
 public class VibeController {
 
     @Autowired
@@ -73,7 +73,7 @@ public class VibeController {
     }
 
     // Get location details by ID (for LLM fallback)
-    @GetMapping("/location/{id}")
+    @GetMapping("/api/location/{id}")
     public ResponseEntity<Map<String, Object>> getLocationById(@PathVariable Integer id) {
         try {
             Location location = vibeService.getLocationById(id);
@@ -90,7 +90,7 @@ public class VibeController {
     }
 
     // Get multiple locations by IDs (for batch LLM responses)
-    @PostMapping("/location/batch")
+    @PostMapping("/api/location/batch")
     public ResponseEntity<Map<String, Object>> getLocationsByIds(
             @RequestBody List<Integer> locationIds) {
         try {

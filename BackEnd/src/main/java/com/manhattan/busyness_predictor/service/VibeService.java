@@ -1,210 +1,356 @@
 package com.manhattan.busyness_predictor.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
+import com.manhattan.busyness_predictor.dto.LLMRecommendationResponse;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.repository.LocationRepository;
 
 @Service
 public class VibeService {
 
-    @Autowired
-    private LocationRepository locationRepository;
+    private static final Logger logger = LoggerFactory.getLogger(VibeService.class);
 
-    @Autowired
-    private LLMService llmService;
+    private final RestTemplate restTemplate;
 
-    @Autowired
-    private LocationService locationService;
+    @Value("${ml.service.url:http://ml-service:5000}")
+    private String mlServiceUrl;
 
+    private final LocationRepository locationRepository;
+    private final LLMService llmService;
+    private final LocationService locationService;
+
+    public VibeService(RestTemplateBuilder restTemplateBuilder,
+            LocationRepository locationRepository,
+            LLMService llmService,
+            LocationService locationService) {
+        this.restTemplate = restTemplateBuilder.build();
+        this.locationRepository = locationRepository;
+        this.llmService = llmService;
+        this.locationService = locationService;
+    }
+
+    // Main entry for vibe search
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
+        if (isMLServiceAvailable()) {
+            List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), request.getMaxResults());
+            if (!mlLocations.isEmpty()) {
+                return buildResponse(mlLocations, "ML-powered recommendations based on your vibe description", 0.9);
+            }
+        }
+        // ML service unavailable or no results — fallback to LLM
+        return findLocationsUsingLLM(request);
+    }
+
+    // Check ML service health endpoint
+    private boolean isMLServiceAvailable() {
+        logger.info("Checking ML service health at {}", mlServiceUrl + "/health");
         try {
-            // Step 1: Call LLM to analyze the vibe and get recommendations
-            String llmResponse = llmService.findLocationsByVibe(
-                request.getVibeDescription(),
-                request.getMaxResults(),
-                request.getLocation(),
-                request.getPriceRange(),
-                request.getTimeOfDay()
-            );
+            ResponseEntity<String> healthResponse = restTemplate.getForEntity(mlServiceUrl + "/health", String.class);
+            logger.info("ML service health check returned status: {}", healthResponse.getStatusCode());
+            return healthResponse.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            logger.warn("ML service health check failed: {}", e.getMessage());
+            // Log health check failure here if desired
+            return false;
+        }
+    }
 
-            // Step 2: Parse LLM response to extract location IDs and explanation
-            LLMVibeResult llmResult = parseLLMResponse(llmResponse);
+    // Calls the ML service with vibe query, expects a JSON response containing
+    // results
+    private List<Location> fetchMLRecommendations(String vibeDescription, Integer maxResults) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
 
-            // Step 3: If LLM returned location IDs, fetch from database
-            List<Location> locations = new ArrayList<>();
-            if (llmResult.getLocationIds() != null && !llmResult.getLocationIds().isEmpty()) {
-                locations = getLocationsByIds(llmResult.getLocationIds());
+            Map<String, Object> payload = Map.of(
+                    "vibeDescription", vibeDescription,
+                    "maxResults", maxResults != null ? maxResults : 10);
+
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
+
+            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", mlServiceUrl, vibeDescription, maxResults);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    mlServiceUrl + "/search",
+                    HttpMethod.POST,
+                    requestEntity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                logger.info("ML service responded with status {} and body: {}", response.getStatusCode(), response.getBody());
+                List<Location> mlLocations = parseLocationsFromMLResponse(response.getBody());
+                logger.info("Parsed {} locations from ML service response.", mlLocations.size());
+                return mlLocations;
+            } else {
+                logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+            }
+        } catch (Exception e) {
+            logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
+        }
+        return Collections.emptyList();
+    }
+
+    // Parses the ML service response map into Location objects
+    private List<Location> parseLocationsFromMLResponse(Map<String, Object> mlResponse) {
+        if (mlResponse == null || !mlResponse.containsKey("results")) {
+            logger.warn("ML response is null or does not contain 'results' key. Returning empty list.");
+            return Collections.emptyList();
+        }
+        Object resultsObj = mlResponse.get("results");
+        if (!(resultsObj instanceof List<?>)) {
+            logger.warn("ML response 'results' is not a list. Type: {}. Returning empty list.", resultsObj.getClass().getName());
+            return Collections.emptyList();
+        }
+
+        List<?> rawLocations = (List<?>) resultsObj;
+        List<Location> locations = new ArrayList<>();
+
+        for (Object rawLocation : rawLocations) {
+            if (rawLocation instanceof Map<?, ?>) {
+                Map<?, ?> locMap = (Map<?, ?>) rawLocation;
+                Location location = mapToLocation(locMap);
+                if (location != null) {
+                    locations.add(location);
+                }
+            }
+        }
+        return locations;
+    }
+
+    private Float parseRating(Object rating) {
+        if (rating == null)
+            return 0f;
+        try {
+            return Float.parseFloat(rating.toString().replaceAll("[^0-9.]", ""));
+        } catch (NumberFormatException e) {
+            return 0f;
+        }
+    }
+
+    // Converts a Map representing a location to a Location entity
+    private Location mapToLocation(Map<?, ?> locMap) {
+        try {
+            Location location = new Location();
+            location.setId(parseInteger(locMap.get("id")));
+            location.setName(parseString(locMap.get("name")));
+            location.setAddress(parseString(locMap.get("address")));
+            location.setDescription(parseString(locMap.get("description")));
+            location.setPrice(parseInteger(locMap.get("price")));
+            location.setLat(parseDouble(locMap.get("latitude")));
+            location.setLng(parseDouble(locMap.get("longitude")));
+            location.setUri(parseString(locMap.get("uri")));
+            location.setReview(parseRating(locMap.get("reviews")));
+            location.setNumReviews(parseInteger(locMap.get("num_reviews")));
+            return location;
+        } catch (Exception e) {
+            // Log parse error here
+            return null;
+        }
+    }
+
+    private Integer parseInteger(Object obj) {
+        if (obj == null)
+            return null;
+        if (obj instanceof Number)
+            return ((Number) obj).intValue();
+        try {
+            return Integer.parseInt(obj.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Double parseDouble(Object obj) {
+        if (obj == null)
+            return null;
+        if (obj instanceof Number)
+            return ((Number) obj).doubleValue();
+        try {
+            return Double.parseDouble(obj.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String parseString(Object obj) {
+        return obj != null ? obj.toString() : null;
+    }
+
+    // Fallback to LLM recommendations if ML unavailable or empty
+    private VibeSearchResponse findLocationsUsingLLM(VibeSearchRequest request) {
+        try {
+            final LLMRecommendationResponse llmResponse = llmService.findLocationsByVibe(
+                    request.getVibeDescription(),
+                    request.getMaxResults(),
+                    request.getLocation(),
+                    request.getPriceRange(),
+                    request.getTimeOfDay());
+
+            if (llmResponse == null || llmResponse.getLocationIds() == null || llmResponse.getLocationIds().isEmpty()) {
+                logger.warn("LLMService returned null or empty location IDs for vibe: {}. Falling back to keyword search.", request.getVibeDescription());
+                // If LLM service failed or returned no IDs, fall back to keyword search
+                return keywordFallback(request);
             }
 
-            // Step 4: If no specific IDs, fall back to keyword-based search
-            if (locations.isEmpty()) {
-                locations = performFallbackSearch(request);
+            logger.info("LLMService returned {} location IDs. Fetching locations from repository.", llmResponse.getLocationIds().size());
+            logger.debug("LLM Location IDs: {}", llmResponse.getLocationIds());
+            List<Location> locations = locationRepository.findAllById(llmResponse.getLocationIds());
+
+            if (locations.isEmpty()) { // If IDs from LLM didn't map to actual locations
+                return keywordFallback(request);
             }
 
-            // Step 5: Create response
-            VibeSearchResponse response = new VibeSearchResponse();
-            response.setLocations(locations);
-            response.setExplanation(llmResult.getExplanation());
-            response.setSearchQuery(request.getVibeDescription());
-            response.setConfidence(llmResult.getConfidence());
-
-            return response;
+            return buildResponse(locations, llmResponse.getExplanation(), llmResponse.getConfidence());
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to find locations by vibe: " + e.getMessage());
+            logger.error("Error during LLM fallback for vibe {}: {}", request.getVibeDescription(), e.getMessage(), e);
+            return keywordFallback(request);
         }
-    }
-
-    public List<Location> findSimilarLocations(Integer locationId, Integer limit) {
-        try {
-            // Step 1: Get the base location
-            Location baseLocation = locationRepository.findById(locationId)
-                .orElseThrow(() -> new RuntimeException("Location not found"));
-
-            // Step 2: Generate vector for the base location
-            String locationVector = llmService.generateLocationVector(baseLocation);
-
-            // Step 3: Find similar locations using vector similarity
-            List<Integer> similarLocationIds = llmService.findSimilarLocationsByVector(
-                locationVector, limit, locationId
-            );
-
-            // Step 4: Fetch locations from database
-            return getLocationsByIds(similarLocationIds);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to find similar locations: " + e.getMessage());
-        }
-    }
-
-    public String generateLocationVibeProfile(Integer locationId) {
-        try {
-            Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> new RuntimeException("Location not found"));
-
-            return llmService.generateVibeProfile(location);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to generate vibe profile: " + e.getMessage());
-        }
-    }
-
-    public Location getLocationById(Integer id) {
-        return locationRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Location not found"));
     }
 
     public List<Location> getLocationsByIds(List<Integer> locationIds) {
+        if (locationIds == null || locationIds.isEmpty()) {
+            return Collections.emptyList();
+        }
         return locationRepository.findAllById(locationIds);
     }
 
-    private LLMVibeResult parseLLMResponse(String llmResponse) {
-        // Parse the LLM response to extract:
-        // 1. Location IDs (if provided)
-        // 2. Explanation text
-        // 3. Confidence score
-        
-        // This would typically involve JSON parsing or regex
-        // For now, implementing a simple parser
-        
-        LLMVibeResult result = new LLMVibeResult();
-        
-        try {
-            // Assuming LLM returns JSON-like format:
-            // {"locationIds": [1, 2, 3], "explanation": "...", "confidence": 0.85}
-            
-            if (llmResponse.contains("\"locationIds\"")) {
-                // Extract location IDs using regex or JSON parser
-                result.setLocationIds(extractLocationIds(llmResponse));
-            }
-            
-            if (llmResponse.contains("\"explanation\"")) {
-                result.setExplanation(extractExplanation(llmResponse));
-            }
-            
-            if (llmResponse.contains("\"confidence\"")) {
-                result.setConfidence(extractConfidence(llmResponse));
-            }
-            
-        } catch (Exception e) {
-            // If parsing fails, treat as plain text explanation
-            result.setExplanation(llmResponse);
-            result.setConfidence(0.5);
-        }
-        
-        return result;
-    }
-
-    private List<Location> performFallbackSearch(VibeSearchRequest request) {
-        // Fallback search using keywords from the vibe description
-        String vibeDescription = request.getVibeDescription().toLowerCase();
-        
-        // Extract keywords and search in location names and descriptions
+    // Simple keyword fallback search
+    private VibeSearchResponse keywordFallback(VibeSearchRequest request) {
+        String vibeDesc = request.getVibeDescription().toLowerCase();
         List<Location> allLocations = locationRepository.findAll();
-        
-        return allLocations.stream()
-            .filter(location -> matchesVibe(location, vibeDescription))
-            .limit(request.getMaxResults())
-            .collect(Collectors.toList());
+
+        List<Location> matched = allLocations.stream()
+                .filter(loc -> {
+                    String combined = (loc.getName() + " " + loc.getDescription() + " " + loc.getAddress())
+                            .toLowerCase();
+                    for (String keyword : vibeDesc.split("\\s+")) {
+                        if (combined.contains(keyword))
+                            return true;
+                    }
+                    return false;
+                })
+                .limit(request.getMaxResults() != null ? request.getMaxResults() : 10)
+                .collect(Collectors.toList());
+
+        return buildResponse(matched, "Keyword fallback recommendations", 0.6);
     }
 
-    private boolean matchesVibe(Location location, String vibeDescription) {
-        String locationText = (location.getName() + " " + 
-                             location.getDescription() + " " + 
-                             location.getAddress()).toLowerCase();
-        
-        // Simple keyword matching - could be improved with more sophisticated NLP
-        String[] keywords = vibeDescription.split("\\s+");
-        
-        for (String keyword : keywords) {
-            if (locationText.contains(keyword)) {
-                return true;
+    // Helper to build VibeSearchResponse DTO
+    private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence) {
+        VibeSearchResponse response = new VibeSearchResponse();
+        response.setLocations(locations);
+        response.setExplanation(explanation);
+        response.setConfidence(confidence);
+        return response;
+    }
+
+    public List<Location> findSimilarLocations(Integer locationId, Integer limit) {
+        Location baseLocation = getLocationById(locationId);
+
+        if (isMLServiceAvailable()) {
+            List<Location> mlSimilar = fetchMLSimilarLocations(baseLocation, limit);
+            if (!mlSimilar.isEmpty()) {
+                return mlSimilar;
             }
         }
-        
-        return false;
+
+        return findSimilarByCategory(baseLocation, limit);
     }
 
-    // Helper methods for parsing LLM response
-    private List<Integer> extractLocationIds(String response) {
-        // Implementation for extracting location IDs from LLM response
-        List<Integer> ids = new ArrayList<>();
-        // Add parsing logic here
-        return ids;
+    /**
+     * Calls ML service to get similar locations based on a given location.
+     */
+    private List<Location> fetchMLSimilarLocations(Location baseLocation, Integer limit) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> payload = Map.of(
+                    "location_name", baseLocation.getName(),
+                    "location_description", baseLocation.getDescription() != null ? baseLocation.getDescription() : "",
+                    "maxResults", limit != null ? limit : 10);
+
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    mlServiceUrl + "/similar",
+                    HttpMethod.POST,
+                    requestEntity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return parseLocationsFromMLResponse(response.getBody());
+            }
+        } catch (Exception e) {
+            // Log if needed
+        }
+        return Collections.emptyList();
     }
 
-    private String extractExplanation(String response) {
-        // Implementation for extracting explanation from LLM response
-        return "LLM explanation parsed from response";
+    /**
+     * Fallback similarity: find locations by matching category/type.
+     */
+    private List<Location> findSimilarByCategory(Location baseLocation, Integer limit) {
+        List<Location> candidates;
+        if (baseLocation.getIsRestaurant() != null && baseLocation.getIsRestaurant()) {
+            candidates = locationRepository.findByIsRestaurantTrue();
+        } else if (baseLocation.getIsBar() != null && baseLocation.getIsBar()) {
+            candidates = locationRepository.findByIsBarTrue();
+        } else if (baseLocation.getIsClub() != null && baseLocation.getIsClub()) {
+            candidates = locationRepository.findByIsClubTrue();
+        } else if (baseLocation.getIsLandmark() != null && baseLocation.getIsLandmark()) {
+            candidates = locationRepository.findByIsLandmarkTrue();
+        } else {
+            candidates = Collections.emptyList();
+        }
+
+        return candidates.stream()
+                .filter(loc -> !loc.getId().equals(baseLocation.getId()))
+                .limit(limit != null ? limit : 10)
+                .collect(Collectors.toList());
     }
 
-    private Double extractConfidence(String response) {
-        // Implementation for extracting confidence score
-        return 0.8;
+    /**
+     * Generate a vibe profile description for a location using the LLM service.
+     */
+    public String generateLocationVibeProfile(Integer locationId) {
+        try {
+            Location location = getLocationById(locationId);
+            return llmService.generateVibeProfile(location);
+        } catch (Exception e) {
+            // Log exception if needed
+            return "Unable to generate vibe profile at this time.";
+        }
     }
 
-    // Inner class for LLM result parsing
-    private static class LLMVibeResult {
-        private List<Integer> locationIds;
-        private String explanation;
-        private Double confidence;
-
-        // Getters and setters
-        public List<Integer> getLocationIds() { return locationIds; }
-        public void setLocationIds(List<Integer> locationIds) { this.locationIds = locationIds; }
-        
-        public String getExplanation() { return explanation; }
-        public void setExplanation(String explanation) { this.explanation = explanation; }
-        
-        public Double getConfidence() { return confidence; }
-        public void setConfidence(Double confidence) { this.confidence = confidence; }
+    /**
+     * Get a Location entity by its ID or throw if not found.
+     */
+    public Location getLocationById(Integer id) {
+        return locationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Location not found with id: " + id));
     }
 }
