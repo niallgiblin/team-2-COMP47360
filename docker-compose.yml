@@ -11,8 +11,8 @@ services:
       MYSQL_USER: urbanuser
       MYSQL_PASSWORD: urbanpass
       MYSQL_LOCAL_INFILE: '1'
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+    healthcheck: # More robust health check to ensure the DB is ready for app connections
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
       timeout: 20s
       retries: 10
       interval: 10s
@@ -44,10 +44,7 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       # Add retry parameters
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
-      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: 60000
       ML_SERVICE_URL: http://ml-service:5000 # Explicitly set ML service URL
-    env_file:
-      - .env # Load environment variables from .env file
     networks:
       - app-network
     # Add health check and retry mechanism
@@ -77,31 +74,40 @@ services:
       - app-network
 
   ml-service:
-    platform: linux/amd64
     build:
       context: ./backend/ml-service
+      dockerfile: Dockerfile
     container_name: urban-gala-ml
     ports:
       - "5001:5000"
     volumes:
-      - ./backend/ml-service:/app # Mount local code for development
+      # Mount data and models as read-only to prevent accidental modification
+      - ./backend/ml-service/data:/app/data:ro
+      - ./backend/ml-service/models:/app/models:ro
     environment:
+      - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformer
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - DATA_PATH=/app/data/locations.csv
+      - PYTHONUNBUFFERED=1
     networks:
       - app-network
-    # Use Gunicorn with its reloader for a stable development server.
-    # This command correctly overrides the CMD in the new Dockerfile.
-    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "8", "--timeout", "0", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 15s
       retries: 5
-      start_period: 30s # Give it time to initialize model and data
-    depends_on:
-      - db
+      start_period: 180s  # Give plenty of time for model loading
+    # Resource limits to prevent OOM
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
 
 networks:
   app-network:
