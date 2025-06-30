@@ -2,7 +2,6 @@ package com.manhattan.busyness_predictor.service;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.manhattan.busyness_predictor.model.Shared;
@@ -12,12 +11,13 @@ import com.manhattan.busyness_predictor.repository.SharedRepository;
 @Service
 public class SharedService {
 
-    @Autowired
-    private SharedRepository sharedRepository;
+    private final SharedRepository sharedRepository;
+    private final LocationRepository locationRepository;
 
-    @Autowired
-    private LocationRepository locationRepository;
-
+    public SharedService(SharedRepository sharedRepository, LocationRepository locationRepository) {
+        this.sharedRepository = sharedRepository;
+        this.locationRepository = locationRepository;
+    }
     public void shareLocation(Integer senderId, Integer receiverId, Integer locationId) {
         // Check if location exists
         locationRepository.findById(locationId)

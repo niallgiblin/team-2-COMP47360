@@ -36,29 +36,26 @@ public class VibeService {
     private String mlServiceUrl;
 
     private final LocationRepository locationRepository;
-    private final LLMService llmService;
     private final LocationService locationService;
 
     public VibeService(RestTemplateBuilder restTemplateBuilder,
             LocationRepository locationRepository,
-            LLMService llmService,
             LocationService locationService) {
         this.restTemplate = restTemplateBuilder.build();
         this.locationRepository = locationRepository;
-        this.llmService = llmService;
         this.locationService = locationService;
     }
 
     // Main entry for vibe search
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
         if (isMLServiceAvailable()) {
-            List<Location> mlLocations = fetchMLRecommendations(request);
+            List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), request.getMaxResults());
             if (!mlLocations.isEmpty()) {
                 return buildResponse(mlLocations, "ML-powered recommendations based on your vibe description", 0.9);
             }
         }
-        // ML service unavailable or no results — fallback to LLM
-        return findLocationsUsingLLM(request);
+        // ML service unavailable or no results — null for now
+        return null;
     }
 
     // Check ML service health endpoint
@@ -77,27 +74,19 @@ public class VibeService {
 
     // Calls the ML service with vibe query, expects a JSON response containing
     // results
-    private List<Location> fetchMLRecommendations(VibeSearchRequest request) {
+    private List<Location> fetchMLRecommendations(String vibeDescription, Integer maxResults) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            Map<String, Object> payload = new java.util.HashMap<>();
-            payload.put("vibeDescription", request.getVibeDescription());
-            payload.put("maxResults", request.getMaxResults() != null ? request.getMaxResults() : 10);
-            if (request.getLocation() != null) {
-                payload.put("location", request.getLocation());
-            }
-            if (request.getPriceRange() != null) {
-                payload.put("priceRange", request.getPriceRange());
-            }
-            if (request.getTimeOfDay() != null) {
-                payload.put("timeOfDay", request.getTimeOfDay());
-            }
+            Map<String, Object> payload = Map.of(
+                    "vibeDescription", vibeDescription,
+                    "maxResults", maxResults != null ? maxResults : 10);
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
-            logger.info("Calling ML service at {}/search with payload: {}", mlServiceUrl, payload);
+            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", mlServiceUrl,
+                    vibeDescription, maxResults);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     mlServiceUrl + "/search",
@@ -107,15 +96,17 @@ public class VibeService {
                     });
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                logger.info("ML service responded with status {} and body: {}", response.getStatusCode(), response.getBody());
+                logger.info("ML service responded with status {} and body: {}", response.getStatusCode(),
+                        response.getBody());
                 List<Location> mlLocations = parseLocationsFromMLResponse(response.getBody());
                 logger.info("Parsed {} locations from ML service response.", mlLocations.size());
                 return mlLocations;
             } else {
-                logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+                logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}",
+                        response.getStatusCode(), response.getBody());
             }
         } catch (Exception e) {
-            logger.error("Error calling ML service for vibe '{}': {}", request.getVibeDescription(), e.getMessage(), e);
+            logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
         }
         return Collections.emptyList();
     }
@@ -128,7 +119,8 @@ public class VibeService {
         }
         Object resultsObj = mlResponse.get("results");
         if (!(resultsObj instanceof List<?>)) {
-            logger.warn("ML response 'results' is not a list. Type: {}. Returning empty list.", resultsObj.getClass().getName());
+            logger.warn("ML response 'results' is not a list. Type: {}. Returning empty list.",
+                    resultsObj.getClass().getName());
             return Collections.emptyList();
         }
 
@@ -173,7 +165,7 @@ public class VibeService {
             location.setNumReviews(parseInteger(locMap.get("num_reviews")));
             return location;
         } catch (Exception e) {
-            logger.error("Failed to parse location from ML response map: {}. Error: {}", locMap, e.getMessage());
+            // Log parse error here
             return null;
         }
     }
@@ -204,14 +196,6 @@ public class VibeService {
 
     private String parseString(Object obj) {
         return obj != null ? obj.toString() : null;
-    }
-
-    // Fallback to LLM recommendations if ML unavailable or empty
-    private VibeSearchResponse findLocationsUsingLLM(VibeSearchRequest request) {
-        // This method is now the fallback when the primary ML service fails.
-        // Instead of calling an external LLM, we will use the simple keyword search.
-        logger.warn("ML service failed or returned no results. Falling back to simple keyword search for vibe: {}", request.getVibeDescription());
-        return keywordFallback(request);
     }
 
     public List<Location> getLocationsByIds(List<Integer> locationIds) {
@@ -316,19 +300,6 @@ public class VibeService {
                 .filter(loc -> !loc.getId().equals(baseLocation.getId()))
                 .limit(limit != null ? limit : 10)
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Generate a vibe profile description for a location using the LLM service.
-     */
-    public String generateLocationVibeProfile(Integer locationId) {
-        try {
-            Location location = getLocationById(locationId);
-            return llmService.generateVibeProfile(location);
-        } catch (Exception e) {
-            // Log exception if needed
-            return "Unable to generate vibe profile at this time.";
-        }
     }
 
     /**
