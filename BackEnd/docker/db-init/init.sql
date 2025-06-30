@@ -26,11 +26,11 @@ IGNORE 1 ROWS
 (@dummy, latitude, longitude, name, address, uri, 
  @reviews, num_reviews, @loc_type, description, @price_level, zone)
 SET 
-    review = CAST(REGEXP_SUBSTR(@reviews, '[0-9]+\\.[0-9]+') AS DECIMAL(3,1)),
-    is_restaurant = CASE WHEN @loc_type LIKE '%restaurant%' THEN TRUE ELSE FALSE END,
-    is_bar = CASE WHEN @loc_type LIKE '%bar%' THEN TRUE ELSE FALSE END,
-    is_club = CASE WHEN @loc_type LIKE '%club%' THEN TRUE ELSE FALSE END,
-    is_landmark = CASE WHEN @loc_type LIKE '%landmark%' THEN TRUE ELSE FALSE END,
+    review = NULLIF(REGEXP_SUBSTR(@reviews, '[0-9]+\\.[0-9]+'), '') + 0.0,
+    is_restaurant = @loc_type LIKE '%restaurant%',
+    is_bar = @loc_type LIKE '%bar%',
+    is_club = @loc_type LIKE '%club%',
+    is_landmark = @loc_type LIKE '%landmark%',
     price = CASE 
         WHEN @price_level LIKE '%very cheap%' THEN 1 
         WHEN @price_level LIKE '%cheap%' THEN 2

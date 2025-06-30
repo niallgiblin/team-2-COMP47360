@@ -2,11 +2,18 @@
 import { Box, Typography, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { usePlan } from '../context/PlanContext';
+import { useAuth } from '../context/AuthContext';
 import VenueCard from './VenueCard';
 
 export default function PlanSummary() {
   const { plan } = usePlan();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // user's name, fallback to "My Plan" if null
+  const planTitle = user?.firstName
+  ? `Plan for ${user.firstName}`
+  : 'My Plan';
 
   if (plan.length === 0) return null;
 
@@ -24,81 +31,75 @@ export default function PlanSummary() {
         overflowX: 'hidden',
       }}
     >
-      <Typography
-        variant="h6"
-        sx={{
-          mb: 3,
-          color: '#fff',
-          fontWeight: 'bold',
-          textAlign: 'center',
-        }}
-      >
-        Your Night Plan ({plan.length}/3 venues)
-      </Typography>
-  
-      {/* Scrollable container wrapper */}
+      {/* Responsive heading + View Map button */}
       <Box
         sx={{
           display: 'flex',
-          justifyContent: 'center',
-          overflowX: 'auto',
-          width: '100%',
-          pb: 1,
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'center', md: 'center' },
+          mb: 2,
         }}
       >
-        {/* Inner horizontal list that adapts width to content */}
-        <Box
+        <Typography
+          variant="h6"
           sx={{
-            display: 'flex',
-            flexDirection: 'row',
-            overflowX: 'auto',
-            justifyContent: plan.length < 3 ? 'center' : 'flex-start',
-            gap: 3,
-            px: 1,
-            scrollSnapType: 'x mandatory',
+            color: '#fff',
+            fontWeight: 'bold',
+            textAlign: { xs: 'center', md: 'left' },
           }}
         >
-          {plan.map((venue) => (
-            <Box
-              key={venue.id}
-              sx={{
-                scrollSnapAlign: 'start',
-                minWidth: 280,
-                flex: '0 0 auto',
-              }}
-            >
-              <VenueCard venue={venue} />
-            </Box>
-          ))}
-        </Box>
-      </Box>
-  
-      <Box
-        sx={{
-          textAlign: 'center',
-          mt: 4,
-        }}
-      >
+          {planTitle}
+        </Typography>
+
         <Button
           variant="contained"
-          onClick={() => navigate('/map')}
+          onClick={() =>
+            navigate('/map', { state: { fromPlan: true } })
+          }          
           sx={{
+            mt: { xs: 1, md: 0 },
             background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
             color: '#000',
             fontWeight: 'bold',
             borderRadius: '8px',
-            px: 4,
-            py: 1.2,
-            mt: 1,
-            fontSize: '1rem',
+            px: 3,
+            py: 1,
+            fontSize: '0.9rem',
             '&:hover': {
               background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
             },
           }}
         >
-          View on Map
+          View On Map
         </Button>
       </Box>
+
+      {/* Subheading */}
+      <Typography
+        variant="body2"
+        sx={{
+          mb: 2,
+          color: '#aaa',
+          textAlign: { xs: 'center', md: 'left' },
+        }}
+      >
+        {plan.length} of 3 spots added
+      </Typography>
+
+  
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+      >
+        {plan.map((venue) => (
+          <VenueCard key={venue.id} venue={venue} />
+        ))}
+      </Box>
+
     </Box>
   );  
 }

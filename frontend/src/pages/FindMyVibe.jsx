@@ -13,6 +13,7 @@ import {
 import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
+import PlanSummary from '../components/PlanSummary';
 
 export default function FindMyVibe() {
   // State hooks
@@ -44,24 +45,38 @@ export default function FindMyVibe() {
     }
 
     setIsLoading(true);
-    const queryParams = new URLSearchParams({
-      input,
-      vibe,
-      type: venueType,
-      cuisine,
-      page,
-      size: pageSize,
-    });
 
-    fetch(`http://localhost:8080/api/location/search?${queryParams}`)
+    // Build the request body for vibe search
+    const requestBody = {
+      vibeDescription: input || `${vibe} ${venueType} ${cuisine}`.trim(),
+      maxResults: pageSize * 10 // Get more results for pagination
+    };
+
+    fetch(`http://localhost:8080/vibe/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Search failed");
         return res.json();
       })
       .then((data) => {
-        setResults(data.content);
-        setTotalPages(data.totalPages);
-        setTotalElements(data.totalElements);
+        // Extract locations from the vibe search response
+        const locations = data.locations || [];
+        
+        // Handle pagination manually since vibe search doesn't support it natively
+        const totalElements = locations.length;
+        const totalPages = Math.ceil(totalElements / pageSize);
+        const startIndex = page * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedResults = locations.slice(startIndex, endIndex);
+        
+        setResults(paginatedResults);
+        setTotalPages(totalPages);
+        setTotalElements(totalElements);
       })
       .catch((err) => {
         console.error("Error fetching search results:", err);
@@ -92,7 +107,7 @@ export default function FindMyVibe() {
 
   return (
     <PageWrapper fullWidth>
-      <Box sx={{ maxWidth: 800, mx: "auto", mb: 10, px: 2 }}>
+      <Box sx={{ maxWidth: 1000, mx: "auto", mb: 10, px: 2 }}>
         <Typography
           variant="h4"
           align="center"
@@ -265,17 +280,43 @@ export default function FindMyVibe() {
           </Typography>
         ) : null}
 
-        {results.map((venue, index) => (
-          <TrendingVenueCard
-            key={venue.id}
-            venue={venue}
-            rank={index + 1}
-            onGetDirections={handleGetDirections}
-            onClick={() =>
-              navigate("/map-view", { state: { selectedVenue: venue } })
-            }
-          />
-        ))}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: 'flex-start',
+            gap: 3,
+          }}
+        >
+          {/* Left: Sidebar PlanSummary */}
+          <Box
+            sx={{
+              width: { xs: '100%', md: 320 },
+              position: { md: 'sticky' },
+              top: { md: 80 },
+              alignSelf: 'flex-start',
+            }}
+          >
+            <PlanSummary />
+          </Box>
+
+          {/* Right: Venue list */}
+          <Box sx={{ flex: 1 }}>
+            {results.map((venue, index) => (
+              <TrendingVenueCard
+                key={venue.id}
+                venue={venue}
+                rank={index + 1}
+                onGetDirections={handleGetDirections}
+                onClick={() =>
+                  navigate("/map-view", { state: { selectedVenue: venue } })
+                }
+              />
+            ))}
+          </Box>
+        </Box>
+
+
 
         {totalPages > 1 && (
           <Box
