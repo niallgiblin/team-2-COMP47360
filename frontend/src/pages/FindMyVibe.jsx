@@ -45,24 +45,38 @@ export default function FindMyVibe() {
     }
 
     setIsLoading(true);
-    const queryParams = new URLSearchParams({
-      input,
-      vibe,
-      type: venueType,
-      cuisine,
-      page,
-      size: pageSize,
-    });
 
-    fetch(`http://localhost:8080/api/location/search?${queryParams}`)
+    // Build the request body for vibe search
+    const requestBody = {
+      vibeDescription: input || `${vibe} ${venueType} ${cuisine}`.trim(),
+      maxResults: pageSize * 10 // Get more results for pagination
+    };
+
+    fetch(`http://localhost:8080/vibe/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    })
       .then((res) => {
         if (!res.ok) throw new Error("Search failed");
         return res.json();
       })
       .then((data) => {
-        setResults(data.content);
-        setTotalPages(data.totalPages);
-        setTotalElements(data.totalElements);
+        // Extract locations from the vibe search response
+        const locations = data.locations || [];
+        
+        // Handle pagination manually since vibe search doesn't support it natively
+        const totalElements = locations.length;
+        const totalPages = Math.ceil(totalElements / pageSize);
+        const startIndex = page * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedResults = locations.slice(startIndex, endIndex);
+        
+        setResults(paginatedResults);
+        setTotalPages(totalPages);
+        setTotalElements(totalElements);
       })
       .catch((err) => {
         console.error("Error fetching search results:", err);
