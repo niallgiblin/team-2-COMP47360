@@ -34,8 +34,8 @@ You should see version numbers for both commands.
 
 ### Step 1: Clone the Repository
 ```bash
-git clone [https://github.com/niallgiblin/team-2-COMP47360]
-cd [team-2-COMP47360]
+git clone https://github.com/niallgiblin/team-2-COMP47360
+cd team-2-COMP47360
 ```
 
 ### Step 2: Start the Application
@@ -51,11 +51,11 @@ docker-compose up --build
 You'll see lots of log messages. Wait until you see these key messages:
 - `urban-gala-db: ready for connections` 
 - `urban-gala-backend: Started BusynessPredictorApplication`
-- `urban-gala-frontend: Local: http://localhost:4173/`
+- `urban-gala-frontend: Local: http://localhost:5173/`
 
 ### Step 4: Access the Application
 Once everything is running:
-- **Frontend (Web App):** [http://localhost:4173](http://localhost:4173)
+- **Frontend (Web App):** http://localhost:5173
 - **Backend API:** [http://localhost:8080](http://localhost:8080)
 
 ## Common Docker Commands
@@ -114,11 +114,11 @@ docker-compose down
 
 # Check what's using the port
 # Windows:
-netstat -ano | findstr :4173
+netstat -ano | findstr :5173
 netstat -ano | findstr :8080
 
 # Mac/Linux:
-lsof -i :4173
+lsof -i :5173
 lsof -i :8080
 
 # Kill the conflicting processes
@@ -177,7 +177,7 @@ team-2-COMP47360/
 4. **Network:** Allows containers to communicate with each other
 
 ### Default Ports:
-- Frontend: `4173` (accessible at localhost:4173)
+- Frontend: `5173` (accessible at localhost:5173)
 - Backend: `8080` (accessible at localhost:8080)
 - Database: `3306` (internal communication only)
 

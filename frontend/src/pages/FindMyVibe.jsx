@@ -48,15 +48,15 @@ export default function FindMyVibe() {
     // Build the request body for vibe search
     const requestBody = {
       vibeDescription: input || `${vibe} ${venueType} ${cuisine}`.trim(),
-      maxResults: pageSize * 10 // Get more results for pagination
+      maxResults: pageSize * 10, // Get more results for pagination
     };
 
     fetch(`http://localhost:8080/vibe/search`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
     })
       .then((res) => {
         if (!res.ok) throw new Error("Search failed");
@@ -65,14 +65,14 @@ export default function FindMyVibe() {
       .then((data) => {
         // Extract locations from the vibe search response
         const locations = data.locations || [];
-        
+
         // Handle pagination manually since vibe search doesn't support it natively
         const totalElements = locations.length;
         const totalPages = Math.ceil(totalElements / pageSize);
         const startIndex = page * pageSize;
         const endIndex = startIndex + pageSize;
         const paginatedResults = locations.slice(startIndex, endIndex);
-        
+
         setResults(paginatedResults);
         setTotalPages(totalPages);
         setTotalElements(totalElements);
@@ -101,8 +101,6 @@ export default function FindMyVibe() {
   useEffect(() => {
     handleSearch();
   }, [handleSearch]);
-
-
 
   return (
     <PageWrapper fullWidth>
