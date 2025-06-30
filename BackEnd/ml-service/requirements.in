@@ -1,11 +1,20 @@
 #
 # This file is for specifying the high-level dependencies for the ML service.
-# Run 'pip-compile requirements.in' to generate the 'requirements.txt' lock file.
+# Run 'pip-compile' to generate the 'requirements.txt' lock file.
 #
 
-torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu
-sentence-transformers==2.2.2
-pandas
+# Core application libraries
 flask
 flask-cors
 gunicorn
+
+# ML and data processing
+pandas
+sentence-transformers==2.7.0
+
+# Utilities
+psutil
+python-dotenv
+
+# PyTorch - explicitly listed for pip-compile to resolve dependencies correctly
+torch==2.1.2
