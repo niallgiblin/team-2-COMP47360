@@ -81,27 +81,30 @@ export default function MapView() {
     fetchData();
   }, [fromPlan, plan, selectedVenueFromState]);
 
-  const handleGeocodeStart = () => {
+  const handleGeocodeStart = async () => {
     if (!manualStart.trim()) return;
     const encoded = encodeURIComponent(manualStart.trim());
 
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`)
-      .then((res) => res.json())
-      .then((results) => {
-        if (results.length > 0) {
-          const firstResult = results[0];
-          setUserLocation({
-            lat: parseFloat(firstResult.lat),
-            lng: parseFloat(firstResult.lon)
-          });
-        } else {
-          alert("Address not found. Try being more specific.");
-        }
-      })
-      .catch((err) => {
-        console.error("Geocoding error:", err);
-        alert("Failed to find location.");
-      });
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`);
+      if (!res.ok) {
+        throw new Error(`Geocoding service failed: ${res.statusText}`);
+      }
+      const results = await res.json();
+
+      if (results.length > 0) {
+        const firstResult = results[0];
+        setUserLocation({
+          lat: parseFloat(firstResult.lat),
+          lng: parseFloat(firstResult.lon),
+        });
+      } else {
+        alert("Address not found. Try being more specific.");
+      }
+    } catch (err) {
+      console.error("Geocoding error:", err);
+      alert("Failed to find location.");
+    }
   };
 
   if (loading) {
@@ -319,6 +322,7 @@ export default function MapView() {
               selectedVenue={selectedVenue}
               onSelectVenue={setSelectedVenue}
               fromPlan={fromPlan}
+              userLocation={userLocation}
             />
           </Box>
         </Box>
@@ -327,4 +331,3 @@ export default function MapView() {
   );
   
 }
-
