@@ -1,8 +1,7 @@
 import { Box, Typography, Slider, Button } from '@mui/material';
 import { useState } from 'react';
 
-export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange }) {
-  const [mode, setMode] = useState('forecast');
+export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange, mode }) {
 
   if (!timestamps.length) return null;
 
@@ -17,59 +16,7 @@ export default function ForecastSlider({ timestamps = [], selectedTimestamp, onC
         mt: 0.2,
       }}
     >
-      {/* Toggle */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          mb: 2,
-        }}
-      >
-        <Typography sx={{ color: '#fff' }}>Mode:</Typography>
 
-        <Button
-          onClick={() => setMode('live')}
-          sx={{
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            color: mode === 'live' ? '#000' : '#FFFFFF',
-            background:
-              mode === 'live'
-                ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)'
-                : 'transparent',
-            border: '1px solid #FF4ECD',
-            px: 2,
-            '&:hover': {
-              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-              color: '#000',
-            },
-          }}
-        >
-          Live
-        </Button>
-
-        <Button
-          onClick={() => setMode('forecast')}
-          sx={{
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            color: mode === 'forecast' ? '#000' : '#FFFFFF',
-            background:
-              mode === 'forecast'
-                ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)'
-                : 'transparent',
-            border: '1px solid #FF4ECD',
-            px: 2,
-            '&:hover': {
-              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-              color: '#000',
-            },
-          }}
-        >
-          Forecast
-        </Button>
-      </Box>
 
       {/* Prediction slider */}
       {mode === 'forecast' && (

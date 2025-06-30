@@ -36,13 +36,13 @@ export default function VenueCard({ venue, variant = 'default' }) {
         color: '#fff',
         backgroundColor: '#222',
         boxSizing: 'border-box',
-        p: variant === 'compact' ? 1 : 2,
+        p: variant === 'compact' ? 1 : variant === 'map' ? 1.5 : 2,
         width: variant === 'compact' ? 200 : '100%',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
-        height: variant === 'compact' ? 300 : 'auto', // control card height in compact
+        // justifyContent: 'space-between',
+        height: 'auto',
     }}
     >
 
@@ -54,9 +54,13 @@ export default function VenueCard({ venue, variant = 'default' }) {
         alt={venue.name}
         sx={{ 
             borderRadius: 2, 
-            mb: variant === 'compact' ? 1 : 2,
-            height: variant === 'compact' ? 100 : { xs: '140px', md: '200px' },
-            objectFit: 'cover', // keep aspect ratio 
+            mb: variant === 'compact' ? 1 : variant === 'map' ? 1 : 2,
+            height: variant === 'compact'
+              ? 100
+              : variant === 'map'
+              ? 120
+              : { xs: '140px', md: '200px' },
+            objectFit: 'cover',
             width: '100%',
         }}
       />
@@ -180,18 +184,18 @@ export default function VenueCard({ venue, variant = 'default' }) {
                 background: isInPlan
                 ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)'
                 : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                color: '#000',
-                fontWeight: 'bold',
-                textTransform: 'none',
-                px: variant === 'compact' ? 2 : 4,
-                py: variant === 'compact' ? 0.5 : 1.5,
-                fontSize: variant === 'compact' ? '0.8rem' : '1rem',
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                '&:hover': {
+              color: '#000',
+              fontWeight: 'bold',
+              textTransform: 'none',
+              px: variant === 'compact' ? 2 : variant === 'map' ? 3 : 4,
+              py: variant === 'compact' ? 0.5 : variant === 'map' ? 1 : 1.5,
+              fontSize: variant === 'compact' ? '0.8rem' : variant === 'map' ? '0.9rem' : '1rem',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+              '&:hover': {
                 background: isInPlan
-                    ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
-                    : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
+                  ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
+                  : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
                 },
             }}
             >
