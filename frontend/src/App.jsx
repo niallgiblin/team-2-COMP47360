@@ -17,6 +17,9 @@ import Signup from './pages/Signup.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Profile from './pages/Profile';
+
+import { PlanProvider } from './context/PlanContext';
+
 // import APITester from './components/APITester'; // Uncomment if you want to use API testing tool
 
 // Component to conditionally render Skyline and Footer
@@ -47,7 +50,9 @@ function AppLayout({ children }) {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <PlanProvider>
+        <AppContent />
+      </PlanProvider>
     </AuthProvider>
   );
 }
