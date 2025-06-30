@@ -82,42 +82,56 @@ export default function DemoMap({
   };
 
   useEffect(() => {
-    fetch('/manhattanZones.geojson')
-      .then(res => res.text())
-      .then(text => {
-        const json = JSON.parse(text);
+    const fetchZoneData = async () => {
+      try {
+        const response = await fetch('/manhattanZones.geojson');
+        if (!response.ok) {
+          // This will happen on a 404 Not Found error, for example.
+          throw new Error(`Failed to fetch zone data: ${response.status} ${response.statusText}`);
+        }
+        const json = await response.json(); // Use .json() directly for robust parsing
         setZoneData(json);
         setZoneDataLoaded(true);
-      })
-      .catch(err => console.error('Failed to load GeoJSON:', err));
+      } catch (err) {
+        console.error('Error loading GeoJSON:', err);
+      }
+    };
+    fetchZoneData();
   }, []);
 
   useEffect(() => {
-    fetch('/api/zones/busyness')
-      .then(res => res.json())
-      .then(data => setBusynessData(data))
-      .catch(console.error);
+    const fetchBusyness = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/zones/busyness');
+        if (!response.ok) {
+          // This check prevents trying to parse a non-JSON response (like an HTML error page)
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setBusynessData(data);
+      } catch (error) {
+        console.error("Could not fetch busyness data. Zones may not be colored correctly.", error);
+      }
+    };
+
+    fetchBusyness();
   }, []);
 
   useEffect(() => {
-    if (!zoneData) return;
-    fetch('http://localhost:8080/api/location')
-      .then(res => res.json())
-      .then(data => {
-        const enriched = data.map((venue) => {
-          const venuePoint = turfPoint([venue.lng, venue.lat]);
-          const match = zoneData.features.filter((feature) =>
-            booleanPointInPolygon(venuePoint, feature.geometry)
-          );
-          return {
-            ...venue,
-            zone: match.length > 0 ? match[0].properties.LocationID : null
-          };
-        });
-        allVenuesRef.current = enriched;
-      })
-      .catch(err => console.error('Failed to preload all venues:', err));
-  }, [zoneData]);
+    // This effect now uses venues instead of re-fetching
+    if (!zoneData || venues.length === 0) return;
+
+    const enrichedVenues = venues.map((venue) => {
+      if (typeof venue.lat !== 'number' || typeof venue.lng !== 'number') return venue;
+      const venuePoint = turfPoint([venue.lng, venue.lat]);
+      // Use .find()
+      const matchingZone = zoneData.features.find((feature) =>
+        booleanPointInPolygon(venuePoint, feature.geometry)
+      );
+      return { ...venue, zone: matchingZone ? matchingZone.properties.LocationID : null };
+    });
+    allVenuesRef.current = enrichedVenues;
+  }, [zoneData, venues]);
 
   useEffect(() => {
     const dummy = [
