@@ -49,13 +49,16 @@ public class VibeService {
     // Main entry for vibe search
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
         if (isMLServiceAvailable()) {
-            List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), request.getMaxResults());
+            // Enforce returning only the top 5 results
+            List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), 5);
             if (!mlLocations.isEmpty()) {
                 return buildResponse(mlLocations, "ML-powered recommendations based on your vibe description", 0.9);
             }
         }
-        // ML service unavailable or no results — null for now
-        return null;
+
+        // Fallback to keyword search if ML service is unavailable or returns no results
+        logger.warn("ML service did not return results for vibe: '{}'. Using keyword fallback.", request.getVibeDescription());
+        return keywordFallback(request);
     }
 
     // Check ML service health endpoint
@@ -220,7 +223,7 @@ public class VibeService {
                     }
                     return false;
                 })
-                .limit(request.getMaxResults() != null ? request.getMaxResults() : 10)
+                .limit(5) // Enforce top 5 for fallback as well
                 .collect(Collectors.toList());
 
         return buildResponse(matched, "Keyword fallback recommendations", 0.6);
