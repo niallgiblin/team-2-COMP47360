@@ -38,7 +38,7 @@ This project uses Git LFS to manage large files, such as machine learning models
     -   On macOS with Homebrew: `brew install git-lfs`
     -   On Windows: Download and run the installer from the website.
 
-2.  **Set up Git LFS for your user account.** Run this command once per machine:
+2.  **Set up Git LFS from the project root directory.** Run this command once per machine:
     ```bash
     git lfs install
     ```
