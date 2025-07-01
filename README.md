@@ -30,6 +30,19 @@ docker-compose --version
 
 You should see version numbers for both commands.
 
+### 3. Install Git LFS (Large File Storage)
+
+This project uses Git LFS to manage large files, such as machine learning models. You must install it to clone the repository correctly.
+
+1.  **Install Git LFS.** Follow the instructions at [https://git-lfs.github.com](https://git-lfs.github.com).
+    -   On macOS with Homebrew: `brew install git-lfs`
+    -   On Windows: Download and run the installer from the website.
+
+2.  **Set up Git LFS for your user account.** Run this command once per machine:
+    ```bash
+    git lfs install
+    ```
+
 ## Getting the Application Running
 
 ### Step 1: Clone the Repository

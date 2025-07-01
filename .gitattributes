@@ -1,0 +1,7 @@
+# Manage line endings for cross-platform compatibility
+backend/mvnw text eol=lf
+backend/*.cmd text eol=crlf
+
+# Track large files with Git LFS
+backend/ml-service/data/*.npy filter=lfs diff=lfs merge=lfs -text
+backend/ml-service/models/** filter=lfs diff=lfs merge=lfs -text
