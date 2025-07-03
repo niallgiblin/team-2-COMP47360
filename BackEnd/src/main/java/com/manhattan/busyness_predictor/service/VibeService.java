@@ -32,8 +32,8 @@ public class VibeService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ml.service.url:http://ml-service:5000}")
-    private String mlServiceUrl;
+    @Value("${llm.service.url:http://llm-service:5000}")
+    private String llmServiceUrl;
 
     private final LocationRepository locationRepository;
     private final LocationService locationService;
@@ -63,9 +63,9 @@ public class VibeService {
 
     // Check ML service health endpoint
     private boolean isMLServiceAvailable() {
-        logger.info("Checking ML service health at {}", mlServiceUrl + "/health");
+        logger.info("Checking ML service health at {}", llmServiceUrl + "/health");
         try {
-            ResponseEntity<String> healthResponse = restTemplate.getForEntity(mlServiceUrl + "/health", String.class);
+            ResponseEntity<String> healthResponse = restTemplate.getForEntity(llmServiceUrl + "/health", String.class);
             logger.info("ML service health check returned status: {}", healthResponse.getStatusCode());
             return healthResponse.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
@@ -88,11 +88,11 @@ public class VibeService {
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
-            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", mlServiceUrl,
+            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", llmServiceUrl,
                     vibeDescription, maxResults);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    mlServiceUrl + "/search",
+                    llmServiceUrl + "/search",
                     HttpMethod.POST,
                     requestEntity,
                     new ParameterizedTypeReference<Map<String, Object>>() {
@@ -267,7 +267,7 @@ public class VibeService {
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    mlServiceUrl + "/similar",
+                    llmServiceUrl + "/similar",
                     HttpMethod.POST,
                     requestEntity,
                     new ParameterizedTypeReference<Map<String, Object>>() {

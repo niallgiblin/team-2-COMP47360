@@ -10,7 +10,6 @@ services:
       MYSQL_DATABASE: urban_gala
       MYSQL_USER: urbanuser
       MYSQL_PASSWORD: urbanpass
-      MYSQL_LOCAL_INFILE: '1'
     healthcheck: # More robust health check to ensure the DB is ready for app connections
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
       timeout: 20s
@@ -19,11 +18,10 @@ services:
       start_period: 40s
     volumes:
       - db_data:/var/lib/mysql
-      - ./backend/docker/db-init:/docker-entrypoint-initdb.d
+      - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro      # For initialization scripts (.sql, .sh)
+      - ./backend/docker/db-config/my.cnf:/etc/mysql/conf.d/my.cnf:ro # For custom MySQL configuration
     networks:
       - app-network
-    # Light MySQL optimizations - only the essential ones
-    command: --secure-file-priv= --local-infile=1
 
 
   backend:
@@ -35,16 +33,12 @@ services:
     depends_on: # The backend now depends on both the DB and the ML service
       db:
         condition: service_healthy
-      ml-service:
+      llm-service:
+        condition: service_healthy
+      busyness-service:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/urban_gala?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      SPRING_DATASOURCE_USERNAME: urbanuser
-      SPRING_DATASOURCE_PASSWORD: urbanpass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      # Add retry parameters
-      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
-      ML_SERVICE_URL: http://ml-service:5000 # Explicitly set ML service URL
+      LLM_SERVICE_URL: http://llm-service:5000
     networks:
       - app-network
     # Add health check and retry mechanism
@@ -73,17 +67,15 @@ services:
     networks:
       - app-network
 
-  ml-service:
+  llm-service:
     build:
-      context: ./backend/ml-service
-      dockerfile: Dockerfile
-    container_name: urban-gala-ml
+      context: ./backend/llm-service
+    container_name: urban-gala-llm
     ports:
       - "5001:5000"
     volumes:
-      # Mount data and models as read-only to prevent accidental modification
-      - ./backend/ml-service/data:/app/data:ro
-      - ./backend/ml-service/models:/app/models:ro
+      - ./backend/llm-service/data:/app/data:ro
+      - ./backend/llm-service/models/sentence-transformer:/app/models/sentence-transformer:ro
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformer
@@ -96,16 +88,45 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 15s
-      retries: 5
-      start_period: 180s  # Give plenty of time for model loading
-    # Resource limits to prevent OOM
+      retries: 3
+      start_period: 60s # Startup should be much faster now
     deploy:
       resources:
         limits:
-          memory: 3G
+          memory: 1.5G # Reduced memory limit
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    restart: unless-stopped
+
+  busyness-service:
+    build:
+      context: ./backend/busyness-service # New build context
+    container_name: urban-gala-busyness
+    ports:
+      - "5002:5000"
+    volumes:
+      - ./backend/busyness-service/models/DNNs:/app/models/busyness/dnn:ro
+      - ./backend/busyness-service/models/LSTMs:/app/models/busyness/lstm:ro
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 180s # This service needs time to load models
+    deploy:
+      resources:
+        limits:
+          memory: 2G
           cpus: '2.0'
         reservations:
-          memory: 1G
+          memory: 768M
           cpus: '0.5'
     restart: unless-stopped
 

@@ -102,7 +102,7 @@ export default function DemoMap({
   useEffect(() => {
     const fetchBusyness = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/zones/busyness');
+        const response = await fetch('http://localhost:8080/busyness');
         if (!response.ok) {
           // This check prevents trying to parse a non-JSON response (like an HTML error page)
           throw new Error(`HTTP error! status: ${response.status}`);
