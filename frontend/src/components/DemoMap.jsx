@@ -5,7 +5,8 @@ import {
   Popup,
   GeoJSON,
   useMap,
-  Tooltip
+  Tooltip,
+  Polyline
 } from 'react-leaflet';
 
 import { Box } from '@mui/material';
@@ -31,7 +32,11 @@ export default function DemoMap({
   venues = [],
   selectedVenue,
   onSelectVenue,
-  fromPlan = false
+  fromPlan = false,
+  userLocation,
+  showDirections = false,
+  plan = [],
+  routeCoords = []
 }) {
   const [zoneData, setZoneData] = useState(null);
   const [busynessData, setBusynessData] = useState([]);
@@ -39,7 +44,6 @@ export default function DemoMap({
   const [userTriggeredFly, setUserTriggeredFly] = useState(false);
   const [routeKey, setRouteKey] = useState(0);
   const [zoneCenter, setZoneCenter] = useState(null);
-  const [userLocation, setUserLocation] = useState(null);
 
   const [predictionData, setPredictionData] = useState([]);
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
@@ -150,19 +154,6 @@ export default function DemoMap({
     setSelectedTimestamp(dummy[0].predictions[0].timestamp);
   }, []);
 
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      (error) => {
-        console.warn('Could not get user location:', error);
-      }
-    );
-  }, []);
 
   const handleZoneClick = (feature) => {
     const zoneId = feature.properties.LocationID;
@@ -290,8 +281,52 @@ export default function DemoMap({
     return null;
   }
 
+  function FlyToPlan({ venues, fromPlan }) {
+    const map = useMap();
+  
+    useEffect(() => {
+      if (!fromPlan || !venues || venues.length === 0) return;
+  
+      // Extract lat/lng pairs
+      const coords = venues
+        .filter(v => typeof v.lat === 'number' && typeof v.lng === 'number')
+        .map(v => [v.lat, v.lng]);
+  
+      if (coords.length === 1) {
+        map.flyTo(coords[0], 15); // zoom 15 for a single venue
+      } else {
+        // Compute the center of all venues
+        const latSum = coords.reduce((sum, [lat]) => sum + lat, 0);
+        const lngSum = coords.reduce((sum, [, lng]) => sum + lng, 0);
+        const center = [latSum / coords.length, lngSum / coords.length];
+  
+        map.flyTo(center, 14); // zoom out a little for multiple venues
+      }
+    }, [venues, fromPlan, map]);
+  
+    return null;
+  }
+
+  function FlyToUserLocation({ location }) {
+    const map = useMap();
+  
+    useEffect(() => {
+      if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
+        map.flyTo([location.lat, location.lng], 15);
+      }
+    }, [location, map]);
+  
+    return null;
+  }
+  
+
   return (
-    <Box sx={{ width: '100%', height: '100%' }}>
+    <Box 
+      sx={{ 
+        width: '100%', 
+        height: '100%' 
+      }}
+    >
       <MapContainer
         center={[40.72, -73.95]}
         zoom={12}
@@ -301,12 +336,19 @@ export default function DemoMap({
         }}
         style={{ height: 'calc(120vh - 300px)', width: '100%' }}
       >
+        {/* Auto fly to userLocation if set manually */}
+        <FlyToUserLocation location={userLocation} />
+        
+        {/* Fly to appropriate center if fromPlan */}
+        <FlyToPlan venues={plan} fromPlan={fromPlan} />
+        
         {selectedVenue && <FlyToVenue venue={selectedVenue} />}
         {zoneCenter && <FlyToZone center={zoneCenter} />}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
+
         <ChoroplethLegend />
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]}>
@@ -350,6 +392,15 @@ export default function DemoMap({
             end={[selectedVenue.lat, selectedVenue.lng]}
           />
         )}
+        
+        {showDirections && routeCoords.length > 0 && (
+          <Polyline
+            positions={routeCoords}
+            color="#3ABEFF"
+            weight={4}
+          />
+        )}
+
       </MapContainer>
     </Box>
   );

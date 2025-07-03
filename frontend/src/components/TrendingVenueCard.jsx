@@ -8,11 +8,11 @@ import { getCategory, categoryImages } from '../utils/tagMapping';
 
 export default function TrendingVenueCard({ venue, onGetDirections }) {
   const priceLevels = {
-    'very cheap': 1,
-    'cheap': 2,
-    'moderate': 3,
-    'expensive': 4,
-    'very expensive': 5,
+    'price level very cheap': 1,
+    'price level cheap': 2,
+    'price level moderate': 3,
+    'price level expensive': 4,
+    'price level very expensive': 5,
   };
   
   const normalizedPrice = typeof venue.price === 'string' 
