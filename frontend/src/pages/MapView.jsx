@@ -63,12 +63,6 @@ export default function MapView() {
   const [showDirections, setShowDirections] = useState(false);
   const [directionsPolyline, setDirectionsPolyline] = useState([]);
 
-  // Automatically fetch directions if accessed from a plan
-  useEffect(() => {
-    if (fromPlan && userLocation && plan.length > 0 && !showDirections) {
-      handleGetDirections();
-    }
-  }, [fromPlan, userLocation, plan, showDirections]);
 
   // fetch walking directions using the Google Routes API
   const handleGetDirections = async () => {
