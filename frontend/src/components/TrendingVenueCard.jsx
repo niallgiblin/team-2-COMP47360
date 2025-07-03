@@ -1,10 +1,9 @@
 import { Card, CardMedia, Typography, Box, Button, Chip } from '@mui/material';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import LaunchIcon from '@mui/icons-material/Launch';
 import { usePlan } from '../context/PlanContext';
 import { getCategory, categoryImages } from '../utils/tagMapping';
-
-
 
 export default function TrendingVenueCard({ venue, onGetDirections }) {
   const priceLevels = {
@@ -15,11 +14,21 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
     'price level very expensive': 5,
   };
   
-  const normalizedPrice = typeof venue.price === 'string' 
-  ? venue.price.trim().toLowerCase() 
-  : '';
+  // Handle both string and numeric price values
+  let level = 0;
+  if (typeof venue.price === 'number') {
+    level = venue.price;
+  } else if (typeof venue.price === 'string') {
+    const normalizedPrice = venue.price.trim().toLowerCase();
+    level = priceLevels[normalizedPrice] || 0;
+  }
 
-  const level = priceLevels[normalizedPrice] || 0;
+  // Debug logging
+  console.log('Venue:', venue.name);
+  console.log('Raw price:', venue.price);
+  console.log('Price type:', typeof venue.price);
+  console.log('Level:', level);
+  console.log('---');
 
   const { plan, addToPlan, removeFromPlan } = usePlan();
   const isInPlan = plan.some(v => v.id === venue.id);
@@ -28,7 +37,12 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
   const category = getCategory(venue.description || '');
   const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
-  
+  const handleWebsiteClick = () => {
+    if (venue.uri) {
+      window.open(venue.uri, '_blank');
+    }
+  };
+
   return (
     <Card
       sx={{
@@ -92,19 +106,38 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
             {venue.category || 'Bar'} · {venue.neighborhood || 'NYC'}
           </Typography>
           
-          <Button
-            variant="text"
-            size="small"
-            onClick={() => onGetDirections(venue)}
-            sx={{
-              color: '#3ABEFF',
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 0,
-            }}
-          >
-            Get Directions
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => onGetDirections(venue)}
+              sx={{
+                color: '#3ABEFF',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 0,
+              }}
+            >
+              Get Directions
+            </Button>
+            
+            {venue.uri && (
+              <Button
+                variant="text"
+                size="small"
+                onClick={handleWebsiteClick}
+                startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  color: '#FF4ECD',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 0,
+                }}
+              >
+                Website
+              </Button>
+            )}
+          </Box>
         </Box>
 
         {/* Right: Trending chip and price icons */}
@@ -177,5 +210,3 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
     </Card>
   );
 }
-
-

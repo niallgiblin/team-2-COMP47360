@@ -1,14 +1,39 @@
-// components/PlanSummary.jsx
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { usePlan } from '../context/PlanContext';
 import { useAuth } from '../context/AuthContext';
 import VenueCard from './VenueCard';
 
 export default function PlanSummary() {
-  const { plan } = usePlan();
+  const { plan, savePlan, loadPlan, clearPlan } = usePlan();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const [tempPlanName, setTempPlanName] = useState('');
+
+
+  const [savedDialogOpen, setSavedDialogOpen] = useState(false);
+  const [lastSavedPlan, setLastSavedPlan] = useState(null);
+
+
+  const handleSave = () => {
+    setTempPlanName('');
+    setNameDialogOpen(true);
+  };
+  
+  const confirmSave = async () => {
+    if (tempPlanName.trim()) {
+      const saved = await savePlan(tempPlanName.trim());
+      if (saved) {
+        setLastSavedPlan(saved);
+        setSavedDialogOpen(true);
+        setNameDialogOpen(false);
+      }
+    }
+  };
+    
 
   // user's name, fallback to "My Plan" if null
   const planTitle = user?.firstName
@@ -17,10 +42,11 @@ export default function PlanSummary() {
 
   if (plan.length === 0) return null;
 
+  
   return (
     <Box
       sx={{
-        mt: 6,
+        mt: { xs: 2, md: 0 },
         p: 3,
         border: '2px solid #3ABEFF',
         borderRadius: 3,
@@ -37,56 +63,100 @@ export default function PlanSummary() {
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
           justifyContent: 'space-between',
-          alignItems: { xs: 'center', md: 'center' },
+          alignItems: { xs: 'flex-start', md: 'center' },
           mb: 2,
         }}
       >
-        <Typography
-          variant="h6"
+        <Box>
+          <Typography
+            variant="h6"
+            sx={{
+              color: '#fff',
+              fontWeight: 'bold',
+              textAlign: { xs: 'center', md: 'left' },
+            }}
+          >
+            {planTitle}
+          </Typography>
+
+          {/* Subheading */}
+          <Typography
+            variant="body2"
+            sx={{
+              mb: 2,
+              color: '#aaa',
+              textAlign: { xs: 'center', md: 'left' },
+            }}
+          >
+            {plan.length} of 3 spots added
+          </Typography>
+        </Box>
+
+        <Box
           sx={{
-            color: '#fff',
-            fontWeight: 'bold',
-            textAlign: { xs: 'center', md: 'left' },
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+            alignItems: { xs: 'flex-start', md: 'flex-end' },
           }}
         >
-          {planTitle}
-        </Typography>
+          <Button
+            variant="contained"
+            onClick={() =>
+              navigate('/map', { state: { fromPlan: true } })
+            }          
+            sx={{
+              mt: { xs: 1, md: 0 },
+              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              color: '#000',
+              fontWeight: 'bold',
+              borderRadius: '8px',
+              px: 3,
+              py: 1,
+              fontSize: '0.9rem',
+              '&:hover': {
+                background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+              },
+            }}
+          >
+            View On Map
+          </Button>
 
-        <Button
-          variant="contained"
-          onClick={() =>
-            navigate('/map', { state: { fromPlan: true } })
-          }          
+          <Button
+          onClick={handleSave}
+          variant="outlined"
           sx={{
-            mt: { xs: 1, md: 0 },
-            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-            color: '#000',
+            borderColor: '#FF4ECD',
+            color: '#FF4ECD',
             fontWeight: 'bold',
-            borderRadius: '8px',
-            px: 3,
-            py: 1,
-            fontSize: '0.9rem',
+            textTransform: 'none',
             '&:hover': {
-              background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+              background: 'rgba(255, 78, 205, 0.1)',
             },
           }}
         >
-          View On Map
+          Save Plan
         </Button>
-      </Box>
 
-      {/* Subheading */}
-      <Typography
-        variant="body2"
+        <Button
+        onClick={clearPlan}
+        variant="text"
         sx={{
-          mb: 2,
-          color: '#aaa',
-          textAlign: { xs: 'center', md: 'left' },
+          color: '#fff',
+          fontSize: '0.8rem',
+          mt: 1,
+          textDecoration: 'underline',
+          '&:hover': {
+            color: '#FF4ECD',
+            textDecoration: 'none',
+          },
         }}
       >
-        {plan.length} of 3 spots added
-      </Typography>
+        Start New Plan
+      </Button>
 
+      </Box>
+      </Box>
   
       <Box
         sx={{
@@ -100,6 +170,129 @@ export default function PlanSummary() {
         ))}
       </Box>
 
+      <Dialog
+        open={nameDialogOpen}
+        onClose={() => setNameDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            backgroundColor: '#000',
+            color: '#fff',
+            borderRadius: 3,
+            border: '2px solid #3ABEFF',
+            p: 2,
+          },
+        }}
+      >
+        <DialogTitle 
+          sx={{ 
+            fontWeight: 'bold', 
+            color: '#3ABEFF' 
+          }}
+        >
+          Name Your Plan
+        </DialogTitle>
+
+        <DialogContent>
+          <input
+            value={tempPlanName}
+            onChange={(e) => setTempPlanName(e.target.value)}
+            placeholder="Enter a name..."
+            style={{
+              width: '100%',
+              padding: '10px',
+              marginTop: '10px',
+              backgroundColor: '#222',
+              color: '#fff',
+              border: '1px solid #3ABEFF',
+              borderRadius: '6px',
+              fontSize: '1rem',
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setNameDialogOpen(false)} sx={{ color: '#aaa' }}>
+            Cancel
+          </Button>
+          <Button onClick={confirmSave} sx={{ color: '#FF4ECD', fontWeight: 'bold' }}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+          
+        <Dialog
+          open={savedDialogOpen}
+          onClose={() => setSavedDialogOpen(false)}
+          PaperProps={{
+            sx: {
+              backgroundColor: '#000',
+              color: '#fff',
+              borderRadius: 3,
+              border: '2px solid #FF4ECD',
+              p: 2,
+            },
+          }}
+        >
+          <DialogTitle 
+            sx={{ 
+              fontWeight: 'bold', 
+              color: '#FF4ECD' 
+            }}
+          >
+            Plan Saved!
+          </DialogTitle>
+
+          <DialogContent 
+            sx={{ 
+              color: '#fff' 
+            }}
+            >
+            What would you like to do next?
+          </DialogContent>
+
+            <DialogActions 
+              sx={{ 
+                justifyContent: 'flex-end', 
+                gap: 2, 
+                mt: 1 
+              }}
+            >
+            {[
+            { label: 'View Saved Plans', action: () => {
+                setSavedDialogOpen(false);
+                navigate('/profile', { state: { showSavedPlans: true } });
+              }},
+            { label: 'View on Map', action: () => {
+                if (lastSavedPlan) {
+                  loadPlan(lastSavedPlan);
+                  navigate('/map', { state: { fromPlan: true } });
+                }
+              }},
+            { label: 'Start New Plan', action: () => {
+                clearPlan();
+                setSavedDialogOpen(false);
+              }},
+          ].map(({ label, action }) => (
+            <Button
+              key={label}
+              onClick={action}
+              sx={{
+                color: '#fff',
+                textTransform: 'none',
+                fontWeight: 'bold',
+                textDecoration: 'underline',
+                '&:hover': {
+                  color: '#FF4ECD',
+                  textDecoration: 'none',
+                },
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </DialogActions>
+      </Dialog>
     </Box>
   );  
 }

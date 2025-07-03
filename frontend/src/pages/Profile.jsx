@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Tabs,
   Tab,
   Container,
   Box,
   Paper,
-  Typography
 } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import ProfileForm from '../components/ProfileForm';
 import FriendsList from '../components/FriendsList';
 import FavouriteVenues from '../components/FavouriteVenues';
-import SavedRoutes from '../components/SavedRoutes';
+import SavedPlans from '../components/SavedPlans';
 
 // Custom styling for each Tab
 const tabStyles = {
@@ -40,7 +40,16 @@ const tabStyles = {
 };
 
 export default function Profile() {
-  const [tabIndex, setTabIndex] = useState(0);
+  const location = useLocation();
+  const [tabIndex, setTabIndex] = useState(() =>
+    location.state?.showSavedPlans ? 3 : 0
+  );
+
+  useEffect(() => {
+    if (location.state?.showSavedPlans) {
+      window.history.replaceState({}, document.title); // clears navigation state
+    }
+  }, []);
 
   const handleTabChange = (_, newValue) => {
     setTabIndex(newValue);
@@ -80,7 +89,7 @@ export default function Profile() {
           <Tab label="Edit Profile" sx={tabStyles} />
           <Tab label="Friends" sx={tabStyles} />
           <Tab label="Favourite Venues" sx={tabStyles} />
-          <Tab label="Saved Routes" sx={tabStyles} />
+          <Tab label="Saved Plans" sx={tabStyles} />
         </Tabs>
 
         {/* Tab Panels */}
@@ -94,7 +103,7 @@ export default function Profile() {
           <FavouriteVenues />
         </Box>
         <Box hidden={tabIndex !== 3}>
-          <SavedRoutes />
+          <SavedPlans />
         </Box>
       </Paper>
     </Container>
