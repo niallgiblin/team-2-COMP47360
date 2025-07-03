@@ -1,6 +1,10 @@
-import { useState, useEffect } from "react";
+// react and routing components
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
+
+// UI components from MUI
 import { Box, Typography, Button, TextField } from "@mui/material";
+
 import PageWrapper from "../components/PageWrapper";
 import VenueCard from "../components/VenueCard";
 import DemoMap from "../components/DemoMap";
@@ -8,25 +12,161 @@ import mockVenues from "../data/mockVenues";
 import { usePlan } from "../context/PlanContext";
 import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
+import DirectionsSidebar from "../components/DirectionSidebar";
+
+// decoding route polyline from Google Directions API
+import polyline from '@mapbox/polyline';
+
 
 export default function MapView() {
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
   const fromPlan = location.state?.fromPlan || false;
+  
+  // Get the user's plan
   const { plan } = usePlan();
 
+  // state for geolocation and manual input
   const [manualStart, setManualStart] = useState('');
   const [userLocation, setUserLocation] = useState(null);
 
+  // try to automatically retrieve user's geolocation
+  useEffect(() => {
+    if (!userLocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn('Geolocation failed or was denied:', error);
+        }
+      );
+    }
+  }, [userLocation]);
+  
+  // state for venue data, loading status and mock fallback
   const [venues, setVenues] = useState([]);
   const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
   const [loading, setLoading] = useState(true);
   const [isMock, setIsMock] = useState(false);
 
+  // state for display mode and forecast data
   const [mode, setMode] = useState("forecast");
   const [predictionData, setPredictionData] = useState([]);
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
 
+  // state for route directions and polyline
+  const [directions, setDirections] = useState([]);
+  const [showDirections, setShowDirections] = useState(false);
+  const [directionsPolyline, setDirectionsPolyline] = useState([]);
+
+
+  // fetch walking directions using the Google Routes API
+  const handleGetDirections = async () => {
+    const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
+  
+    if (!GOOGLE_API_KEY) {
+      console.error("❌ Google API key is missing. Check your .env or Docker environment.");
+      alert("Directions cannot be loaded. Missing API key.");
+      return;
+    }
+  
+    if (!plan || plan.length === 0) {
+      console.warn("⚠️ No venues in plan. Cannot compute directions.");
+      return;
+    }
+  
+    const start = userLocation || { lat: plan[0].lat, lng: plan[0].lng };
+  
+    // define origin, destination and intermediate stops
+    const origin = {
+      location: {
+        latLng: {
+          latitude: start.lat,
+          longitude: start.lng
+        }
+      }
+    };
+  
+    const destination = {
+      location: {
+        latLng: {
+          latitude: plan[plan.length - 1].lat,
+          longitude: plan[plan.length - 1].lng
+        }
+      }
+    };
+  
+    const intermediates = plan.slice(1, -1).map(v => ({
+      location: {
+        latLng: {
+          latitude: v.lat,
+          longitude: v.lng
+        }
+      }
+    }));
+  
+    try {
+      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+        method: "POST",
+        headers: {
+          "X-Goog-Api-Key": GOOGLE_API_KEY,
+          "X-Goog-FieldMask": "routes.legs,routes.polyline.encodedPolyline",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          origin,
+          destination,
+          intermediates,
+          travelMode: "WALK"
+        }),
+      });
+  
+      const data = await response.json();
+  
+      const encoded = data?.routes?.[0]?.polyline?.encodedPolyline;
+      if (!encoded) {
+        console.warn("No encoded polyline returned from Google");
+        alert("Could not load route. Try again.");
+        return;
+      }
+  
+      // decode the encoded polyline into [lat, lng] path
+      const decodedPath = polyline.decode(encoded); // [lat, lng] pairs
+  
+      setDirectionsPolyline(decodedPath);
+      setShowDirections(true);
+  
+      const steps = data.routes[0].legs.flatMap((leg, i) =>
+        leg.steps?.map((step, j) => ({
+          summary: `Step ${i + 1}.${j + 1}`,
+          instructions: step.navigationInstruction?.instructions || step.text || ""
+        })) || []
+      );
+  
+      setDirections(steps);
+    } catch (err) {
+      console.error("❌ Google Directions API failed:", err);
+      alert("Failed to load directions. Check console for details.");
+    }
+  };
+
+  const mapSectionRef = useRef(null);
+
+  useEffect(() => {
+    if (showDirections && mapSectionRef.current) {
+      mapSectionRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+  }, [showDirections]);
+  
+  
+  // dummy forecast data
   useEffect(() => {
     const dummy = [
       {
@@ -44,6 +184,7 @@ export default function MapView() {
     setSelectedTimestamp(dummy[0].predictions[0].timestamp);
   }, []);
 
+  // fetch venues from backend or fallback to mock data
   useEffect(() => {
     const fetchData = async () => {
       if (fromPlan && plan.length > 0) {
@@ -81,6 +222,7 @@ export default function MapView() {
     fetchData();
   }, [fromPlan, plan, selectedVenueFromState]);
 
+  // handle geocoding for manually input start address
   const handleGeocodeStart = async () => {
     if (!manualStart.trim()) return;
     const encoded = encodeURIComponent(manualStart.trim());
@@ -107,6 +249,16 @@ export default function MapView() {
     }
   };
 
+  // Toggle showing or hiding directions
+  const toggleDirections = () => {
+    if (showDirections) {
+      setShowDirections(false);
+    } else {
+      handleGetDirections();
+    }
+  };
+
+  // while loading, show placeholder
   if (loading) {
     return (
       <PageWrapper>
@@ -115,6 +267,7 @@ export default function MapView() {
     );
   }
 
+  // main render
   return (
     <PageWrapper fullWidth fullHeight>
 
@@ -129,7 +282,7 @@ export default function MapView() {
           mb: 2,
         }}
       >
-        <Typography sx={{ color: '#fff' }}>Mode:</Typography>
+        <Typography sx={{ color: '#fff' }}>Check Busyness Level:</Typography>
 
         <Button
           onClick={() => setMode('live')}
@@ -260,8 +413,8 @@ export default function MapView() {
             <Box 
               sx={{ 
                 width: '100%', 
-                maxWidth: { xs: '100%', md: '700px'  
-                }}}
+                maxWidth: { xs: '100%', md: '700px'},
+              }}
               >
               {mode === "forecast" && predictionData.length > 0 && (
                 <ForecastSlider
@@ -272,9 +425,40 @@ export default function MapView() {
                 />
               )}
             </Box>
-          </Box>
 
-    
+            {/* Get Directions Button */}
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                justifyContent: 'center' 
+              }}
+            >
+            {fromPlan && (userLocation || plan.length > 0) && (
+              <Button
+                variant="contained"
+                onClick={toggleDirections}
+                sx={{
+                  mt: 2,
+                  background: showDirections 
+                    ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)' 
+                    : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  color: '#000',
+                  fontWeight: 'bold',
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 2,
+                  alignSelf: 'center',
+                  '&:hover': {
+                    background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+                  },
+                }}
+              >
+                {showDirections ? 'Hide Directions' : 'Get Directions'}
+              </Button>
+            )}
+            </Box>
+          </Box>
+                
             {/* Vertical Divider */}
             <Box
             sx={{
@@ -292,9 +476,12 @@ export default function MapView() {
           {/* Right: Venue card(s) */}
           <Box 
             sx={{ 
-              maxWidth: 280, 
-              width: '100%',
-              mt: { xs: 2, md: 0 }
+              width: fromPlan ? '100%' : '100%',
+              maxWidth: fromPlan ? 550 : 280,   // horizontal space for venue cards, 450: plan, 280: venue card
+              flex: fromPlan ? 1.2 : 'initial',  // allow it to grow in horizontal space
+              mt: { xs: 2, md: 0 },
+              overflowX: fromPlan ? 'auto' : 'hidden', // enable scrolling if needed
+              px: 0
             }}
           >
             {fromPlan ? (
@@ -303,10 +490,12 @@ export default function MapView() {
               selectedVenue && <VenueCard venue={selectedVenue} variant="map" />
             )}
           </Box>
+
         </Box>
         
         {/* Map */}
         <Box
+          ref={mapSectionRef}
           sx={{
             width: '100%',
             minHeight: '60vh',
@@ -323,6 +512,14 @@ export default function MapView() {
               onSelectVenue={setSelectedVenue}
               fromPlan={fromPlan}
               userLocation={userLocation}
+              showDirections={showDirections}
+              plan={plan}
+              routeCoords={directionsPolyline}
+            />
+            <DirectionsSidebar
+              open={showDirections}
+              onClose={() => setShowDirections(false)}
+              directions={directions}
             />
           </Box>
         </Box>

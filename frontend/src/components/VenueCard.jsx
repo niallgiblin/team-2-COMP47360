@@ -14,11 +14,11 @@ export default function VenueCard({ venue, variant = 'default' }) {
   const isPlanFull = plan.length >= 3;
 
   const priceLevels = {
-    'very cheap': 1,
-    'cheap': 2,
-    'moderate': 3,
-    'expensive': 4,
-    'very expensive': 5,
+    'price level very cheap': 1,
+    'price level cheap': 2,
+    'price level moderate': 3,
+    'price level expensive': 4,
+    'price level very expensive': 5,
   };
   
   const normalizedPrice = 

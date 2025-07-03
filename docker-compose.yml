@@ -29,6 +29,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     container_name: urban-gala-backend
     ports:
       - "8080:8080"
@@ -68,6 +70,7 @@ services:
     command: npm run dev     # Start dev server instead of production build
     environment:
     - HOST=0.0.0.0
+    -  VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
     depends_on:
       - backend
     networks:
@@ -111,6 +114,12 @@ services:
 
 networks:
   app-network:
+  driver: bridge
+  driver_opts:
+    com.docker.network.enable_ipv6: "false"
+  ipam:
+    config:
+      - subnet: 172.28.0.0/16
 
 volumes:
   db_data:
