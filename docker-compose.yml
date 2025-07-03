@@ -68,6 +68,7 @@ services:
     command: npm run dev     # Start dev server instead of production build
     environment:
     - HOST=0.0.0.0
+    -  VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
     depends_on:
       - backend
     networks:
