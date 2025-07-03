@@ -35,6 +35,9 @@ public class VibeService {
     @Value("${llm.service.url:http://llm-service:5000}")
     private String llmServiceUrl;
 
+    @Value("${busyness.service.url:http://busyness-service:5000}")
+    private String busynessServiceUrl;
+
     private final LocationRepository locationRepository;
     private final LocationService locationService;
 
@@ -48,17 +51,29 @@ public class VibeService {
 
     // Main entry for vibe search
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
+        List<Location> locations = new ArrayList<>();
+        String explanation = "Keyword fallback recommendations";
+        double confidence = 0.6;
+
         if (isMLServiceAvailable()) {
             // Enforce returning only the top 5 results
             List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), 5);
             if (!mlLocations.isEmpty()) {
-                return buildResponse(mlLocations, "ML-powered recommendations based on your vibe description", 0.9);
+                locations = mlLocations;
+                explanation = "ML-powered recommendations based on your vibe description";
+                confidence = 0.9;
             }
         }
 
-        // Fallback to keyword search if ML service is unavailable or returns no results
-        logger.warn("ML service did not return results for vibe: '{}'. Using keyword fallback.", request.getVibeDescription());
-        return keywordFallback(request);
+        if (locations.isEmpty()) {
+            logger.warn("ML service did not return results for vibe: '{}'. Using keyword fallback.", request.getVibeDescription());
+            locations = keywordFallback(request.getVibeDescription());
+        }
+
+        // Fetch busyness data regardless of the source of locations
+        Map<String, List<Double>> busynessData = fetchBusynessData();
+
+        return buildResponse(locations, explanation, confidence, busynessData);
     }
 
     // Check ML service health endpoint
@@ -209,8 +224,8 @@ public class VibeService {
     }
 
     // Simple keyword fallback search
-    private VibeSearchResponse keywordFallback(VibeSearchRequest request) {
-        String vibeDesc = request.getVibeDescription().toLowerCase();
+    private List<Location> keywordFallback(String vibeDescription) {
+        String vibeDesc = vibeDescription.toLowerCase();
         List<Location> allLocations = locationRepository.findAll();
 
         List<Location> matched = allLocations.stream()
@@ -226,15 +241,38 @@ public class VibeService {
                 .limit(5) // Enforce top 5 for fallback as well
                 .collect(Collectors.toList());
 
-        return buildResponse(matched, "Keyword fallback recommendations", 0.6);
+        return matched;
+    }
+
+    // Calls the busyness service to get predictions for all zones
+    private Map<String, List<Double>> fetchBusynessData() {
+        try {
+            logger.info("Calling busyness service at {}", busynessServiceUrl + "/busyness");
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    busynessServiceUrl + "/busyness",
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && (Boolean) response.getBody().get("success")) {
+                logger.info("Busyness service responded successfully.");
+                return (Map<String, List<Double>>) response.getBody().get("predictions");
+            } else {
+                logger.warn("Busyness service call failed or returned unsuccessful. Status: {}", response.getStatusCode());
+            }
+        } catch (Exception e) {
+            logger.error("Error calling busyness service: {}", e.getMessage(), e);
+        }
+        return Collections.emptyMap();
     }
 
     // Helper to build VibeSearchResponse DTO
-    private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence) {
+    private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence, Map<String, List<Double>> busynessData) {
         VibeSearchResponse response = new VibeSearchResponse();
         response.setLocations(locations);
         response.setExplanation(explanation);
         response.setConfidence(confidence);
+        response.setBusyness(busynessData);
         return response;
     }
 

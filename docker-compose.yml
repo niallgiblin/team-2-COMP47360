@@ -38,6 +38,7 @@ services:
       busyness-service:
         condition: service_healthy
     environment:
+      BUSYNESS_SERVICE_URL: http://busyness-service:5000
       LLM_SERVICE_URL: http://llm-service:5000
     networks:
       - app-network
