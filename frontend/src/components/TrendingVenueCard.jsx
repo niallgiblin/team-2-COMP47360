@@ -16,27 +16,31 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
   
   // Handle both string and numeric price values
   let level = 0;
+  
+  // case - price is already a number
   if (typeof venue.price === 'number') {
     level = venue.price;
+  
+  // case - price is a descriptive string
   } else if (typeof venue.price === 'string') {
-    const normalizedPrice = venue.price.trim().toLowerCase();
-    level = priceLevels[normalizedPrice] || 0;
+    const normalizedPrice = venue.price.trim().toLowerCase();     // normalise whitespace/ case
+    level = priceLevels[normalizedPrice] || 0;                    // map to numeric values, default to 0 if unknown
   }
 
-  // Debug logging
-  console.log('Venue:', venue.name);
-  console.log('Raw price:', venue.price);
-  console.log('Price type:', typeof venue.price);
-  console.log('Level:', level);
-  console.log('---');
-
+  // access context state for the user's current plan
   const { plan, addToPlan, removeFromPlan } = usePlan();
+  
+  // check if this venue is already in the plan
   const isInPlan = plan.some(v => v.id === venue.id);
+  
+  // limit to max 3 venues in the plan
   const isPlanFull = plan.length >= 3;
 
+  // derive image and category based on venue description
   const category = getCategory(venue.description || '');
   const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
+  // open venue website in a new tab when clicked
   const handleWebsiteClick = () => {
     if (venue.uri) {
       window.open(venue.uri, '_blank');
@@ -103,7 +107,7 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
                 mb: 0.5 
                 }}
             >
-            {venue.category || 'Bar'} · {venue.neighborhood || 'NYC'}
+            {venue.type || 'Restaurant'} · {venue.zone || 'Manhattan'}
           </Typography>
           
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
