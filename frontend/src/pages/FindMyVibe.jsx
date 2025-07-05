@@ -65,18 +65,11 @@ export default function FindMyVibe() {
       })
       .then((data) => {
         // Extract locations from the vibe search response
-        const locations = data.locations || [];
+        const locations = (data.locations || []).slice(0, 5); // Take top 5 only
 
-        // Handle pagination manually since vibe search doesn't support it natively
-        const totalElements = locations.length;
-        const totalPages = Math.ceil(totalElements / pageSize);
-        const startIndex = page * pageSize;
-        const endIndex = startIndex + pageSize;
-        const paginatedResults = locations.slice(startIndex, endIndex);
-
-        setResults(paginatedResults);
-        setTotalPages(totalPages);
-        setTotalElements(totalElements);
+        setResults(locations);
+        setTotalElements(locations.length);
+        setTotalPages(1);
       })
       .catch((err) => {
         console.error("Error fetching search results:", err);

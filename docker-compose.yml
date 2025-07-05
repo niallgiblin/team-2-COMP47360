@@ -10,7 +10,11 @@ services:
       MYSQL_DATABASE: urban_gala
       MYSQL_USER: urbanuser
       MYSQL_PASSWORD: urbanpass
-    healthcheck: # More robust health check to ensure the DB is ready for app connections
+    # Set default authentication plugin for compatibility with older clients
+    command:
+      - --local-infile=1
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
       timeout: 20s
       retries: 10
@@ -18,11 +22,10 @@ services:
       start_period: 40s
     volumes:
       - db_data:/var/lib/mysql
-      - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro      # For initialization scripts (.sql, .sh)
-      - ./backend/docker/db-config/my.cnf:/etc/mysql/conf.d/my.cnf:ro # For custom MySQL configuration
+      - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro
+      - ./backend/docker/db-config/my.cnf:/etc/mysql/conf.d/my.cnf:ro
     networks:
       - app-network
-
 
   backend:
     build:
@@ -30,7 +33,7 @@ services:
     container_name: urban-gala-backend
     ports:
       - "8080:8080"
-    depends_on: # The backend now depends on both the DB and the ML service
+    depends_on:
       db:
         condition: service_healthy
       llm-service:
@@ -42,7 +45,6 @@ services:
       LLM_SERVICE_URL: http://llm-service:5000
     networks:
       - app-network
-    # Add health check and retry mechanism
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -56,13 +58,13 @@ services:
     container_name: urban-gala-frontend
     ports:
       - "5173:5173"
-      - "24678:24678"        # Vite HMR (Hot Module Replacement) websocket
+      - "24678:24678"
     volumes:
-      - ./frontend:/app      # Mount code into the container
-      - /app/node_modules    # Avoid conflict with local node_modules
-    command: npm run dev     # Start dev server instead of production build
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
     environment:
-    - HOST=0.0.0.0
+      - HOST=0.0.0.0
     depends_on:
       - backend
     networks:
@@ -74,60 +76,60 @@ services:
     container_name: urban-gala-llm
     ports:
       - "5001:5000"
+    # Mount only the data directory, models are now copied into the image
     volumes:
       - ./backend/llm-service/data:/app/data:ro
-      - ./backend/llm-service/models/sentence-transformer:/app/models/sentence-transformer:ro
     environment:
       - FLASK_ENV=production
-      - MODEL_PATH=/app/models/sentence-transformer
+      - MODEL_PATH=/app/models/sentence-transformers
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - DATA_PATH=/app/data/locations.csv
       - PYTHONUNBUFFERED=1
     networks:
       - app-network
+    # Increase worker timeout to prevent crashes during intensive ML operations
+    command: gunicorn --bind 0.0.0.0:5000 --timeout 120 "app:app"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 15s
-      retries: 3
-      start_period: 60s # Startup should be much faster now
+      retries: 5
+      start_period: 120s  # Give more time for model loading
     deploy:
       resources:
         limits:
-          memory: 1.5G # Reduced memory limit
+          memory: 2G  # Increased memory for sentence transformers
           cpus: '1.0'
         reservations:
-          memory: 512M
+          memory: 1G
           cpus: '0.25'
     restart: unless-stopped
 
   busyness-service:
     build:
-      context: ./backend/busyness-service # New build context
+      context: ./backend/busyness-service
     container_name: urban-gala-busyness
     ports:
       - "5002:5000"
-    volumes:
-      - ./backend/busyness-service/models/DNNs:/app/models/busyness/dnn:ro
-      - ./backend/busyness-service/models/LSTMs:/app/models/busyness/lstm:ro
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
     networks:
       - app-network
     healthcheck:
+      # Tighter healthcheck to get faster feedback on the crash-loop.
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 15s
-      retries: 5
-      start_period: 180s # This service needs time to load models
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 15s # Give 15s to start. If it fails after this, we know it's crashing.
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 8G  # Final memory increase to handle TensorFlow's peak usage
           cpus: '2.0'
         reservations:
-          memory: 768M
+          memory: 8G  # Guarantee the full memory amount to prevent swapping
           cpus: '0.5'
     restart: unless-stopped
 

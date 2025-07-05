@@ -63,7 +63,6 @@ numpy==1.26.4
     #   pandas
     #   scikit-learn
     #   scipy
-    #   sentence-transformers
     #   transformers
 packaging==25.0
     # via
@@ -90,17 +89,20 @@ regex==2024.11.6
     # via transformers
 requests==2.32.4
     # via
+    #   -r requirements.in
     #   huggingface-hub
     #   transformers
 safetensors==0.5.3
     # via transformers
 scikit-learn==1.6.1
-    # via sentence-transformers
+    # via
+    #   -r requirements.in
+    #   sentence-transformers
 scipy==1.13.1
     # via
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==2.7.0
+sentence-transformers==4.1.0
     # via -r requirements.in
 six==1.17.0
     # via python-dateutil
@@ -124,6 +126,7 @@ transformers==4.53.0
 typing-extensions==4.14.0
     # via
     #   huggingface-hub
+    #   sentence-transformers
     #   torch
 tzdata==2025.2
     # via pandas

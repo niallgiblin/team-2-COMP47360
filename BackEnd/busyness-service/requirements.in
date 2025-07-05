@@ -1,11 +1,10 @@
-# Application
+# ===== Busyness Service requirements.in =====
 flask
 flask-cors
-gunicorn
-
-# ML and data processing
+waitress
+tensorflow
+numpy
 pandas
-tensorflow==2.15.0 # Use Keras 2 compatible version
-holidays
-requests
 python-dotenv
+requests
+holidays

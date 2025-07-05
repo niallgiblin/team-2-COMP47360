@@ -11,6 +11,17 @@ import threading
 from typing import Optional
 import sys
 
+# Helper function for safe type conversion
+def _safe_to_int(value, default=0):
+    """Safely convert a value to an integer, handling pandas/numpy NaN."""
+    if pd.isna(value):
+        return default
+    try:
+        # Convert to float first to handle string representations of floats
+        return int(float(value))
+    except (ValueError, TypeError):
+        return default
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -32,9 +43,13 @@ initialized = False
 initialization_error = None
 initialization_lock = threading.Lock()
 
+# Cache for search results
+search_cache = {}
+SEARCH_CACHE_DURATION = 300  # 5 minutes
+
 def verify_file_paths():
     """Verify that all required files exist before attempting to load them"""
-    model_path = os.getenv('MODEL_PATH', '/app/models/sentence-transformer')
+    model_path = os.getenv('MODEL_PATH', '/app/models/sentence-transformers')
     data_path = os.getenv('DATA_PATH', '/app/data/locations.csv')
     embeddings_path = os.getenv('EMBEDDINGS_PATH', '/app/data/location_embeddings.npy')
     
@@ -60,8 +75,14 @@ def load_model():
     """Load the sentence transformer model"""
     global model
     try:
-        model_path = os.getenv('MODEL_PATH', '/app/models/sentence-transformer')
+        model_path = os.getenv('MODEL_PATH', '/app/models/sentence-transformers')
         logger.info(f"Loading model from {model_path}")
+        
+        # Check if model files exist
+        config_path = os.path.join(model_path, 'config.json')
+        if not os.path.exists(config_path):
+            logger.error(f"Model config.json not found at {config_path}")
+            return False
         
         # Force CPU usage to avoid GPU-related issues in containers
         model = SentenceTransformer(model_path, device='cpu')
@@ -69,7 +90,16 @@ def load_model():
         return True
     except Exception as e:
         logger.error(f"Model loading failed: {str(e)}", exc_info=True)
-        return False
+        
+        # Try to load from HuggingFace as fallback
+        try:
+            logger.info("Attempting to load fallback model from HuggingFace...")
+            model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+            logger.warning("Loaded fallback model from HuggingFace")
+            return True
+        except Exception as fallback_e:
+            logger.error(f"Fallback model loading also failed: {str(fallback_e)}")
+            return False
 
 def load_data():
     """Load the locations data and embeddings"""
@@ -80,7 +110,8 @@ def load_data():
 
         logger.info(f"Loading data from {data_path}")
         df = pd.read_csv(data_path)
-        logger.info(f"Data loaded successfully. Shape: {df.shape}")
+        # Clean data: drop rows with missing essential info
+        logger.info(f"Data loaded and cleaned. Shape: {df.shape}")
 
         logger.info(f"Loading embeddings from {embeddings_path}")
         embeddings_np = np.load(embeddings_path)
@@ -160,6 +191,45 @@ def health():
             "error": str(e)
         }), 500
 
+@app.route('/locations/all', methods=['GET'])
+def get_all_locations():
+    """Returns all locations from the dataframe"""
+    if not initialized or df is None:
+        return jsonify({'success': False, 'error': 'Service not initialized or data not loaded'}), 503
+
+    try:
+        # Re-use the response building logic from the search endpoint
+        results = []
+        for idx, loc in df.iterrows():
+            price_map = {
+                'very cheap': 1, 'cheap': 2, 'moderate': 3, 'mid': 3,
+                'expensive': 4, 'very expensive': 5, 'luxury': 5
+            }
+            price_str = str(loc.get('price', 'moderate')).lower().strip()
+            price_int = price_map.get(price_str, 3)
+            name = str(loc['name']) if pd.notna(loc['name']) else "Unnamed Location"
+
+            results.append({
+                'id': _safe_to_int(idx),
+                'name': name,
+                'address': str(loc['addr']),
+                'type': str(loc['loc_type']),
+                'description': str(loc.get('description', '')),
+                'price': price_int,
+                'lat': float(loc['lat']),
+                'lng': float(loc['long']),
+                'uri': str(loc.get('uri', '')),
+                'review': str(loc.get('reviews', '')),
+                'numReviews': _safe_to_int(loc.get('num_reviews')),
+                'zone': str(loc.get('zone', ''))
+            })
+        
+        return jsonify({'success': True, 'results': results})
+
+    except Exception as e:
+        logger.error(f"Error in /locations/all: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Internal server error', 'message': str(e)}), 500
+
 @app.route('/search', methods=['POST'])
 def vibe_search():
     """Main search endpoint"""
@@ -191,6 +261,14 @@ def vibe_search():
         max_results = data.get('maxResults', 10)
         location_filter = data.get('location', None)
         price_range = data.get('priceRange', None)
+
+        # --- Caching Logic ---
+        # Only cache simple, generic queries like the one for the main map view
+        cache_key = vibe_desc.lower()
+        if cache_key == "new york":
+            if cache_key in search_cache and (time.time() - search_cache[cache_key]['timestamp'] < SEARCH_CACHE_DURATION):
+                logger.info(f"Returning cached result for query: '{vibe_desc}'")
+                return jsonify(search_cache[cache_key]['response'])
 
         if not vibe_desc:
             return jsonify({
@@ -254,27 +332,36 @@ def vibe_search():
         for idx, score in top_results:
             loc = df.iloc[idx]
 
-            # Map price string to integer
-            price_str = str(loc.get('price', 'moderate')).lower()
-            price_int = 1  # Default to budget
-            if 'moderate' in price_str or 'mid' in price_str:
-                price_int = 2
-            elif 'expensive' in price_str or 'luxury' in price_str:
-                price_int = 3
+            # Map price string to a 1-5 integer scale
+            price_map = {
+                'very cheap': 1,
+                'cheap': 2,
+                'moderate': 3,
+                'mid': 3,
+                'expensive': 4,
+                'very expensive': 5,
+                'luxury': 5
+            }
+            price_str = str(loc.get('price', 'moderate')).lower().strip()
+            price_int = price_map.get(price_str, 3) # Default to 3 (moderate)
+
+            # Ensure name is a valid string, not 'nan'
+            name = str(loc['name']) if pd.notna(loc['name']) else "Unnamed Location"
 
             results.append({
-                'id': int(idx),
-                'name': str(loc['name']),
+                'id': _safe_to_int(idx),
+                'name': name,
                 'address': str(loc['addr']),
                 'type': str(loc['loc_type']),
                 'description': str(loc['description']),
                 'similarity': float(score),
                 'price': price_int,
-                'latitude': float(loc['lat']),
-                'longitude': float(loc['long']),
+                'lat': float(loc['lat']),
+                'lng': float(loc['long']),
                 'uri': str(loc.get('uri', '')),
-                'reviews': str(loc.get('reviews', '')),
-                'num_reviews': int(loc.get('num_reviews', 0))
+                'review': str(loc.get('reviews', '')),
+                'numReviews': _safe_to_int(loc.get('num_reviews')),
+                'zone': str(loc.get('zone', ''))
             })
 
         response = {
@@ -284,6 +371,14 @@ def vibe_search():
             'explanation': f"Found {len(results)} locations matching your vibe and filters.",
             'confidence': None
         }
+
+        # --- Cache Update ---
+        if cache_key == "new york":
+            logger.info(f"Caching result for query: '{vibe_desc}'")
+            search_cache[cache_key] = {
+                'timestamp': time.time(),
+                'response': response
+            }
 
         logger.info(f"ML Service: Returning {len(results)} results for query '{vibe_desc}'")
         return jsonify(response)

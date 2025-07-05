@@ -21,7 +21,7 @@ LOAD DATA LOCAL INFILE '/docker-entrypoint-initdb.d/locations_data_markIV.csv'
 INTO TABLE location
 FIELDS TERMINATED BY ','
 OPTIONALLY ENCLOSED BY '"'
-LINES TERMINATED BY '\r\n'
+LINES TERMINATED BY '\n'
 IGNORE 1 ROWS
 (@dummy, latitude, longitude, name, address, uri, 
  @reviews, num_reviews, @loc_type, description, @price_level, zone)
@@ -34,9 +34,10 @@ SET
     is_club = @loc_type LIKE '%club%',
     is_landmark = @loc_type LIKE '%landmark%',
     price = CASE 
-        WHEN @price_level LIKE '%very cheap%' THEN 1 
-        WHEN @price_level LIKE '%cheap%' THEN 2
-        WHEN @price_level LIKE '%moderate%' THEN 3
-        WHEN @price_level LIKE '%expensive%' THEN 4
-        ELSE 0 
+        WHEN LOWER(@price_level) LIKE '%very cheap%' THEN 1 
+        WHEN LOWER(@price_level) LIKE '%cheap%' THEN 2
+        WHEN LOWER(@price_level) LIKE '%moderate%' OR LOWER(@price_level) LIKE '%mid%' THEN 3
+        WHEN LOWER(@price_level) LIKE '%expensive%' THEN 4
+        WHEN LOWER(@price_level) LIKE '%very expensive%' OR LOWER(@price_level) LIKE '%luxury%' THEN 5
+        ELSE 3 -- Default to moderate if unknown
     END;

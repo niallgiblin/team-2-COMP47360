@@ -1,30 +1,37 @@
-# --- Build Stage ---
-FROM python:3.9-slim as builder
+FROM python:3.11-slim as builder
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Install pip-tools for dependency management
+# Install pip-tools to compile requirements
 RUN pip install --no-cache-dir pip-tools
 
-# Copy and compile requirements, then install them with a longer timeout
+# Copy requirements.in and compile it to requirements.txt
 COPY requirements.in .
-RUN pip-compile requirements.in -o requirements.txt && \
-    pip install --no-cache-dir --timeout=100 -r requirements.txt
+RUN pip-compile requirements.in -o requirements.txt
 
 # --- Final Stage ---
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy installed packages from the builder stage
-COPY --from=builder /usr/local/lib/python3.9/site-packages/ /usr/local/lib/python3.9/site-packages/
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
+# Create a non-root user for security
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --ingroup appgroup appuser
 
-# Copy only the necessary application code into the container
-COPY app.py .
-COPY predictor/ ./predictor/
+# Copy the compiled requirements.txt from the builder stage and install dependencies
+COPY --from=builder /app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Command to run the application using Gunicorn
-# Use --preload to load the app once before forking workers, which is essential for ML models.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--preload", "app:app"]
+# Copy the rest of the application's code into the container.
+COPY --chown=appuser:appgroup . .
+
+# Switch to the non-root user
+USER appuser
+
+# Command to run the application using Gunicorn for production
+# Use waitress, a production-ready server that is more stable with TensorFlow than Gunicorn.
+CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "app:app"]

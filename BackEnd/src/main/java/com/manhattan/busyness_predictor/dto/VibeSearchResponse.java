@@ -10,7 +10,7 @@ public class VibeSearchResponse {
     private List<Location> locations;
     private String explanation;
     private double confidence;
-    private Map<String, List<Double>> busyness;
+    private Map<String, Double> busyness;
 
     // Constructors
     public VibeSearchResponse() {
@@ -41,11 +41,11 @@ public class VibeSearchResponse {
         this.confidence = confidence;
     }
 
-    public Map<String, List<Double>> getBusyness() {
+    public Map<String, Double> getBusyness() {
         return busyness;
     }
 
-    public void setBusyness(Map<String, List<Double>> busyness) {
+    public void setBusyness(Map<String, Double> busyness) {
         this.busyness = busyness;
     }
 }
