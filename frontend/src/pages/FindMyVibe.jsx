@@ -16,35 +16,36 @@ import { useNavigate } from "react-router-dom";
 import PlanSummary from '../components/PlanSummary';
 
 export default function FindMyVibe() {
-  // State hooks
-  const [input, setInput] = useState("");
-  const [results, setResults] = useState([]);
-  const [vibe, setVibe] = useState("");
-  const [venueType, setVenueType] = useState("");
-  const [cuisine, setCuisine] = useState("");
-  const navigate = useNavigate();
+  // State hooks for user input and results
+  const [input, setInput] = useState("");           // manual text input 
+  const [results, setResults] = useState([]);       // search results (list of venues)
+  const [vibe, setVibe] = useState("");             // vibe filter
+  const [venueType, setVenueType] = useState("");   //venue type
+  const [cuisine, setCuisine] = useState("");       // cuisine filter
+  const navigate = useNavigate();                   // navigation handler
 
   // Pagination state
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
+  const [page, setPage] = useState(0);                      // current page index
+  const [pageSize, setPageSize] = useState(20);             // number of items per page
+  const [totalPages, setTotalPages] = useState(0);          // total number of pages
+  const [totalElements, setTotalElements] = useState(0);    // total number of search results
   const [isLoading, setIsLoading] = useState(false);
 
+  // handle get directions button
   const handleGetDirections = (venue) => {
-    navigate("/map", { state: { selectedVenue: venue } });
+    navigate("/map", { state: { selectedVenue: venue } }); // navigates to map page
   };
 
-  // Memoized search function
+  // Main search function
   const handleSearch = useCallback(() => {
-    if (!input && !vibe && !venueType && !cuisine) {
+    if (!input && !vibe && !venueType && !cuisine) {      // prevent search if no filters or text input provided
       setResults([]);
       setTotalPages(0);
       setTotalElements(0);
       return;
     }
 
-    setIsLoading(true);
+    setIsLoading(true);                                 // start loading state
 
     // Build the request body for vibe search
     const requestBody = {
@@ -52,6 +53,7 @@ export default function FindMyVibe() {
       maxResults: pageSize * 10, // Get more results for pagination
     };
 
+    // call backend API to perform search
     fetch(`http://localhost:8080/vibe/search`, {
       method: "POST",
       headers: {
@@ -74,7 +76,27 @@ export default function FindMyVibe() {
         const endIndex = startIndex + pageSize;
         const paginatedResults = locations.slice(startIndex, endIndex);
 
-        setResults(paginatedResults);
+        // save results and pagination info to state
+        const normalizedResults = paginatedResults.map((v) => ({
+          ...v,
+          latitude: v.lat,
+          longitude: v.lng,
+          address: v.addr || v.address || 'No address provided',
+          zone: v.zone || 'Unknown',
+          price: v.price || '',
+          description: v.description || '',
+        }));
+
+        // Debug logging
+        console.log('Raw vibe search results:', locations);
+        console.log('Paginated results (before normalization):', paginatedResults);
+        console.log('First normalized venue:', normalizedResults[0]);
+        console.log('Total results:', totalElements, '| Showing page:', page + 1);
+
+        setResults(normalizedResults);
+
+
+
         setTotalPages(totalPages);
         setTotalElements(totalElements);
       })
