@@ -215,23 +215,29 @@ public class LocationController {
 
     // Get user's favourite locations
     @GetMapping("/favourite")
-    public ResponseEntity<List<Location>> getFavouriteLocations(@RequestParam Integer userId) {
+    public ResponseEntity<?> getFavouriteLocations(@RequestParam Integer userId) {
         try {
             List<Location> favourites = favouriteService.getFavouriteLocations(userId);
             return ResponseEntity.ok(favourites);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Failed to retrieve favourite locations.");
+            error.put("message", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
         }
     }
 
     // Get user's search history
     @GetMapping("/history")
-    public ResponseEntity<List<Location>> getSearchHistory(@RequestParam Integer userId) {
+    public ResponseEntity<?> getSearchHistory(@RequestParam Integer userId) {
         try {
             List<Location> history = historyService.getSearchHistory(userId);
             return ResponseEntity.ok(history);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Failed to retrieve search history.");
+            error.put("message", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
         }
     }
 

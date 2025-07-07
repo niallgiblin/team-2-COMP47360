@@ -4,14 +4,11 @@ import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -26,23 +23,22 @@ public class SecurityConfig {
     }
 
     @Bean
-    public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
-        UserDetails admin = User.builder()
-                .username("admin")
-                .password(passwordEncoder.encode("adminpass"))
-                .roles("ADMIN")
-                .build();
-
-        return new InMemoryUserDetailsManager(admin);
-    }
-
-    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/actuator/**", "/vibe/**").permitAll()
-                        .requestMatchers("/api/**").permitAll()
+                        // Public, read-only endpoints for general location data
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/location",
+                                "/api/location/{id}",
+                                "/api/location/trending",
+                                "/api/location/nearby",
+                                "/api/location/search")
+                        .permitAll()
+                        .requestMatchers("/vibe/**", "/busyness", "/actuator/health").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll() // For login/signup
+                        // All other API endpoints require authentication
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.disable());
 

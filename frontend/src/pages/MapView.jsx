@@ -17,6 +17,9 @@ import DirectionsSidebar from "../components/DirectionSidebar";
 // decoding route polyline from Google Directions API
 import polyline from '@mapbox/polyline';
 
+// Turf for enriching venues with zone data
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { point as turfPoint } from "@turf/helpers";
 
 export default function MapView() {
   const location = useLocation();
@@ -49,12 +52,15 @@ export default function MapView() {
   
   // state for venue data, loading status and mock fallback
   const [venues, setVenues] = useState([]);
+  const [enrichedVenues, setEnrichedVenues] = useState([]);
+  const [zoneData, setZoneData] = useState(null);
+  const [busynessData, setBusynessData] = useState([]);
   const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
   const [loading, setLoading] = useState(true);
   const [isMock, setIsMock] = useState(false);
 
   // state for display mode and forecast data
-  const [mode, setMode] = useState("forecast");
+  const [mode, setMode] = useState("live");
   const [predictionData, setPredictionData] = useState([]);
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
 
@@ -62,8 +68,25 @@ export default function MapView() {
   const [directions, setDirections] = useState([]);
   const [showDirections, setShowDirections] = useState(false);
   const [directionsPolyline, setDirectionsPolyline] = useState([]);
+  const mapSectionRef = useRef(null);
 
-
+  // try to automatically retrieve user's geolocation
+  useEffect(() => {
+    if (!userLocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn('Geolocation failed or was denied:', error);
+        }
+      );
+    }
+  }, [userLocation]);
+  
   // fetch walking directions using the Google Routes API
   const handleGetDirections = async () => {
     const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
@@ -146,7 +169,7 @@ export default function MapView() {
           instructions: step.navigationInstruction?.instructions || step.text || ""
         })) || []
       );
-  
+      
       setDirections(steps);
     } catch (err) {
       console.error("❌ Google Directions API failed:", err);
@@ -154,6 +177,7 @@ export default function MapView() {
     }
   };
 
+  // Scroll to map when directions are shown
   const mapSectionRef = useRef(null);
 
   useEffect(() => {
@@ -168,86 +192,118 @@ export default function MapView() {
   
   // dummy forecast data
   useEffect(() => {
-    const dummy = [
-      {
-        LocationID: "zone_001",
-        predictions: [
-          { timestamp: "2025-06-23T18:00:00Z", busyness: 0.1 },
-          { timestamp: "2025-06-23T19:00:00Z", busyness: 0.3 },
-          { timestamp: "2025-06-23T20:00:00Z", busyness: 0.5 },
-          { timestamp: "2025-06-23T21:00:00Z", busyness: 0.75 },
-          { timestamp: "2025-06-23T22:00:00Z", busyness: 0.9 },
-        ],
-      },
-    ];
-    setPredictionData(dummy);
-    setSelectedTimestamp(dummy[0].predictions[0].timestamp);
+    if (showDirections && mapSectionRef.current) {
+      mapSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showDirections]);
+  
+  // Generate dummy forecast data for the slider
+  useEffect(() => {
+    const generateDummyPredictions = () => {
+      const zones = ["262", "237", "68", "232", "194", "164", "144", "158", "236", "142", "79", "140"];
+      const timestamps = [ "2025-07-04T18:00:00Z", "2025-07-04T19:00:00Z", "2025-07-04T20:00:00Z", "2025-07-04T21:00:00Z", "2025-07-04T22:00:00Z" ];
+      return zones.map(zoneId => ({
+        LocationID: zoneId,
+        predictions: timestamps.map(ts => ({ timestamp: ts, busyness: Math.random() })),
+      }));
+    };
+    const dummyData = generateDummyPredictions();
+    setPredictionData(dummyData);
+    if (dummyData.length > 0 && dummyData[0].predictions.length > 0) {
+      setSelectedTimestamp(dummyData[0].predictions[0].timestamp);
+    }
   }, []);
 
-  // fetch venues from backend or fallback to mock data
+  // 1. Load zone polygons for map coloring
+  useEffect(() => {
+    const fetchZoneData = async () => {
+      try {
+        const response = await fetch("/manhattanZones.geojson");
+        if (!response.ok) throw new Error("Failed to fetch zone data");
+        const json = await response.json();
+        setZoneData(json);
+      } catch (err) {
+        console.error("Error loading GeoJSON:", err);
+        setIsMock(true);
+      }
+    };
+    fetchZoneData();
+  }, []);
+
+  // 2. Fetch combined venues and busyness data from the backend
   useEffect(() => {
     const fetchData = async () => {
       if (fromPlan && plan.length > 0) {
         setVenues(plan);
-        setSelectedVenue(plan[0]);
         setLoading(false);
         return;
       }
-
       try {
-        const res = await fetch("http://localhost:8080/api/location");
-        if (!res.ok) throw new Error("Server error");
-
+        const res = await fetch("http://localhost:8080/vibe/map-data");
+        if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
-        const normalizedData = data.map((v) => ({
-          ...v,
-          tags: Array.isArray(v.tags) ? v.tags : [],
-        }));
-        setVenues(normalizedData);
-        if (!selectedVenueFromState) {
-          setSelectedVenue(data[0]);
-        }
+        console.log("Fetched venues:", data.locations?.length || 0);
+        console.log("Fetched busyness data:", data.busyness ? Object.keys(data.busyness).length : 0);
+        setVenues(data.locations || []);
+        const busynessObject = data.busyness || {};
+        const busynessArray = Object.entries(busynessObject).map(
+          ([locationId, busynessValue]) => ({
+            LocationID: locationId,
+            busyness: busynessValue,
+          })
+        );
+        setBusynessData(busynessArray);
       } catch (err) {
         console.warn("Falling back to mock data due to fetch error:", err);
         setVenues(mockVenues);
-        if (!selectedVenueFromState) {
-          setSelectedVenue(mockVenues[0]);
-        }
+        if (!selectedVenueFromState) setSelectedVenue(mockVenues[0]);
         setIsMock(true);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [fromPlan, plan, selectedVenueFromState]);
 
-  // handle geocoding for manually input start address
-  const handleGeocodeStart = async () => {
-    if (!manualStart.trim()) return;
-    const encoded = encodeURIComponent(manualStart.trim());
-
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`);
-      if (!res.ok) {
-        throw new Error(`Geocoding service failed: ${res.statusText}`);
-      }
-      const results = await res.json();
-
-      if (results.length > 0) {
-        const firstResult = results[0];
-        setUserLocation({
-          lat: parseFloat(firstResult.lat),
-          lng: parseFloat(firstResult.lon),
-        });
-      } else {
-        alert("Address not found. Try being more specific.");
-      }
-    } catch (err) {
-      console.error("Geocoding error:", err);
-      alert("Failed to find location.");
+  // 3. Enrich venues with zone IDs once all data is loaded
+  useEffect(() => {
+    if (!zoneData || venues.length === 0) {
+      if (fromPlan) setEnrichedVenues(venues);
+      return;
+    };
+    const enriched = venues.map((venue) => {
+      if (typeof venue.lat !== "number" || typeof venue.lng !== "number") return venue;
+      const venuePoint = turfPoint([venue.lng, venue.lat]);
+      const matchingZone = zoneData.features.find((feature) =>
+        booleanPointInPolygon(venuePoint, feature.geometry)
+      );
+      return { ...venue, zone: matchingZone ? matchingZone.properties.LocationID : null };
+    });
+    setEnrichedVenues(enriched);
+    if (!selectedVenue && enriched.length > 0) {
+      setSelectedVenue(enriched[0]);
     }
-  };
+  }, [zoneData, venues, fromPlan, selectedVenue]);
+
+// handle geocoding for manually input start address
+const handleGeocodeStart = async () => {
+  if (!manualStart.trim()) return;
+  const encoded = encodeURIComponent(manualStart.trim());
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`);
+    if (!res.ok) throw new Error(`Geocoding service failed: ${res.statusText}`);
+    const results = await res.json();
+    if (results.length > 0) {
+      const firstResult = results[0];
+      setUserLocation({ lat: parseFloat(firstResult.lat), lng: parseFloat(firstResult.lon) });
+    } else {
+      alert("Address not found. Try being more specific.");
+    }
+  } catch (err) {
+    console.error("Geocoding error:", err);
+    alert("Failed to find location.");
+  }
+};
 
   // Toggle showing or hiding directions
   const toggleDirections = () => {
@@ -266,112 +322,140 @@ export default function MapView() {
       </PageWrapper>
     );
   }
+};
 
-  // main render
-  return (
-    <PageWrapper fullWidth fullHeight>
+if (loading) {
+  return <PageWrapper><p style={{ color: "white" }}>Loading venues...</p></PageWrapper>;
+}
 
-      {/* Mode Toggle */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: 2,
-          mt: 0,
-          mb: 2,
+return (
+  <PageWrapper fullWidth fullHeight>
+    {/* Mode Toggle */}
+    <Box sx={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      gap: 2, 
+      mt: 0, 
+      mb: 2 
+    }}>
+      <Typography sx={{ color: '#fff' }}>Check Busyness Level:</Typography>
+      <Button 
+        onClick={() => setMode('live')} 
+        sx={{ 
+          fontWeight: 'bold', 
+          textTransform: 'uppercase', 
+          color: mode === 'live' ? '#000' : '#FFFFFF', 
+          background: mode === 'live' ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)' : 'transparent', 
+          border: '1px solid #FF4ECD', 
+          px: 2, 
+          '&:hover': { 
+            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)', 
+            color: '#000' 
+          } 
         }}
       >
-        <Typography sx={{ color: '#fff' }}>Check Busyness Level:</Typography>
-
-        <Button
-          onClick={() => setMode('live')}
-          sx={{
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            color: mode === 'live' ? '#000' : '#FFFFFF',
-            background:
-              mode === 'live'
-                ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)'
-                : 'transparent',
-            border: '1px solid #FF4ECD',
-            px: 2,
-            '&:hover': {
-              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-              color: '#000',
-            },
-          }}
-        >
-          Live
-        </Button>
-
-        <Button
-          onClick={() => setMode('forecast')}
-          sx={{
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            color: mode === 'forecast' ? '#000' : '#FFFFFF',
-            background:
-              mode === 'forecast'
-                ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)'
-                : 'transparent',
-            border: '1px solid #FF4ECD',
-            px: 2,
-            '&:hover': {
-              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-              color: '#000',
-            },
-          }}
-        >
-          Forecast
-        </Button>
-      </Box>
-
-      {/* Pink Container */}
-      <Box
-        sx={{
-          border: '4px solid #900B6A',
-          borderRadius: 4,
-          backgroundColor: '#000',
-          px: { xs: 1, md: 2 },
-          py: 3,
-          mx: 0,
-          mb: 5,
-          overflow: 'hidden',
+        Live
+      </Button>
+      <Button 
+        onClick={() => setMode('forecast')} 
+        sx={{ 
+          fontWeight: 'bold', 
+          textTransform: 'uppercase', 
+          color: mode === 'forecast' ? '#000' : '#FFFFFF', 
+          background: mode === 'forecast' ? 'linear-gradient(to right, #3ABEFF, #FF4ECD)' : 'transparent', 
+          border: '1px solid #FF4ECD', 
+          px: 2, 
+          '&:hover': { 
+            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)', 
+            color: '#000' 
+          } 
         }}
       >
-        {/* Location input + venue cards */}
+        Forecast
+      </Button>
+    </Box>
+
+    {/* Pink Container */}
+    <Box sx={{ 
+      border: '4px solid #900B6A', 
+      borderRadius: 4, 
+      backgroundColor: '#000', 
+      px: { xs: 1, md: 2 }, 
+      py: 3, 
+      mx: 0, 
+      mb: 5, 
+      overflow: 'hidden' 
+    }}>
+      {/* Location input + venue cards */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', md: 'row' }, 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        px: 3, 
+        mb: 5, 
+        gap: 3, 
+        flexWrap: 'nowrap' 
+      }}>
+        {/* Left: Start Location input + button */}
         <Box
           sx={{
+            flex: 1,
             display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            px: 3,
-            mb: 5,
             gap: 3,
-            flexWrap: 'nowrap',
           }}
         >
-          {/* Left: Start Location input + button */}
+          {/* Manual Input and Set Start Button */}
           <Box
             sx={{
-              flex: 1,
               display: 'flex',
-              flexDirection: 'column',
+              flexDirection: 'row',
               alignItems: 'center',
-              gap: 3,
+              gap: 1,
             }}
           >
-            {/* Manual Input and Set Start Button */}
-            <Box
+            <TextField
+              size="small"
+              label="Start location"
+              placeholder="Enter address or location"
+              variant="outlined"
+              value={manualStart}
+              onChange={(e) => setManualStart(e.target.value)}
               sx={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 1,
+                width: 280,
+                '& .MuiInputBase-input': { color: 'white' },
+                '& .MuiInputLabel-root': { color: 'white' },
+                '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': { borderColor: 'white' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#ccc' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
+              }}
+              InputLabelProps={{ shrink: true }}
+            />
+            <Button
+              onClick={handleGeocodeStart}
+              sx={{
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#000',
+                px: 3,
+                py: 1.2,
+                borderRadius: '8px',
+                height: '40px',
+                '&:hover': {
+                  background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+                },
               }}
             >
+
+          {/* Forecast Slider */}
+          <Box 
+            sx={{ 
+              width: '100%', 
+              maxWidth: { xs: '100%', md: '700px'},
               <TextField
                 size="small"
                 label="Start location"
@@ -405,75 +489,11 @@ export default function MapView() {
                   },
                 }}
               >
-                Set Start
-              </Button>
-            </Box>
 
-            {/* Forecast Slider */}
-            <Box 
-              sx={{ 
-                width: '100%', 
-                maxWidth: { xs: '100%', md: '700px'},
-              }}
-              >
-              {mode === "forecast" && predictionData.length > 0 && (
-                <ForecastSlider
-                  timestamps={predictionData[0]?.predictions?.map((p) => p.timestamp)}
-                  selectedTimestamp={selectedTimestamp}
-                  onChange={setSelectedTimestamp}
-                  mode={mode}
-                />
-              )}
-            </Box>
 
-            {/* Get Directions Button */}
-            <Box 
-              sx={{ 
-                display: 'flex', 
-                justifyContent: 'center' 
-              }}
-            >
-            {fromPlan && (userLocation || plan.length > 0) && (
-              <Button
-                variant="contained"
-                onClick={toggleDirections}
-                sx={{
-                  mt: 2,
-                  background: showDirections 
-                    ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)' 
-                    : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                  color: '#000',
-                  fontWeight: 'bold',
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 2,
-                  alignSelf: 'center',
-                  '&:hover': {
-                    background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
-                  },
-                }}
-              >
-                {showDirections ? 'Hide Directions' : 'Get Directions'}
-              </Button>
-            )}
-            </Box>
-          </Box>
-                
-            {/* Vertical Divider */}
-            <Box
-            sx={{
-              display: { xs: 'none', md: 'block' },
-              width: '6px',
-              minWidth: '6px',
-              alignSelf: 'stretch',
-              background: `linear-gradient(to bottom, 
-                rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)`,
-              borderRadius: '3px',
-              mx: 2, // small horizontal space
-            }}
-            />
-          
-          {/* Right: Venue card(s) */}
+
+
+          {/* Get Directions Button */}
           <Box 
             sx={{ 
               width: fromPlan ? '100%' : '100%',
@@ -484,23 +504,81 @@ export default function MapView() {
               px: 0
             }}
           >
-            {fromPlan ? (
-              <CompactPlanSummary />
-            ) : (
-              selectedVenue && <VenueCard venue={selectedVenue} variant="map" />
-            )}
+          {fromPlan && (userLocation || plan.length > 0) && (
+            <Button
+              variant="contained"
+              onClick={toggleDirections}
+              sx={{
+                mt: 2,
+                background: showDirections 
+                  ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)' 
+                  : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#000',
+                fontWeight: 'bold',
+                px: 4,
+                py: 1.5,
+                borderRadius: 2,
+                alignSelf: 'center',
+                '&:hover': {
+                  background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+                },
+              }}
+            >
+              {showDirections ? 'Hide Directions' : 'Get Directions'}
+            </Button>
+          )}
           </Box>
 
+          {/* Vertical Divider */}
+          <Box
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            width: '6px',
+            minWidth: '6px',
+            alignSelf: 'stretch',
+            background: `linear-gradient(to bottom, 
+              rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)`,
+            borderRadius: '3px',
+            mx: 2, // small horizontal space
+          }}
+          >
+          {mode === "forecast" && predictionData.length > 0 && (
+            <ForecastSlider
+              timestamps={predictionData[0]?.predictions?.map((p) => p.timestamp)}
+              selectedTimestamp={selectedTimestamp}
+              onChange={setSelectedTimestamp}
+              mode={mode}
+            />
+          )}
         </Box>
-        
+
         {/* Map */}
         <Box
           ref={mapSectionRef}
           sx={{
-            width: '100%',
-            minHeight: '60vh',
+            display: { xs: 'none', md: 'block' },
+            width: '6px',
+            minWidth: '6px',
+            alignSelf: 'stretch',
+            background: `linear-gradient(to bottom, 
+              rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)`,
+            borderRadius: '3px',
+            mx: 2, // small horizontal space
+          }}
+          />
+        
+        {/* Right: Venue card(s) */}
+        <Box 
+          sx={{ 
+            width: fromPlan ? '100%' : '100%',
+            maxWidth: fromPlan ? 550 : 280,
+            flex: fromPlan ? 1.2 : 'initial',
+            mt: { xs: 2, md: 0 },
+            overflowX: fromPlan ? 'auto' : 'hidden',
+            px: 0
           }}
         >
+
           {isMock && (
             <Box sx={{ color: "orange", p: 1 }}>
               You are viewing mock venue data. Backend not connected.
@@ -522,7 +600,8 @@ export default function MapView() {
               directions={directions}
             />
           </Box>
-        </Box>
+          )}
+          
   
     </PageWrapper>
   );
