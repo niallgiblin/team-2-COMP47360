@@ -15,3 +15,4 @@ dist/
 Thumbs.db
 Desktop.ini
 *.log
+.env

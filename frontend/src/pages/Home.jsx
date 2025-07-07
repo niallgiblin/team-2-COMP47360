@@ -31,16 +31,19 @@ export default function Home() {
             iconSrc={searchIcon}
             title="Find Your Vibe"
             description="Describe your night – we'll match you with the perfect spot."
+            to="/vibe"
           />
           <FeatureCard
             iconSrc={hotIcon}
             title="What's Hot"
             description="Track the buzz and see where the night's heating up."
+            to="/recommendations"
           />
           <FeatureCard
             iconSrc={exploreIcon}
             title="Map View"
             description="Tap the map to explore venues, check vibes and plan your route."
+            to="/map"
           />
         </Box>
       </Container>

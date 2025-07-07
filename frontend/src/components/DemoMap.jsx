@@ -278,8 +278,52 @@ export default function DemoMap({
     return null;
   }
 
+  function FlyToPlan({ venues, fromPlan }) {
+    const map = useMap();
+  
+    useEffect(() => {
+      if (!fromPlan || !venues || venues.length === 0) return;
+  
+      // Extract lat/lng pairs
+      const coords = venues
+        .filter(v => typeof v.lat === 'number' && typeof v.lng === 'number')
+        .map(v => [v.lat, v.lng]);
+  
+      if (coords.length === 1) {
+        map.flyTo(coords[0], 15); // zoom 15 for a single venue
+      } else {
+        // Compute the center of all venues
+        const latSum = coords.reduce((sum, [lat]) => sum + lat, 0);
+        const lngSum = coords.reduce((sum, [, lng]) => sum + lng, 0);
+        const center = [latSum / coords.length, lngSum / coords.length];
+  
+        map.flyTo(center, 14); // zoom out a little for multiple venues
+      }
+    }, [venues, fromPlan, map]);
+  
+    return null;
+  }
+
+  function FlyToUserLocation({ location }) {
+    const map = useMap();
+  
+    useEffect(() => {
+      if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
+        map.flyTo([location.lat, location.lng], 15);
+      }
+    }, [location, map]);
+  
+    return null;
+  }
+  
+
   return (
-    <Box sx={{ width: "100%", height: "100%" }}>
+    <Box 
+      sx={{ 
+        width: '100%', 
+        height: '100%' 
+      }}
+    >
       <MapContainer
         center={[40.72, -73.95]}
         zoom={12}
@@ -294,13 +338,14 @@ export default function DemoMap({
         
         {/* Fly to appropriate center if fromPlan */}
         <FlyToPlan venues={plan} fromPlan={fromPlan} />
-
+        
         {selectedVenue && <FlyToVenue venue={selectedVenue} />}
         {zoneCenter && <FlyToZone center={zoneCenter} />}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
+
         <ChoroplethLegend />
 
         {/* User location marker */}
@@ -361,9 +406,10 @@ export default function DemoMap({
           <Polyline
             positions={routeCoords}
             color="#3ABEFF"
-            weight={5}
+            weight={4}
           />
         )}
+
       </MapContainer>
     </Box>
   );

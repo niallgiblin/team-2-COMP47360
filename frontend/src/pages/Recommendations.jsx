@@ -24,9 +24,23 @@ export default function Recommendations() {
         return res.json();
       })
       .then((data) => {
-        setVenues(data);         // Save data to state
-        setLoading(false);       // Stop showing loading message
+        console.log('API Response:', data); // Add this to see the structure
+        
+        // If the API returns { locations: [...] } like vibe search:
+        const venues = data.locations || data; // Try both patterns
+        
+        const transformed = venues.map((venue) => ({
+          ...venue,
+          id: venue.id || venue.placeId,
+          latitude: venue.latitude || venue.lat,
+          longitude: venue.longitude || venue.lng,
+          address: venue.address || 'No address provided',
+        }));
+        
+        setVenues(transformed);
+        setLoading(false);
       })
+      
       .catch(async (err) => {
         console.warn('Falling back to mock data de to fetch error:', err);
         
@@ -114,14 +128,18 @@ export default function Recommendations() {
         )}
         
         {/* Display trending venues */}
-        {venues.map((venue, index) => (
-          <TrendingVenueCard
-            key={venue.id}
-            venue={venue}
-            rank={index + 1}
-            onGetDirections={handleGetDirections}
-          />
-        ))}
+        {venues.map((venue, index) => {
+          console.log('Rendering venue:', venue); // DEBUGGING
+
+          return (
+            <TrendingVenueCard
+              key={venue.id || index} // fallback in case id is missing
+              venue={venue}
+              rank={index + 1}
+              onGetDirections={handleGetDirections}
+            />
+          );
+        })}
       </Box>
     </PageWrapper>
   );

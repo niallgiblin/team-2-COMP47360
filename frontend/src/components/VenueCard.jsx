@@ -1,8 +1,8 @@
 import { Box, Typography, Chip, Button, Card, CardMedia, Tooltip } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import LaunchIcon from '@mui/icons-material/Launch';
 import { getCategory, categoryImages } from '../utils/tagMapping';
-
 
 import { usePlan } from '../context/PlanContext';
 
@@ -14,21 +14,37 @@ export default function VenueCard({ venue, variant = 'default' }) {
   const isPlanFull = plan.length >= 3;
 
   const priceLevels = {
-    'very cheap': 1,
-    'cheap': 2,
-    'moderate': 3,
-    'expensive': 4,
-    'very expensive': 5,
+    'price level very cheap': 1,
+    'price level cheap': 2,
+    'price level moderate': 3,
+    'price level expensive': 4,
+    'price level very expensive': 5,
   };
   
-  const normalizedPrice = 
-    typeof venue.price === 'string' ? venue.price.trim().toLowerCase() : '';
+  // Handle both string and numeric price values
+  let level = 0;
+  if (typeof venue.price === 'number') {
+    level = venue.price;
+  } else if (typeof venue.price === 'string') {
+    const normalizedPrice = venue.price.trim().toLowerCase();
+    level = priceLevels[normalizedPrice] || 0;
+  }
 
-  const level = priceLevels[normalizedPrice] || 0;
+  // Debug logging
+  console.log('Venue:', venue.name);
+  console.log('Raw price:', venue.price);
+  console.log('Price type:', typeof venue.price);
+  console.log('Mapped level:', level);
+  console.log('---');
 
   const category = getCategory(venue.description || '');
   const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
+  const handleWebsiteClick = () => {
+    if (venue.uri) {
+      window.open(venue.uri, '_blank');
+    }
+  };
 
   return (
     <Card
@@ -41,11 +57,9 @@ export default function VenueCard({ venue, variant = 'default' }) {
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        // justifyContent: 'space-between',
-        height: 'auto',
+        height: variant === 'compact' ? 320 : 'auto', // Increased height for compact
     }}
     >
-
 
       {/* Display the venue's image using CardMedia */}
       <CardMedia
@@ -66,82 +80,83 @@ export default function VenueCard({ venue, variant = 'default' }) {
       />
       
       {/* Display the venue's name as a heading */}
-      <Typography variant="h6">{venue.name}</Typography>
+      <Typography 
+        variant="h6" 
+        sx={{ 
+          fontSize: '1.25rem',
+          lineHeight: variant === 'compact' ? 1.3 : 1.6,
+          mb: variant === 'compact' ? 'auto' : 0,
+          flexGrow: variant === 'compact' ? 1 : 0,
+        }}
+      >
+        {venue.name}
+      </Typography>
       
       {/* Display the price level and rating */}
-      <Box
-        sx={{
+        <Box sx={{ mt: variant === 'compact' ? 0 : 'auto' }}>
+        
+        {/* Rating and price */}
+        <Box
+            sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 8,
             mt: 1,
-        }}
+            }}
         >
-     {/* Rating (left side) */}
-        <Box 
-            sx={{ 
-                display: 'flex', 
-                alignItems: 'center' 
-                }}
-        >
-            {/* Star icon for rating */}
+            {/* Rating */}
+            <Box 
+                sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center' }}>
             <StarIcon 
                 sx={{ 
                     color: '#FFD700', 
                     fontSize: 18, 
                     mr: 0.5 
-                    }} 
+                }} 
             />
-            
-            {/* Display numeric rating */}
-            <Typography variant="body2" 
-                sx={{ 
-                    color: '#fff' 
-                    }}
-            >
+            <Typography variant="body2" sx={{ color: '#fff' }}>
                 {venue.rating}
             </Typography>
-        </Box>
+            </Box>
 
-    {/* Price Level (right side) */}
-        <Box 
-            sx={{ 
-                display: 'flex', 
-                gap: '0.5px' // gap between each money icon 
-                }}
-        >
-            
-            {/* Display 5 money icons, fill them based on price level */}
+            {/* Price */}
+            <Box 
+                sx={{ 
+                    display: 'flex', 
+                    gap: '0.5px' 
+                }}>
             {[1, 2, 3, 4, 5].map((i) => (
-            <AttachMoneyIcon
+                <AttachMoneyIcon
                 key={i}
                 sx={{
-                fontSize: 16,  // size of money icons
-                color: i <= level ? '#FFD700' : '#555555',
+                    fontSize: 16,
+                    color: i <= level ? '#FFD700' : '#555555',
                 }}
-            />
+                />
             ))}
+            </Box>
         </Box>
-    </Box>
-      
-      {/* Display vibe tags */}
-      <Box 
-        sx={{ 
-            display: 'flex', 
-            flexWrap: 'wrap', 
-            gap: 1, 
-            mt: 1 
+
+        {/* Tags */}
+        <Box
+            sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1,
+            mt: 1,
             }}
         >
-        {(venue.tags || []).map((tag) => (
-          <Chip 
-            key={tag} 
-            label={tag} 
-            variant='outlined'
-            size="small"
-            sx={{
+            {(venue.tags || []).map((tag) => (
+            <Chip
+                key={tag}
+                label={tag}
+                variant="outlined"
+                size="small"
+                sx={{
                 backgroundColor: '#394150',
-                color: '#fff', // text colour
+                color: '#fff',
                 borderColor: '#ffffff',
                 borderWidth: '0.2px',
                 borderStyle: 'solid',
@@ -151,60 +166,86 @@ export default function VenueCard({ venue, variant = 'default' }) {
                 letterSpacing: '0.3px',
                 paddingX: '6px',
                 height: '24px',
-            }} 
-        />
-        ))}
-      </Box>
-      
-      {/* Button to add venue to the user's route */}
-    <Box 
-        sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            mt: 2
-        }}
-    >
-        <Tooltip
-        title={
-            !isInPlan && isPlanFull
-            ? 'You can only add up to 3 venues to your plan.'
-            : ''
-        }
-        arrow
-        placement="top"
-        >
-        <span>
-            <Button
-            onClick={() =>
-                isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)
-            }
-            disabled={!isInPlan && isPlanFull}
-            variant="contained"
-            sx={{
-                background: isInPlan
-                ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)'
-                : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-              color: '#000',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              px: variant === 'compact' ? 2 : variant === 'map' ? 3 : 4,
-              py: variant === 'compact' ? 0.5 : variant === 'map' ? 1 : 1.5,
-              fontSize: variant === 'compact' ? '0.8rem' : variant === 'map' ? '0.9rem' : '1rem',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-              '&:hover': {
-                background: isInPlan
-                  ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
-                  : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
-                },
-            }}
-            >
-            {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
-            </Button>
-        </span>
-        </Tooltip>
+                }}
+            />
+            ))}
+        </Box>
 
-    </Box>
+        {/* Website link */}
+        {venue.uri && (
+          <Box sx={{ mt: 1 }}>
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleWebsiteClick}
+              startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                color: '#FF4ECD',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 0,
+              }}
+            >
+              Visit Website
+            </Button>
+          </Box>
+        )}
+
+        {/* Add/Remove Button */}
+        <Box 
+            sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                mt: variant === 'compact' ? 1 : 2,
+                mb: variant === 'compact' ? 1.5 : 1, 
+            }}>
+            
+            <Tooltip
+            title={
+                !isInPlan && isPlanFull
+                ? 'You can only add up to 3 venues to your plan.'
+                : ''
+            }
+            arrow
+            placement="top"
+            >
+            <span>
+                <Button
+                onClick={() =>
+                    isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)
+                }
+                disabled={!isInPlan && isPlanFull}
+                variant="contained"
+                sx={{
+                    background: isInPlan
+                    ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)'
+                    : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                    color: '#000',
+                    fontWeight: 'bold',
+                    textTransform: 'none',
+                    px: variant === 'compact' ? 2 : variant === 'map' ? 3 : 4,
+                    py: variant === 'compact' ? 0.3 : variant === 'map' ? 1 : 1.5,
+                    fontSize:
+                    variant === 'compact'
+                        ? '0.8rem'
+                        : variant === 'map'
+                        ? '0.9rem'
+                        : '1rem',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                    '&:hover': {
+                    background: isInPlan
+                        ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
+                        : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
+                    },
+                }}
+                >
+                {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
+                </Button>
+            </span>
+            </Tooltip>
+        </Box>
+        </Box>
     </Card>
   );
 }
