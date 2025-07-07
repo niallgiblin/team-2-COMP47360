@@ -1,0 +1,10 @@
+# ===== Busyness Service requirements.in =====
+flask
+flask-cors
+waitress
+tensorflow
+numpy
+pandas
+python-dotenv
+requests
+holidays
