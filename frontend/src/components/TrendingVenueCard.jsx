@@ -196,8 +196,8 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
                                 borderRadius: 2,
                                 borderColor: '#FF4ECD',
                                 color: '#FF4ECD',
-                                minWidth: 140,
-                                minHeight: 32,
+                                minWidth: 105,
+                                minHeight: 22,
                                 '&:hover': {
                                     background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                                     color: '#000',
