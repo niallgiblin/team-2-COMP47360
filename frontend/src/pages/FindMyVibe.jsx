@@ -67,7 +67,7 @@ export default function FindMyVibe() {
       })
       .then((data) => {
         // Extract locations from the vibe search response
-        const locations = data.locations || [];
+        const locations = (data.locations || []).slice(0, 5); // Take top 5 only
 
         // Handle pagination manually since vibe search doesn't support it natively
         const totalElements = locations.length;

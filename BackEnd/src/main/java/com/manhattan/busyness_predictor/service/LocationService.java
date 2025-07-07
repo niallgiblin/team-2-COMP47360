@@ -2,10 +2,15 @@ package com.manhattan.busyness_predictor.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.manhattan.busyness_predictor.model.Location;
@@ -15,6 +20,8 @@ import jakarta.persistence.criteria.Predicate;
 
 @Service
 public class LocationService {
+
+    private static final Logger logger = LoggerFactory.getLogger(LocationService.class);
 
     @Autowired
     private LocationRepository locationRepository;
@@ -49,7 +56,15 @@ public class LocationService {
     public List<Location> getTrendingLocations() {
         // Return locations with most reviews in last 30 days
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-        return locationRepository.findMostReviewedSince(thirtyDaysAgo);
+        List<Location> trending = locationRepository.findMostReviewedSince(thirtyDaysAgo).stream().limit(5).collect(Collectors.toList());
+
+        // If no locations with recent reviews, fallback to all-time most reviewed.
+        if (trending.isEmpty()) {
+            logger.warn("No trending locations found with reviews in the last 30 days. Falling back to top 5 all-time most reviewed.");
+            Pageable topFive = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "numReviews"));
+            return locationRepository.findAll(topFive).getContent();
+        }
+        return trending;
     }
 
     public Page<Location> searchLocations(String input, Boolean isRestaurant,
@@ -63,14 +78,17 @@ public class LocationService {
             // Text search across name, address, and description
             if (input != null && !input.isEmpty()) {
                 String[] terms = input.toLowerCase().split("\\s+");
-                Predicate[] textPredicates = new Predicate[terms.length * 3];
+                Predicate[] termPredicates = new Predicate[terms.length];
                 for (int i = 0; i < terms.length; i++) {
-                    String term = terms[i];
-                    textPredicates[i * 3] = cb.like(cb.lower(root.get("name")), "%" + term + "%");
-                    textPredicates[i * 3 + 1] = cb.like(cb.lower(root.get("address")), "%" + term + "%");
-                    textPredicates[i * 3 + 2] = cb.like(cb.lower(root.get("description")), "%" + term + "%");
+                    String term = "%" + terms[i] + "%";
+                    // For each term, find if it's in the name, address, OR description
+                    Predicate nameMatch = cb.like(cb.lower(root.get("name")), term);
+                    Predicate addressMatch = cb.like(cb.lower(root.get("address")), term);
+                    Predicate descriptionMatch = cb.like(cb.lower(root.get("description")), term);
+                    termPredicates[i] = cb.or(nameMatch, addressMatch, descriptionMatch);
                 }
-                predicate = cb.and(predicate, cb.or(textPredicates));
+                // All terms must be found
+                predicate = cb.and(predicate, cb.and(termPredicates));
             }
 
             // Venue type filters
