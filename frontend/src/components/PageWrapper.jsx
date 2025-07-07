@@ -9,7 +9,7 @@ export default function PageWrapper({ children, fullWidth = false, fullHeight = 
       sx={{ 
         width: '100%',            // take up full horizontal space
         overflowX: 'hidden',     // prevent horizontal scroll hiding
-        position: 'static', 
+        position: 'relative', 
         display: 'flex',
         flexDirection: 'column',
         minHeight: fullHeight ? '100vh' : 'auto',
@@ -18,18 +18,20 @@ export default function PageWrapper({ children, fullWidth = false, fullHeight = 
       <Box
         sx={{
           paddingTop: 8,         // space below nav bar
-          paddingX: { xs: 2, sm: 4, md: 6 },            // horizontal padding
+          paddingX: { xs: 1, sm: 2, md: 4, lg: 6 },            // horizontal padding
           ...(fullWidth
             ? {  
-                maxWidth: '1300px',   // allow wider views
+                maxWidth: {  xs: '500px', sm: '700px', md: '850px', lg: '1300px'},   // allow wider views
                 width: '100%',
                 mx: 'auto',           // center the content again
               }  
             : { 
-                maxWidth: '1200px', 
-                mx: 'auto' 
+               maxWidth: { xs: '100%', sm: '100%', md: '1200px' }, // responsive max width
+                mx: 'auto',
+                width: '100%',
               }),
-          flexGrow: 1             // Let the inner content stretch vertically
+          flexGrow: 1,             // Let the inner content stretch vertically
+          overflow: 'hidden',     // prevent overflow from children
         }}
       >
         {children}        {/* injected page content */}
