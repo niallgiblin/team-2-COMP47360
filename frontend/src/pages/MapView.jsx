@@ -152,21 +152,23 @@ export default function MapView() {
 
   // 5. Generate dummy forecast data for the slider
   useEffect(() => {
+    // Wait until the zone data is loaded before generating predictions
+    if (!zoneData) {
+      return;
+    }
+
     const generateDummyPredictions = () => {
-      const zones = [
-        "262",
-        "237",
-        "68",
-        "232",
-        "194",
-        "164",
-        "144",
-        "158",
-        "236",
-        "142",
-        "79",
-        "140",
-      ];
+      // Filter features to get only Manhattan zones, matching the live data.
+      const manhattanZoneIds = zoneData.features
+        .filter((feature) => feature.properties.borough === "Manhattan")
+        .map((feature) => feature.properties.LocationID);
+
+      // If the filter fails (e.g., no 'borough' property), fallback to all zones to prevent a blank map.
+      const zonesToUse =
+        manhattanZoneIds.length > 0
+          ? manhattanZoneIds
+          : zoneData.features.map((f) => f.properties.LocationID);
+
       const timestamps = [
         "2025-07-04T18:00:00Z",
         "2025-07-04T19:00:00Z",
@@ -174,7 +176,9 @@ export default function MapView() {
         "2025-07-04T21:00:00Z",
         "2025-07-04T22:00:00Z",
       ];
-      return zones.map((zoneId) => ({
+
+      // Generate predictions for every Manhattan zone
+      return zonesToUse.map((zoneId) => ({
         LocationID: zoneId,
         predictions: timestamps.map((ts) => ({
           timestamp: ts,
@@ -182,12 +186,13 @@ export default function MapView() {
         })),
       }));
     };
+
     const dummyData = generateDummyPredictions();
     setPredictionData(dummyData);
     if (dummyData.length > 0 && dummyData[0].predictions.length > 0) {
       setSelectedTimestamp(dummyData[0].predictions[0].timestamp);
     }
-  }, []);
+  }, [zoneData]); // Add zoneData as a dependency
 
   // Scroll to map when directions are shown
   useEffect(() => {
