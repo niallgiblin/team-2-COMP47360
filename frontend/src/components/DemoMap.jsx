@@ -188,40 +188,6 @@ export default function DemoMap({
     return null;
   }
 
-  function FlyToPlan({ venues, fromPlan }) {
-    const map = useMap();
-  
-    useEffect(() => {
-      if (!fromPlan || !venues || venues.length === 0) return;
-  
-      // Extract lat/lng pairs
-      const coords = venues
-        .filter(v => typeof v.lat === 'number' && typeof v.lng === 'number')
-        .map(v => [v.lat, v.lng]);
-  
-      if (coords.length === 1) {
-        map.flyTo(coords[0], 15); // zoom 15 for a single venue
-      } else if (coords.length > 1) {
-        const bounds = L.latLngBounds(coords);
-        map.fitBounds(bounds, { padding: [50, 50] });
-      }
-    }, [venues, fromPlan, map]);
-  
-    return null;
-  }
-
-  function FlyToUserLocation({ location }) {
-    const map = useMap();
-  
-    useEffect(() => {
-      if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
-        map.flyTo([location.lat, location.lng], 15);
-      }
-    }, [location, map]);
-  
-    return null;
-  }
-
   function ChoroplethLegend() {
     const map = useMap();
     useEffect(() => {
