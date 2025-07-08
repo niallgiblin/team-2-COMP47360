@@ -291,8 +291,8 @@ export default function DemoMap({
       }}
     >
       <MapContainer
-        center={[40.72, -73.95]}
-        zoom={12}
+        center={[40.78, -74.00]}
+        zoom={12.4}
         scrollWheelZoom={false}
         whenCreated={(map) => {
           map.on("click", () => map.scrollWheelZoom.enable());
