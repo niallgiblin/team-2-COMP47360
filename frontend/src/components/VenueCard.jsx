@@ -57,7 +57,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: variant === 'compact' ? 320 : 'auto', // Increased height for compact
+        height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
     }}
     >
 

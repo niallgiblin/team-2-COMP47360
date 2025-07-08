@@ -490,7 +490,29 @@ export default function MapView() {
                 {showDirections ? "Hide Directions" : "Get Directions"}
               </Button>
             )}
-          </Box>
+
+          {/* Forecast Slider */}
+          {mode === "forecast" && predictionData.length > 0 && (
+            <Box
+              sx={{
+                width: "100%",
+                maxWidth: "700px",
+                mt: 2,
+                px: 1,
+              }}
+            >
+              <ForecastSlider
+                timestamps={predictionData[0]?.predictions?.map(
+                  (p) => p.timestamp
+                )}
+                selectedTimestamp={selectedTimestamp}
+                onChange={setSelectedTimestamp}
+                mode={mode}
+              />
+            </Box>
+          )}
+        </Box>
+
 
           {/* Vertical Divider */}
           <Box
@@ -516,39 +538,18 @@ export default function MapView() {
             {fromPlan ? (
               <CompactPlanSummary />
             ) : (
-              selectedVenue && <VenueCard venue={selectedVenue} />
+              selectedVenue && <VenueCard venue={selectedVenue} variant="compact" />
             )}
           </Box>
         </Box>
 
-        {/* Forecast Slider */}
-        {mode === "forecast" && predictionData.length > 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              maxWidth: { xs: "100%", md: "700px" },
-              mx: "auto",
-              px: 2,
-              mb: 3,
-            }}
-          >
-            <ForecastSlider
-              timestamps={predictionData[0]?.predictions?.map(
-                (p) => p.timestamp
-              )}
-              selectedTimestamp={selectedTimestamp}
-              onChange={setSelectedTimestamp}
-              mode={mode}
-            />
-          </Box>
-        )}
 
         {/* Map Section */}
         <Box
           ref={mapSectionRef}
           sx={{
-            height: "calc(100vh - 300px)",
-            minHeight: "500px",
+            minHeight: "550px",
+            flexGrow: 1,
             width: "100%",
             position: "relative",
           }}
