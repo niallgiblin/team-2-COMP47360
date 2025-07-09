@@ -14,6 +14,8 @@ import { useEffect, useState, useRef } from "react";
 import RouteDisplay from "./RouteDisplay";
 import L from "leaflet";
 
+import { usePlan } from '../context/PlanContext';
+
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
@@ -27,11 +29,9 @@ L.Icon.Default.mergeOptions({
 
 export default function DemoMap({
   venues = [],
-  selectedVenue,
   onSelectVenue,
-  fromPlan = false,
   busynessData = [],
-  zoneData, // Receive zoneData as a prop
+  zoneData,
   userLocation,
   mode = "forecast",
   predictionData = [],
@@ -39,12 +39,14 @@ export default function DemoMap({
   plan = [],
   routeCoords = [],
   showDirections = false,
+  resetMapKey = 0,
+  zoneCenter,
+  setZoneCenter, // lifted from parent
 }) {
-  const [userTriggeredFly, setUserTriggeredFly] = useState(false);
   const [routeKey, setRouteKey] = useState(0);
-  const [zoneCenter, setZoneCenter] = useState(null);
   const [activeZoneVenues, setActiveZoneVenues] = useState([]);
   const allVenuesRef = useRef([]);
+  const { selectedVenue, fromPlan } = usePlan();
 
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
@@ -58,12 +60,8 @@ export default function DemoMap({
     
     if (mode === "forecast") {
       const zone = predictionData.find((z) => String(z.LocationID) === String(locationId));
-      const match = zone?.predictions?.find(
-        (p) => p.timestamp === selectedTimestamp
-      );
-      const fillColor = match
-        ? getColorForBusyness(match.busyness * 100)
-        : "#CCCCCC";
+      const match = zone?.predictions?.find((p) => p.timestamp === selectedTimestamp);
+      const fillColor = match ? getColorForBusyness(match.busyness * 100) : "#CCCCCC";
       return {
         fillColor,
         weight: 2,
@@ -72,11 +70,8 @@ export default function DemoMap({
         fillOpacity: 0.5,
       };
     } else {
-      // Live mode
       const match = busynessData.find((z) => String(z.LocationID) === String(locationId));
-      const fillColor = match
-        ? getColorForBusyness(match.busyness * 100)
-        : "#CCCCCC";
+      const fillColor = match ? getColorForBusyness(match.busyness * 100) : "#CCCCCC";
       return {
         fillColor,
         weight: 2,
@@ -124,7 +119,7 @@ export default function DemoMap({
       click: async (e) => {
         const bounds = e.target.getBounds();
         const center = bounds.getCenter();
-        setZoneCenter(center);
+        setZoneCenter(center); // updated via props
         handleZoneClick(feature);
       },
     });
@@ -151,30 +146,23 @@ export default function DemoMap({
     }
 
     layer.bindTooltip(
-      `${
-        feature.properties.zone || feature.properties.name || "Unnamed Zone"
-      } — ${level}`,
+      `${feature.properties.zone || feature.properties.name || "Unnamed Zone"} — ${level}`,
       { sticky: true }
     );
   };
 
   function FlyToVenue({ venue }) {
     const map = useMap();
+
     useEffect(() => {
-      if (
-        userTriggeredFly && // Only fly when user clicks a marker
-        venue &&
-        typeof venue.lat === "number" &&
-        typeof venue.lng === "number"
-      ) {
+      if (venue && typeof venue.lat === "number" && typeof venue.lng === "number") {
         const timeout = setTimeout(() => {
           map.flyTo([venue.lat, venue.lng], 15);
-          // After flying, reset the trigger to prevent unwanted re-focusing
-          setUserTriggeredFly(false);
         }, 300);
         return () => clearTimeout(timeout);
       }
-    }, [venue, map, userTriggeredFly]); // Add userTriggeredFly to dependencies
+    }, [venue, map]);
+
     return null;
   }
 
@@ -228,12 +216,9 @@ export default function DemoMap({
           { label: "Busy", color: getColorForBusyness(51) },
           { label: "Very busy", color: getColorForBusyness(76) },
         ];
-        div.innerHTML = levels
-          .map(
-            (level) =>
-              `<i style="background:${level.color}"></i> ${level.label}`
-          )
-          .join("<br>");
+        div.innerHTML = levels.map(level =>
+          `<i style="background:${level.color}"></i> ${level.label}`
+        ).join("<br>");
         return div;
       };
 
@@ -246,50 +231,51 @@ export default function DemoMap({
 
   function FlyToPlan({ venues, fromPlan }) {
     const map = useMap();
-  
+
     useEffect(() => {
       if (!fromPlan || !venues || venues.length === 0) return;
-  
-      // Extract lat/lng pairs
+
       const coords = venues
         .filter(v => typeof v.lat === 'number' && typeof v.lng === 'number')
         .map(v => [v.lat, v.lng]);
-  
+
       if (coords.length === 1) {
-        map.flyTo(coords[0], 15); // zoom 15 for a single venue
+        map.flyTo(coords[0], 15);
       } else {
-        // Compute the center of all venues
         const latSum = coords.reduce((sum, [lat]) => sum + lat, 0);
         const lngSum = coords.reduce((sum, [, lng]) => sum + lng, 0);
         const center = [latSum / coords.length, lngSum / coords.length];
-  
-        map.flyTo(center, 14); // zoom out a little for multiple venues
+        map.flyTo(center, 14);
       }
     }, [venues, fromPlan, map]);
-  
+
     return null;
   }
 
   function FlyToUserLocation({ location }) {
     const map = useMap();
-  
+
     useEffect(() => {
       if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
         map.flyTo([location.lat, location.lng], 15);
       }
     }, [location, map]);
-  
+
     return null;
   }
-  
+
+  function ResetMap({ triggerKey }) {
+    const map = useMap();
+
+    useEffect(() => {
+      map.setView([40.78, -74.00], 12.4); // Default center and zoom
+    }, [triggerKey]);
+
+    return null;
+  }
 
   return (
-    <Box 
-      sx={{ 
-        width: '100%', 
-        height: '100%' 
-      }}
-    >
+    <Box sx={{ width: '100%', height: '100%' }}>
       <MapContainer
         center={[40.78, -74.00]}
         zoom={12.4}
@@ -301,12 +287,15 @@ export default function DemoMap({
       >
         {/* Auto fly to userLocation if set manually */}
         <FlyToUserLocation location={userLocation} />
-        
+
+        <ResetMap triggerKey={resetMapKey} />
+
         {/* Fly to appropriate center if fromPlan */}
         <FlyToPlan venues={plan} fromPlan={fromPlan} />
-        
-        {selectedVenue && <FlyToVenue venue={selectedVenue} />}
+
+        {selectedVenue && !fromPlan && <FlyToVenue venue={selectedVenue} />}
         {zoneCenter && <FlyToZone center={zoneCenter} />}
+
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
@@ -326,7 +315,7 @@ export default function DemoMap({
         {/* Zone polygons */}
         {zoneData && (
           <GeoJSON
-            key={`${mode}-${selectedTimestamp}`} // Force re-render when mode/timestamp changes
+            key={`${mode}-${selectedTimestamp}`}
             data={zoneData}
             style={getZoneStyle}
             onEachFeature={onEachZone}
@@ -334,7 +323,7 @@ export default function DemoMap({
         )}
 
         {/* Venue markers - only show when zone is selected or from plan */}
-        {(fromPlan ? venues : activeZoneVenues)
+        {(fromPlan ? venues : (activeZoneVenues.length > 0 ? activeZoneVenues : [selectedVenue]))
           .filter((v) => v?.lat && v?.lng)
           .map((venue) => (
             <Marker
@@ -342,7 +331,6 @@ export default function DemoMap({
               position={[venue.lat, venue.lng]}
               eventHandlers={{
                 click: () => {
-                  setUserTriggeredFly(true);
                   onSelectVenue(venue);
                   setRouteKey((prev) => prev + 1);
                 },
@@ -356,7 +344,7 @@ export default function DemoMap({
                 <em>Zone: {venue.zone || "Unknown"}</em>
               </Popup>
             </Marker>
-          ))}
+        ))}
 
         {/* Route display */}
         {userLocation && selectedVenue && (
@@ -369,13 +357,8 @@ export default function DemoMap({
 
         {/* Multi-stop route from plan */}
         {showDirections && routeCoords.length > 0 && (
-          <Polyline
-            positions={routeCoords}
-            color="#3ABEFF"
-            weight={4}
-          />
+          <Polyline positions={routeCoords} color="#3ABEFF" weight={4} />
         )}
-
       </MapContainer>
     </Box>
   );

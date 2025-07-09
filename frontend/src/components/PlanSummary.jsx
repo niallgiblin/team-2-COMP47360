@@ -34,64 +34,55 @@ export default function PlanSummary() {
     }
   };
     
-
-  // user's name, fallback to "My Plan" if null
-  const planTitle = user?.firstName
-  ? `Plan for ${user.firstName}`
-  : 'My Plan';
-
-  if (plan.length === 0) return null;
-
-  
   return (
+  <Box
+    sx={{
+      mt: { xs: 2, md: 3.6 },
+      p: 3,
+      border: '2px solid #3ABEFF',
+      borderRadius: 3,
+      backgroundColor: '#000',
+      width: '90%',
+      maxWidth: '100%',
+      mx: 'auto',
+      overflowX: 'hidden',
+    }}
+  >
+    {/* Responsive heading + View Map button */}
     <Box
       sx={{
-        mt: { xs: 2, md: 0 },
-        p: 3,
-        border: '2px solid #3ABEFF',
-        borderRadius: 3,
-        backgroundColor: '#000',
-        width: '90%',
-        maxWidth: '100%',
-        mx: 'auto',
-        overflowX: 'hidden',
+        display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
+        justifyContent: 'space-between',
+        alignItems: { xs: 'flex-start', md: 'center' },
+        mb: 2,
       }}
     >
-      {/* Responsive heading + View Map button */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', md: 'center' },
-          mb: 2,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h6"
-            sx={{
-              color: '#fff',
-              fontWeight: 'bold',
-              textAlign: { xs: 'center', md: 'left' },
-            }}
-          >
-            {planTitle}
-          </Typography>
+      <Box>
+        <Typography
+          variant="h6"
+          sx={{
+            color: '#fff',
+            fontWeight: 'bold',
+            textAlign: { xs: 'center', md: 'left' },
+          }}
+        >
+          {user?.firstName ? `Plan for ${user.firstName}` : 'My Plan'}
+        </Typography>
 
-          {/* Subheading */}
-          <Typography
-            variant="body2"
-            sx={{
-              mb: 2,
-              color: '#aaa',
-              textAlign: { xs: 'center', md: 'left' },
-            }}
-          >
-            {plan.length} of 3 spots added
-          </Typography>
-        </Box>
+        <Typography
+          variant="body2"
+          sx={{
+            mb: 2,
+            color: '#aaa',
+            textAlign: { xs: 'center', md: 'left' },
+          }}
+        >
+          {plan.length} of 3 spots added
+        </Typography>
+      </Box>
 
+      {plan.length > 0 && (
         <Box
           sx={{
             display: 'flex',
@@ -102,16 +93,15 @@ export default function PlanSummary() {
         >
           <Button
             variant="contained"
-            onClick={() =>
-              navigate('/map', { state: { fromPlan: true } })
-            }          
+            onClick={() => navigate('/map', { state: { fromPlan: true } })}
             sx={{
               mt: { xs: 1, md: 0 },
+              mb: { xs: 0, md: 1 },
               background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
               color: '#000',
               fontWeight: 'bold',
               borderRadius: '8px',
-              px: 3,
+              px: 2,
               py: 1,
               fontSize: '0.9rem',
               '&:hover': {
@@ -123,52 +113,71 @@ export default function PlanSummary() {
           </Button>
 
           <Button
-          onClick={handleSave}
-          variant="outlined"
+            onClick={handleSave}
+            variant="outlined"
+            sx={{
+              borderColor: '#FF4ECD',
+              color: '#FF4ECD',
+              fontWeight: 'bold',
+              px: 3,
+              borderRadius: '8px',
+              textTransform: 'none',
+              '&:hover': {
+                background: 'rgba(255, 78, 205, 0.1)',
+              },
+            }}
+          >
+            Save Plan
+          </Button>
+
+          <Button
+            onClick={clearPlan}
+            variant="text"
+            sx={{
+              color: '#fff',
+              fontSize: '0.9rem',
+              mt: 0.3,
+              textDecoration: 'underline',
+              textTransform: 'none',
+              '&:hover': {
+                color: '#FF4ECD',
+                textDecoration: 'none',
+              },
+            }}
+          >
+            Start New Plan
+          </Button>
+        </Box>
+      )}
+    </Box>
+
+    {/* Content below actions */}
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {plan.length === 0 ? (
+        <Box
           sx={{
-            borderColor: '#FF4ECD',
-            color: '#FF4ECD',
-            fontWeight: 'bold',
-            textTransform: 'none',
-            '&:hover': {
-              background: 'rgba(255, 78, 205, 0.1)',
-            },
+            border: '1px dashed #555',
+            backgroundColor: '#111',
+            borderRadius: 2,
+            p: 2,
+            mt: 1,
           }}
         >
-          Save Plan
-        </Button>
-
-        <Button
-        onClick={clearPlan}
-        variant="text"
-        sx={{
-          color: '#fff',
-          fontSize: '0.8rem',
-          mt: 1,
-          textDecoration: 'underline',
-          '&:hover': {
-            color: '#FF4ECD',
-            textDecoration: 'none',
-          },
-        }}
-      >
-        Start New Plan
-      </Button>
-
-      </Box>
-      </Box>
-  
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-        }}
-      >
-        {plan.map((venue) => (
-          <VenueCard key={venue.id} venue={venue} />
-        ))}
-      </Box>
+          <Typography
+            variant="body2"
+            sx={{
+              color: '#aaa',
+              fontStyle: 'italic',
+              textAlign: 'center',
+            }}
+          >
+            You can add up to 3 venues to your plan by clicking “Add to Plan”.
+          </Typography>
+        </Box>
+      ) : (
+        plan.map((venue) => <VenueCard key={venue.id} venue={venue} />)
+      )}
+    </Box>
 
       <Dialog
         open={nameDialogOpen}
