@@ -23,6 +23,7 @@ export default function FindMyVibe() {
   const [venueType, setVenueType] = useState("");   //venue type
   const [cuisine, setCuisine] = useState("");       // cuisine filter
   const navigate = useNavigate();                   // navigation handler
+  const [hasSearched, setHasSearched] = useState(false); // track if a search has been triggered, so the plan summary is displayed
 
   // Pagination state
   const [page, setPage] = useState(0);                      // current page index
@@ -46,6 +47,7 @@ export default function FindMyVibe() {
     }
 
     setIsLoading(true);                                 // start loading state
+    setHasSearched(true);                               // mark that the user has searched
 
     // Build the request body for vibe search
     const requestBody = {
@@ -309,6 +311,7 @@ export default function FindMyVibe() {
           }}
         >
           {/* Left: Sidebar PlanSummary */}
+          {hasSearched && (
           <Box
             sx={{
               width: { xs: '100%', md: 320 },
@@ -319,6 +322,7 @@ export default function FindMyVibe() {
           >
             <PlanSummary />
           </Box>
+          )}
 
           {/* Right: Venue list */}
           <Box sx={{ flex: 1 }}>

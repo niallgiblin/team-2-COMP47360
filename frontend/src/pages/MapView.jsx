@@ -29,23 +29,34 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
 export default function MapView() {
+  
+  // Get state from route (eg when coming from a plan)
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
   const fromPlan = location.state?.fromPlan || false;
 
   const { plan } = usePlan();
+  
   const mapSectionRef = useRef(null);
 
-  // State for user location (automatic and manual)
+  // Core app states
+  const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
+  const [zoneCenter, setZoneCenter] = useState(null);
   const [manualStart, setManualStart] = useState("");
   const [userLocation, setUserLocation] = useState(null);
+
+
+  // Reset map by fully refreshing the page, when button is clicked
+  const [resetMapKey] = useState(0);
+  const handleResetMap = () => {
+    window.location.reload();
+  };
 
   // State for venue data, loading, and map display
   const [venues, setVenues] = useState([]);
   const [enrichedVenues, setEnrichedVenues] = useState([]);
   const [zoneData, setZoneData] = useState(null);
   const [busynessData, setBusynessData] = useState([]);
-  const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
   const [loading, setLoading] = useState(true);
   const [isMock, setIsMock] = useState(false);
 
@@ -145,7 +156,7 @@ export default function MapView() {
       };
     });
     setEnrichedVenues(enriched);
-    if (!selectedVenue && enriched.length > 0) {
+    if (!selectedVenueFromState && !selectedVenue && enriched.length > 0) {
       setSelectedVenue(enriched[0]);
     }
   }, [zoneData, venues, fromPlan, selectedVenue]);
@@ -212,25 +223,28 @@ export default function MapView() {
       alert("Directions cannot be loaded. Missing API key.");
       return;
     }
-    if (!plan || plan.length === 0) return;
 
-    const start = userLocation || { lat: plan[0].lat, lng: plan[0].lng };
+    const hasPlan = fromPlan && plan.length > 0;
+    const destinationVenue = hasPlan ? plan[plan.length - 1] : selectedVenue;
+    if (!destinationVenue) return;
+
+    const start = userLocation || (hasPlan ? plan[0] : selectedVenue);
     const origin = {
       location: { latLng: { latitude: start.lat, longitude: start.lng } },
     };
     const destination = {
       location: {
         latLng: {
-          latitude: plan[plan.length - 1].lat,
-          longitude: plan[plan.length - 1].lng,
+          latitude: destinationVenue.lat,
+          longitude: destinationVenue.lng,
         },
       },
     };
-    const intermediates = plan
-      .slice(1, -1)
-      .map((v) => ({
-        location: { latLng: { latitude: v.lat, longitude: v.lng } },
-      }));
+    const intermediates = hasPlan
+      ? plan.slice(1, -1).map((v) => ({
+          location: { latLng: { latitude: v.lat, longitude: v.lng } },
+        }))
+      : [];
 
     try {
       const response = await fetch(
@@ -250,6 +264,7 @@ export default function MapView() {
           }),
         }
       );
+
       const data = await response.json();
       const encoded = data?.routes?.[0]?.polyline?.encodedPolyline;
       if (!encoded) throw new Error("No encoded polyline in API response");
@@ -272,6 +287,7 @@ export default function MapView() {
       alert("Failed to load directions. Check console for details.");
     }
   };
+
 
   // Geocode manually input start address
   const handleGeocodeStart = async () => {
@@ -396,6 +412,30 @@ export default function MapView() {
           overflow: "hidden",
         }}
       >
+        {/* Reset map button */}
+        <Box 
+          sx={{ 
+            textAlign: "left", 
+            mb: 1, 
+            pl: 2 
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              color: "#ccc",
+              textDecoration: "underline",
+              cursor: "pointer",
+              "&:hover": {
+                color: "#fff",
+              },
+            }}
+            onClick={handleResetMap}
+          >
+            Reset Map
+          </Typography>
+        </Box>
+
         {/* Top Section: Controls and Venue Info */}
         <Box
           sx={{
@@ -468,7 +508,7 @@ export default function MapView() {
                 Set
               </Button>
             </Box>
-            {fromPlan && (userLocation || plan.length > 0) && (
+            {((fromPlan && (userLocation || plan.length > 0)) || selectedVenue) && (
               <Button
                 variant="contained"
                 onClick={toggleDirections}
@@ -586,6 +626,9 @@ export default function MapView() {
             plan={plan}
             routeCoords={directionsPolyline}
             showDirections={showDirections}
+            resetMapKey={resetMapKey}
+            zoneCenter={zoneCenter}
+            setZoneCenter={setZoneCenter}
           />
           <DirectionsSidebar
             open={showDirections}
