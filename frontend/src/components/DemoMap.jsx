@@ -13,8 +13,9 @@ import { Box } from "@mui/material";
 import { useEffect, useState, useRef } from "react";
 import RouteDisplay from "./RouteDisplay";
 import L from "leaflet";
+import { getVenueIcon } from "../utils/mapIcons";
 
-import { usePlan } from '../context/PlanContext';
+import { usePlan } from "../context/PlanContext";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -41,12 +42,13 @@ export default function DemoMap({
   showDirections = false,
   resetMapKey = 0,
   zoneCenter,
-  setZoneCenter, // lifted from parent
+  setZoneCenter,
+  fromPlan: fromPlanProp, // 🔄 renamed
 }) {
   const [routeKey, setRouteKey] = useState(0);
   const [activeZoneVenues, setActiveZoneVenues] = useState([]);
   const allVenuesRef = useRef([]);
-  const { selectedVenue, fromPlan } = usePlan();
+  const { selectedVenue } = usePlan(); // ⛔️ don't use fromPlan from context anymore
 
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
@@ -57,45 +59,36 @@ export default function DemoMap({
 
   const getZoneStyle = (feature) => {
     const locationId = feature.properties.LocationID;
-    
-    if (mode === "forecast") {
-      const zone = predictionData.find((z) => String(z.LocationID) === String(locationId));
-      const match = zone?.predictions?.find((p) => p.timestamp === selectedTimestamp);
-      const fillColor = match ? getColorForBusyness(match.busyness * 100) : "#CCCCCC";
-      return {
-        fillColor,
-        weight: 2,
-        opacity: 1,
-        color: "#3ABEFF",
-        fillOpacity: 0.5,
-      };
-    } else {
-      const match = busynessData.find((z) => String(z.LocationID) === String(locationId));
-      const fillColor = match ? getColorForBusyness(match.busyness * 100) : "#CCCCCC";
-      return {
-        fillColor,
-        weight: 2,
-        opacity: 1,
-        color: "#3ABEFF",
-        fillOpacity: 0.5,
-      };
-    }
+    const match =
+      mode === "forecast"
+        ? predictionData
+            .find((z) => String(z.LocationID) === String(locationId))
+            ?.predictions?.find((p) => p.timestamp === selectedTimestamp)
+        : busynessData.find(
+            (z) => String(z.LocationID) === String(locationId)
+          );
+
+    const fillColor = match ? getColorForBusyness((match.busyness || 0) * 100) : "#CCCCCC";
+
+    return {
+      fillColor,
+      weight: 2,
+      opacity: 1,
+      color: "#3ABEFF",
+      fillOpacity: 0.5,
+    };
   };
 
-  // Update the ref when the enriched venues prop changes
   useEffect(() => {
     allVenuesRef.current = venues;
   }, [venues]);
 
   const handleZoneClick = (feature) => {
     const zoneId = feature.properties.LocationID;
-    console.log("Zone clicked:", zoneId);
-
     try {
       const filteredVenues = allVenuesRef.current.filter(
         (v) => String(v.zone) === String(zoneId)
       );
-      console.log("Venues in zone:", filteredVenues.length);
       setActiveZoneVenues(filteredVenues);
     } catch (err) {
       console.error("Failed to load venues for zone:", err);
@@ -106,44 +99,33 @@ export default function DemoMap({
   const onEachZone = (feature, layer) => {
     layer.on({
       mouseover: (e) => {
-        e.target.setStyle({
-          weight: 3,
-          color: "#ffffff",
-          fillOpacity: 0.7,
-        });
+        e.target.setStyle({ weight: 3, color: "#ffffff", fillOpacity: 0.7 });
       },
       mouseout: (e) => {
-        const originalStyle = getZoneStyle(feature);
-        e.target.setStyle(originalStyle);
+        e.target.setStyle(getZoneStyle(feature));
       },
-      click: async (e) => {
+      click: (e) => {
         const bounds = e.target.getBounds();
         const center = bounds.getCenter();
-        setZoneCenter(center); // updated via props
+        setZoneCenter(center);
         handleZoneClick(feature);
       },
     });
 
-    // Create tooltip based on mode
-    let level;
-    if (mode === "forecast") {
-      const zone = predictionData.find(
-        (z) => String(z.LocationID) === String(feature.properties.LocationID)
-      );
-      const match = zone?.predictions?.find(
-        (p) => p.timestamp === selectedTimestamp
-      );
-      level = match
-        ? `${(match.busyness * 100).toFixed(0)}% busy`
-        : "No forecast data";
-    } else {
-      const match = busynessData.find(
-        (z) => String(z.LocationID) === String(feature.properties.LocationID)
-      );
-      level = match
-        ? `${(match.busyness * 100).toFixed(0)}% busy`
-        : "No live data";
-    }
+    const level =
+      mode === "forecast"
+        ? (() => {
+            const match = predictionData
+              .find((z) => String(z.LocationID) === String(feature.properties.LocationID))
+              ?.predictions?.find((p) => p.timestamp === selectedTimestamp);
+            return match ? `${(match.busyness * 100).toFixed(0)}% busy` : "No forecast data";
+          })()
+        : (() => {
+            const match = busynessData.find(
+              (z) => String(z.LocationID) === String(feature.properties.LocationID)
+            );
+            return match ? `${(match.busyness * 100).toFixed(0)}% busy` : "No live data";
+          })();
 
     layer.bindTooltip(
       `${feature.properties.zone || feature.properties.name || "Unnamed Zone"} — ${level}`,
@@ -153,36 +135,74 @@ export default function DemoMap({
 
   function FlyToVenue({ venue }) {
     const map = useMap();
-
     useEffect(() => {
-      if (venue && typeof venue.lat === "number" && typeof venue.lng === "number") {
-        const timeout = setTimeout(() => {
-          map.flyTo([venue.lat, venue.lng], 15);
-        }, 300);
+      if (venue?.lat && venue?.lng) {
+        const timeout = setTimeout(() => map.flyTo([venue.lat, venue.lng], 15), 300);
         return () => clearTimeout(timeout);
       }
     }, [venue, map]);
-
     return null;
   }
 
   function FlyToZone({ center }) {
     const map = useMap();
     useEffect(() => {
-      if (center) {
-        map.flyTo([center.lat, center.lng], 15);
-      }
+      if (center) map.flyTo([center.lat, center.lng], 15);
     }, [center]);
+    return null;
+  }
+
+  function FlyToPlan({ venues, fromPlan }) {
+    const map = useMap();
+    useEffect(() => {
+      if (
+        !fromPlan ||
+        !venues ||
+        venues.length === 0 ||
+        !venues.every((v) => typeof v.lat === "number" && typeof v.lng === "number")
+      ) {
+        return;
+      }
+
+      const coords = venues.map((v) => [v.lat, v.lng]);
+
+      if (coords.length === 1) {
+        map.flyTo(coords[0], 15);
+      } else {
+        const latSum = coords.reduce((sum, [lat]) => sum + lat, 0);
+        const lngSum = coords.reduce((sum, [, lng]) => sum + lng, 0);
+        map.flyTo([latSum / coords.length, lngSum / coords.length], 14);
+      }
+    }, [venues, fromPlan, map]);
+
+    return null;
+  }
+
+  function FlyToUserLocation({ location }) {
+    const map = useMap();
+    useEffect(() => {
+      if (location?.lat && location?.lng) {
+        map.flyTo([location.lat, location.lng], 15);
+      }
+    }, [location, map]);
+    return null;
+  }
+
+  function ResetMap({ triggerKey }) {
+    const map = useMap();
+    useEffect(() => {
+      map.setView([40.78, -74.0], 12.4);
+    }, [triggerKey]);
     return null;
   }
 
   function ChoroplethLegend() {
     const map = useMap();
     useEffect(() => {
-      const styleTagId = "leaflet-legend-style";
-      if (!document.getElementById(styleTagId)) {
+      const id = "leaflet-legend-style";
+      if (!document.getElementById(id)) {
         const style = document.createElement("style");
-        style.id = styleTagId;
+        style.id = id;
         style.innerHTML = `
           .leaflet-control.legend {
             background: #1e1e1e;
@@ -207,8 +227,7 @@ export default function DemoMap({
       }
 
       const legend = L.control({ position: "bottomright" });
-
-      legend.onAdd = function () {
+      legend.onAdd = () => {
         const div = L.DomUtil.create("div", "leaflet-control legend");
         const levels = [
           { label: "Quiet", color: getColorForBusyness(1) },
@@ -216,9 +235,7 @@ export default function DemoMap({
           { label: "Busy", color: getColorForBusyness(51) },
           { label: "Very busy", color: getColorForBusyness(76) },
         ];
-        div.innerHTML = levels.map(level =>
-          `<i style="background:${level.color}"></i> ${level.label}`
-        ).join("<br>");
+        div.innerHTML = levels.map((l) => `<i style="background:${l.color}"></i> ${l.label}`).join("<br>");
         return div;
       };
 
@@ -229,55 +246,18 @@ export default function DemoMap({
     return null;
   }
 
-  function FlyToPlan({ venues, fromPlan }) {
-    const map = useMap();
-
-    useEffect(() => {
-      if (!fromPlan || !venues || venues.length === 0) return;
-
-      const coords = venues
-        .filter(v => typeof v.lat === 'number' && typeof v.lng === 'number')
-        .map(v => [v.lat, v.lng]);
-
-      if (coords.length === 1) {
-        map.flyTo(coords[0], 15);
-      } else {
-        const latSum = coords.reduce((sum, [lat]) => sum + lat, 0);
-        const lngSum = coords.reduce((sum, [, lng]) => sum + lng, 0);
-        const center = [latSum / coords.length, lngSum / coords.length];
-        map.flyTo(center, 14);
-      }
-    }, [venues, fromPlan, map]);
-
-    return null;
-  }
-
-  function FlyToUserLocation({ location }) {
-    const map = useMap();
-
-    useEffect(() => {
-      if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
-        map.flyTo([location.lat, location.lng], 15);
-      }
-    }, [location, map]);
-
-    return null;
-  }
-
-  function ResetMap({ triggerKey }) {
-    const map = useMap();
-
-    useEffect(() => {
-      map.setView([40.78, -74.00], 12.4); // Default center and zoom
-    }, [triggerKey]);
-
-    return null;
-  }
+  const displayedVenues = fromPlanProp
+    ? plan
+    : activeZoneVenues.length > 0
+    ? activeZoneVenues
+    : selectedVenue
+    ? [selectedVenue]
+    : [];
 
   return (
-    <Box sx={{ width: '100%', height: '100%' }}>
+    <Box sx={{ width: "100%", height: "100%" }}>
       <MapContainer
-        center={[40.78, -74.00]}
+        center={[40.78, -74.0]}
         zoom={12.4}
         scrollWheelZoom={false}
         whenCreated={(map) => {
@@ -285,25 +265,16 @@ export default function DemoMap({
         }}
         style={{ height: "calc(120vh - 300px)", width: "100%" }}
       >
-        {/* Auto fly to userLocation if set manually */}
         <FlyToUserLocation location={userLocation} />
-
         <ResetMap triggerKey={resetMapKey} />
-
-        {/* Fly to appropriate center if fromPlan */}
-        <FlyToPlan venues={plan} fromPlan={fromPlan} />
-
-        {selectedVenue && !fromPlan && <FlyToVenue venue={selectedVenue} />}
+        <FlyToPlan venues={plan} fromPlan={fromPlanProp} />
+        {selectedVenue && !fromPlanProp && <FlyToVenue venue={selectedVenue} />}
         {zoneCenter && <FlyToZone center={zoneCenter} />}
-
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
-
         <ChoroplethLegend />
-
-        {/* User location marker */}
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]}>
             <Tooltip direction="top" offset={[0, -10]} permanent>
@@ -311,8 +282,6 @@ export default function DemoMap({
             </Tooltip>
           </Marker>
         )}
-
-        {/* Zone polygons */}
         {zoneData && (
           <GeoJSON
             key={`${mode}-${selectedTimestamp}`}
@@ -321,32 +290,45 @@ export default function DemoMap({
             onEachFeature={onEachZone}
           />
         )}
-
-        {/* Venue markers - only show when zone is selected or from plan */}
-        {(fromPlan ? venues : (activeZoneVenues.length > 0 ? activeZoneVenues : [selectedVenue]))
+        {displayedVenues
           .filter((v) => v?.lat && v?.lng)
-          .map((venue) => (
-            <Marker
-              key={venue.id}
-              position={[venue.lat, venue.lng]}
-              eventHandlers={{
-                click: () => {
-                  onSelectVenue(venue);
-                  setRouteKey((prev) => prev + 1);
-                },
-              }}
-            >
-              <Popup>
-                <strong>{venue.name || "Unnamed Venue"}</strong>
-                <br />
-                {venue.address || "No address provided"}
-                <br />
-                <em>Zone: {venue.zone || "Unknown"}</em>
-              </Popup>
-            </Marker>
-        ))}
+          .map((venue) => {
+            const type =
+              venue.isRestaurant
+                ? "restaurant"
+                : venue.isBar
+                ? "bar"
+                : venue.isClub
+                ? "club"
+                : venue.isLandmark
+                ? "landmark"
+                : "default";
 
-        {/* Route display */}
+            return (
+              <Marker
+                key={venue.id}
+                position={[venue.lat, venue.lng]}
+                icon={getVenueIcon(type)}
+                eventHandlers={{
+                  click: () => {
+                    onSelectVenue(venue);
+                    setRouteKey((prev) => prev + 1);
+                  },
+                }}
+              >
+                <Tooltip direction="top" offset={[0, -10]} opacity={1}>
+                  <strong>{venue.name}</strong>
+                </Tooltip>
+                <Popup>
+                  <strong>{venue.name || "Unnamed Venue"}</strong>
+                  <br />
+                  {venue.address || "No address provided"}
+                  <br />
+                  <em>Zone: {venue.zone || "Unknown"}</em>
+                </Popup>
+              </Marker>
+            );
+          })}
         {userLocation && selectedVenue && (
           <RouteDisplay
             key={routeKey}
@@ -354,8 +336,6 @@ export default function DemoMap({
             end={[selectedVenue.lat, selectedVenue.lng]}
           />
         )}
-
-        {/* Multi-stop route from plan */}
         {showDirections && routeCoords.length > 0 && (
           <Polyline positions={routeCoords} color="#3ABEFF" weight={4} />
         )}
