@@ -14,6 +14,7 @@ services:
     command:
       - --local-infile=1
       - --default-authentication-plugin=mysql_native_password
+      - --secure-file-priv=""
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
       timeout: 20s
@@ -23,9 +24,40 @@ services:
     volumes:
       - db_data:/var/lib/mysql
       - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro
-      - ./backend/docker/db-config/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./backend/docker/db-config/my.ini:/etc/mysql/conf.d/my.ini:ro
     networks:
       - app-network
+
+  # Data import initialization container
+  db-init:
+    image: mysql:8.0
+    container_name: urban-gala-db-init
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+    volumes:
+      - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - app-network
+    command: >
+      bash -c "
+        echo 'Waiting for database to be fully ready...' &&
+        sleep 20 &&
+        echo 'Checking if data exists...' &&
+        DATA_COUNT=$$(mysql -h db -u urbanuser -purbanpass -e 'USE urban_gala; SELECT COUNT(*) FROM location;' 2>/dev/null | tail -n1) &&
+        if [ \"$$DATA_COUNT\" = \"0\" ] || [ -z \"$$DATA_COUNT\" ]; then
+          echo 'Importing location data...' &&
+          mysql --local-infile=1 -h db -u root -prootpass urban_gala < /docker-entrypoint-initdb.d/init.sql &&
+          echo 'Data import completed successfully!' ||
+          echo 'Data import failed!'
+        else
+          echo 'Data already exists ($$DATA_COUNT locations)'
+        fi &&
+        echo 'Database initialization complete'
+      "
+    restart: "no"
 
   backend:
     build:
@@ -38,6 +70,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       llm-service:
         condition: service_healthy
       busyness-service:
@@ -67,7 +101,7 @@ services:
     command: npm run dev
     environment:
       - HOST=0.0.0.0
-      -  VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
+      - VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
     depends_on:
       - backend
     networks:
