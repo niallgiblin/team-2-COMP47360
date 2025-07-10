@@ -36,6 +36,7 @@ export default function MapView() {
   const fromPlan = location.state?.fromPlan || false;
 
   const { plan } = usePlan();
+  const { setFromPlan } = usePlan();
   
   const mapSectionRef = useRef(null);
 
@@ -69,6 +70,13 @@ export default function MapView() {
   const [directions, setDirections] = useState([]);
   const [showDirections, setShowDirections] = useState(false);
   const [directionsPolyline, setDirectionsPolyline] = useState([]);
+
+  // Ensure fromPlan is only true if user navigated via route state
+  useEffect(() => {
+    const comingFromPlan = location.state?.fromPlan === true;
+    setFromPlan(comingFromPlan);
+  }, [location.state, setFromPlan]);
+
 
   // 1. Try to automatically retrieve user's geolocation
   useEffect(() => {
@@ -107,7 +115,7 @@ export default function MapView() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      if (fromPlan && plan.length > 0) {
+      if (location.state?.fromPlan === true && plan.length > 0) {
         setVenues(plan);
         setLoading(false);
         return;
@@ -140,9 +148,12 @@ export default function MapView() {
   // 4. Enrich venues with zone IDs once all data is loaded
   useEffect(() => {
     if (!zoneData || venues.length === 0) {
-      if (fromPlan) setEnrichedVenues(venues);
+      if (location.state?.fromPlan === true && plan.length > 0) {
+        setEnrichedVenues(plan);
+      }
       return;
     }
+
     const enriched = venues.map((venue) => {
       if (typeof venue.lat !== "number" || typeof venue.lng !== "number")
         return venue;
@@ -623,7 +634,7 @@ export default function MapView() {
             mode={mode}
             predictionData={predictionData}
             selectedTimestamp={selectedTimestamp}
-            plan={plan}
+            plan={fromPlan ? enrichedVenues : plan}
             routeCoords={directionsPolyline}
             showDirections={showDirections}
             resetMapKey={resetMapKey}

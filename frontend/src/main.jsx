@@ -6,6 +6,8 @@ import 'leaflet/dist/leaflet.css';
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import '@fortawesome/fontawesome-free/css/all.min.css';
+
 
 // Create a custom MUI theme using Urbanist font
 const theme = createTheme({

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import VenueCard from './VenueCard';
 
 export default function PlanSummary() {
-  const { plan, savePlan, loadPlan, clearPlan } = usePlan();
+  const { plan, savePlan, loadPlan, clearPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -93,7 +93,10 @@ export default function PlanSummary() {
         >
           <Button
             variant="contained"
-            onClick={() => navigate('/map', { state: { fromPlan: true } })}
+              onClick={() => {
+                setFromPlan(true);
+                navigate('/map', { state: { fromPlan: true } });
+              }}
             sx={{
               mt: { xs: 1, md: 0 },
               mb: { xs: 0, md: 1 },
@@ -275,6 +278,7 @@ export default function PlanSummary() {
             { label: 'View on Map', action: () => {
                 if (lastSavedPlan) {
                   loadPlan(lastSavedPlan);
+                  setFromPlan(true);
                   navigate('/map', { state: { fromPlan: true } });
                 }
               }},
