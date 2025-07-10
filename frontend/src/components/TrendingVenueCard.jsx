@@ -11,7 +11,7 @@ import {
 
 import { useNavigate } from 'react-router-dom';
 import { usePlan } from '../context/PlanContext';
-import { getCategory, categoryImages } from '../utils/tagMapping';
+import { categoryImages } from '../utils/tagMapping';
 import { Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Whatshot as WhatshotIcon, AttachMoney as AttachMoneyIcon, Launch as LaunchIcon } from '@mui/icons-material';
 
 
@@ -28,6 +28,7 @@ export default function TrendingVenueCard({ venue}) {
         'price level expensive': 4,
         'price level very expensive': 5,
     };
+    
 
     let level = 0;
     if (typeof venue.price === 'number') {
@@ -41,7 +42,16 @@ export default function TrendingVenueCard({ venue}) {
     const isInPlan = plan.some((v) => v.id === venue.id);
     const isPlanFull = plan.length >= 3;
 
-    const category = getCategory(venue.description || '');
+    const getCategoryFromFlags = (venue) => {
+        if (venue.isRestaurant) return 'restaurant';
+        if (venue.isBar) return 'bar';
+        if (venue.isClub) return 'club';
+        if (venue.isLandmark) return 'landmark';
+        return 'other';
+        };
+
+        const category = getCategoryFromFlags(venue);
+
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
     const handleWebsiteClick = () => {
