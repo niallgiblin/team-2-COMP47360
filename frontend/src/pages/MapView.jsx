@@ -1,6 +1,8 @@
 // react and routing components
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { Tabs, Tab } from '@mui/material';
+
 
 // UI components from MUI
 import {
@@ -18,6 +20,7 @@ import DemoMap from "../components/DemoMap";
 import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
+import CompactSavedPlans from '../components/CompactSavedPlans';
 
 // Data and context
 import mockVenues from "../data/mockVenues";
@@ -29,7 +32,27 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
 export default function MapView() {
-  
+
+  // Define tab styles
+  const tabStyles = {
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    color: '#BBB',
+    minWidth: 120,
+    '&.Mui-selected': {
+      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      color: '#FFF',
+    },
+    '&:focus': {
+      outline: 'none',
+      border: 'none',
+    },
+    borderLeft: 'none',
+    borderRight: 'none',
+  };
+ 
   // Get state from route (eg when coming from a plan)
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
@@ -67,9 +90,12 @@ export default function MapView() {
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
 
   // State for route directions
+  const [travelMode, setTravelMode] = useState("WALK");
   const [directions, setDirections] = useState([]);
   const [showDirections, setShowDirections] = useState(false);
   const [directionsPolyline, setDirectionsPolyline] = useState([]);
+
+  const [viewMode, setViewMode] = useState('plan');
 
   // Ensure fromPlan is only true if user navigated via route state
   useEffect(() => {
@@ -271,7 +297,7 @@ export default function MapView() {
             origin,
             destination,
             intermediates,
-            travelMode: "WALK",
+            travelMode,
           }),
         }
       );
@@ -290,8 +316,10 @@ export default function MapView() {
             summary: `Leg ${i + 1}, Step ${j + 1}`,
             instructions:
               step.navigationInstruction?.instructions || step.text || "",
+            transitDetails: step.transitDetails || null, // 👈 Add this
           })) || []
       );
+
       setDirections(steps);
     } catch (err) {
       console.error("❌ Google Directions API failed:", err);
@@ -334,6 +362,14 @@ export default function MapView() {
     }
   };
 
+  // Refetch directions when mode changes (walk/ public transport)
+  useEffect(() => {
+    if (showDirections && directions.length > 0) {
+      handleGetDirections();
+    }
+  }, [travelMode]);
+
+  
   if (loading) {
     return (
       <PageWrapper fullWidth fullHeight>
@@ -367,7 +403,13 @@ export default function MapView() {
           mb: 2,
         }}
       >
-        <Typography sx={{ color: "#fff" }}>Check Busyness Level:</Typography>
+        <Typography 
+          sx={{ 
+            color: "#fff" 
+          }}
+        >
+          Check Busyness Level:
+        </Typography>
         <Button
           onClick={() => setMode("live")}
           sx={{
@@ -409,6 +451,7 @@ export default function MapView() {
           Forecast
         </Button>
       </Box>
+      
 
       {/* Main Content Area */}
       <Box
@@ -417,7 +460,6 @@ export default function MapView() {
           borderRadius: 4,
           backgroundColor: "#000",
           px: { xs: 1, md: 2 },
-          py: 3,
           mx: 0,
           mb: 5,
           overflow: "hidden",
@@ -428,7 +470,8 @@ export default function MapView() {
           sx={{ 
             textAlign: "left", 
             mb: 1, 
-            pl: 2 
+            pl: 2, 
+            mt: { xs: 2, lg: 3 },
           }}
         >
           <Typography
@@ -451,12 +494,14 @@ export default function MapView() {
         <Box
           sx={{
             display: "flex",
-            flexDirection: { xs: "column", md: "row" },
+            flexDirection: { xs: "column", lg: "row" },
             alignItems: "center",
             justifyContent: "space-between",
-            px: 3,
+            maxWidth: '800px',
+            px: 2,
             mb: 3,
             gap: 3,
+            mt: { xs: 2, lg: -4 },
           }}
         >
           {/* Left: Start Location Input & Directions Button */}
@@ -568,30 +613,97 @@ export default function MapView() {
           {/* Vertical Divider */}
           <Box
             sx={{
-              display: { xs: "none", md: "block" },
-              width: "6px",
-              alignSelf: "stretch",
-              background: `linear-gradient(to bottom, rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)`,
-              borderRadius: "3px",
+              display: { xs: 'none', lg: 'block' },
+              width: '6px',
+              height: '100%',
+              minHeight: '300px', // ensures it doesn't collapse
+              background: 'linear-gradient(to bottom, rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)',
+              borderRadius: '3px',
+              flexShrink: 0,
+              alignSelf: 'stretch',
               mx: 2,
             }}
           />
 
-          {/* Right: Venue Card or Plan Summary */}
-          <Box
+
+        {/* Right Panel with Toggle */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', lg: 'row' },
+            width: '100%',
+            flexGrow: 1,
+            mt: { xs: 2, md: 0 },
+            gap: 2,
+          }}
+        >
+          {/* Vertical Tabs */}
+          <Tabs
+            orientation="vertical"
+            value={viewMode}
+            onChange={(e, newValue) => setViewMode(newValue)}
             sx={{
-              width: "100%",
-              maxWidth: fromPlan ? 550 : 320,
-              flex: fromPlan ? 1.2 : "initial",
-              mt: { xs: 2, md: 0 },
+              borderRight: '1px solid #333',
+              minWidth: 140,
+              display: { xs: 'none', lg: 'flex' },
+              '& .MuiTabs-indicator': {
+                width: '3px',
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              },
             }}
           >
-            {fromPlan ? (
-              <CompactPlanSummary />
-            ) : (
-              selectedVenue && <VenueCard venue={selectedVenue} variant="compact" />
+            <Tab label="Current Plan" value="plan" sx={tabStyles} />
+            <Tab label="Saved Plans" value="saved" sx={tabStyles} />
+            <Tab label="Favourites" value="favourites" sx={tabStyles} />
+          </Tabs>
+
+          {/* Horizontal Tabs on mobile only */}
+          <Tabs
+            value={viewMode}
+            onChange={(e, newValue) => setViewMode(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              display: { xs: 'flex', lg: 'none' },
+              borderBottom: '1px solid #333',
+              mb: 2,
+              '& .MuiTabs-indicator': {
+                height: '3px',
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              },
+            }}
+          >
+            <Tab label="Current Plan" value="plan" sx={tabStyles} />
+            <Tab label="Saved Plans" value="saved" sx={tabStyles} />
+            <Tab label="Favourites" value="favourites" sx={tabStyles} />
+          </Tabs>
+
+
+          {/* Conditional View Content */}
+          <Box 
+            sx={{ 
+              flexGrow: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              }}
+            >
+            {viewMode === 'plan' && (
+              fromPlan ? (
+                <CompactPlanSummary />
+              ) : (
+                selectedVenue && <VenueCard venue={selectedVenue} variant="compact" />
+              )
+            )}
+
+            {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
+
+            {viewMode === 'favourites' && (
+              <Typography sx={{ color: '#888', mt: 2 }}>
+                You haven’t added any favourites yet.
+              </Typography>
             )}
           </Box>
+        </Box>
         </Box>
 
 
@@ -645,6 +757,8 @@ export default function MapView() {
             open={showDirections}
             onClose={() => setShowDirections(false)}
             directions={directions}
+            travelMode={travelMode}
+            setTravelMode={setTravelMode}
           />
         </Box>
       </Box>
