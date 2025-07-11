@@ -31,6 +31,9 @@ export function PlanProvider({ children }) {
   const [plan, setPlan] = useState([]);
   const [savedPlans, setSavedPlans] = useState([]);
   const { user } = useAuth();
+  const [selectedVenue, setSelectedVenue] = useState(null);
+  const [fromPlan, setFromPlan] = useState(false);
+
 
   useEffect(() => {
     if (user?.id) {
@@ -93,6 +96,10 @@ export function PlanProvider({ children }) {
         savePlan,
         loadPlan,
         deletePlan,
+        selectedVenue,
+        setSelectedVenue,
+        fromPlan,
+        setFromPlan
       }}
     >
       {children}

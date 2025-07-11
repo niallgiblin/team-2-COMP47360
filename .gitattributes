@@ -2,6 +2,7 @@
 backend/mvnw text eol=lf
 backend/*.cmd text eol=crlf
 
-# Track large files with Git LFS
-backend/ml-service/data/*.npy filter=lfs diff=lfs merge=lfs -text
-backend/ml-service/models/** filter=lfs diff=lfs merge=lfs -text
+# Track large files with Git LFS for the new service structure
+backend/llm-service/data/*.npy filter=lfs diff=lfs merge=lfs -text
+backend/llm-service/models/** filter=lfs diff=lfs merge=lfs -text
+backend/busyness-service/models/** filter=lfs diff=lfs merge=lfs -text

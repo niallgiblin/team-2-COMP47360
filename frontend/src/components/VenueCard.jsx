@@ -30,13 +30,6 @@ export default function VenueCard({ venue, variant = 'default' }) {
     level = priceLevels[normalizedPrice] || 0;
   }
 
-  // Debug logging
-  console.log('Venue:', venue.name);
-  console.log('Raw price:', venue.price);
-  console.log('Price type:', typeof venue.price);
-  console.log('Mapped level:', level);
-  console.log('---');
-
   const category = getCategory(venue.description || '');
   const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
@@ -57,7 +50,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: variant === 'compact' ? 320 : 'auto', // Increased height for compact
+        height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
     }}
     >
 

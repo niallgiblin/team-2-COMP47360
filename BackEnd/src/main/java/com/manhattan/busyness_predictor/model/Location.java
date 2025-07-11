@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 @Entity
 @Table(name = "location")
@@ -55,13 +56,19 @@ public class Location {
     @Column(name = "price")
     private Integer price;
 
+    @Column(name = "zone")
+    private String zone;
+
+    @Transient // This field is not persisted in the database
+    private Double similarity;
+
     // Constructors
     public Location() {
     }
 
     public Location(Double lat, Double lng, String name, String address, String uri,
             Float review, Integer numReviews, Boolean isRestaurant, Boolean isLandmark,
-            Boolean isClub, Boolean isBar, String description, Integer price) {
+            Boolean isClub, Boolean isBar, String description, Integer price, String zone) {
         this.lat = lat;
         this.lng = lng;
         this.name = name;
@@ -75,6 +82,7 @@ public class Location {
         this.isBar = isBar;
         this.description = description;
         this.price = price;
+        this.zone = zone;
     }
 
     // Getters and Setters
@@ -188,5 +196,21 @@ public class Location {
 
     public void setPrice(Integer price) {
         this.price = price;
+    }
+
+    public String getZone() {
+        return zone;
+    }
+
+    public void setZone(String zone) {
+        this.zone = zone;
+    }
+
+    public Double getSimilarity() {
+        return similarity;
+    }
+
+    public void setSimilarity(Double similarity) {
+        this.similarity = similarity;
     }
 }
