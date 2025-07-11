@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
     Card,
     CardMedia,
@@ -9,13 +9,17 @@ import {
     IconButton,
 } from '@mui/material';
 
+import { useNavigate } from 'react-router-dom';
 import { usePlan } from '../context/PlanContext';
-import { getCategory, categoryImages } from '../utils/tagMapping';
+import { categoryImages } from '../utils/tagMapping';
 import { Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Whatshot as WhatshotIcon, AttachMoney as AttachMoneyIcon, Launch as LaunchIcon } from '@mui/icons-material';
 
 
-export default function TrendingVenueCard({ venue, onGetDirections }) {
+export default function TrendingVenueCard({ venue}) {
     const [liked, setLiked] = useState(false);
+    const { setSelectedVenue, setFromPlan } = usePlan();
+    const navigate = useNavigate();
+
 
     const priceLevels = {
         'price level very cheap': 1,
@@ -37,7 +41,16 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
     const isInPlan = plan.some((v) => v.id === venue.id);
     const isPlanFull = plan.length >= 3;
 
-    const category = getCategory(venue.description || '');
+    const getCategoryFromFlags = (venue) => {
+        if (venue.isRestaurant) return 'restaurant';
+        if (venue.isBar) return 'bar';
+        if (venue.isClub) return 'club';
+        if (venue.isLandmark) return 'landmark';
+        return 'other';
+        };
+
+        const category = getCategoryFromFlags(venue);
+
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
     const handleWebsiteClick = () => {
@@ -108,18 +121,40 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
                     }}
                 >
                     <Box sx={{ mt: 0.5 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                        <Typography 
+                            variant="subtitle1" 
+                            sx={{ 
+                                fontWeight: 'bold', 
+                                mb: 0.5 
+                            }}
+                        >
                             {venue.name}
                         </Typography>
-                        <Typography variant="body2" sx={{ color: '#aaa', mb: 0.5 }}>
-                            {venue.category || 'Bar'} · {venue.neighborhood || 'NYC'}
+                        <Typography 
+                            variant="body2" 
+                            sx={{ 
+                                color: '#aaa', 
+                                mb: 0.5 
+                            }}
+                        >
+                            {category.charAt(0).toUpperCase() + category.slice(1)} · {venue.zone && venue.zone !== 'nan' ? venue.zone : 'Manhattan'}
                         </Typography>
 
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Box 
+                            sx={{ 
+                                display: 'flex', 
+                                gap: 1, 
+                                flexWrap: 'wrap' 
+                            }}
+                        >
                             <Button
                                 variant="text"
                                 size="small"
-                                onClick={() => onGetDirections(venue)}
+                                  onClick={() => {
+                                    setSelectedVenue(venue);
+                                    setFromPlan(false);
+                                    navigate("/map");
+                                }}
                                 sx={{
                                     color: '#3ABEFF',
                                     textTransform: 'none',
@@ -127,7 +162,7 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
                                     px: 0,
                                 }}
                             >
-                                Get Directions
+                                View on Map
                             </Button>
 
                             {venue.uri && (
@@ -196,8 +231,8 @@ export default function TrendingVenueCard({ venue, onGetDirections }) {
                                 borderRadius: 2,
                                 borderColor: '#FF4ECD',
                                 color: '#FF4ECD',
-                                minWidth: 105,
-                                minHeight: 22,
+                                minWidth: 140,
+                                minHeight: 32,
                                 '&:hover': {
                                     background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                                     color: '#000',

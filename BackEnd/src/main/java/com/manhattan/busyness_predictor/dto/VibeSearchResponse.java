@@ -1,6 +1,7 @@
 package com.manhattan.busyness_predictor.dto;
 
 import java.util.List;
+import java.util.Map;
 
 import com.manhattan.busyness_predictor.model.Location;
 
@@ -8,16 +9,11 @@ public class VibeSearchResponse {
 
     private List<Location> locations;
     private String explanation;
-    private String searchQuery;
-    private Double confidence;
+    private double confidence;
+    private Map<String, Double> busyness;
 
     // Constructors
     public VibeSearchResponse() {
-    }
-
-    public VibeSearchResponse(List<Location> locations, String explanation) {
-        this.locations = locations;
-        this.explanation = explanation;
     }
 
     // Getters and Setters
@@ -37,19 +33,19 @@ public class VibeSearchResponse {
         this.explanation = explanation;
     }
 
-    public String getSearchQuery() {
-        return searchQuery;
-    }
-
-    public void setSearchQuery(String searchQuery) {
-        this.searchQuery = searchQuery;
-    }
-
-    public Double getConfidence() {
+    public double getConfidence() {
         return confidence;
     }
 
-    public void setConfidence(Double confidence) {
+    public void setConfidence(double confidence) {
         this.confidence = confidence;
+    }
+
+    public Map<String, Double> getBusyness() {
+        return busyness;
+    }
+
+    public void setBusyness(Map<String, Double> busyness) {
+        this.busyness = busyness;
     }
 }

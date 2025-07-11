@@ -3,19 +3,22 @@ import PageWrapper from '../components/PageWrapper';
 import { Typography, Box } from '@mui/material';
 import TrendingVenueCard from '../components/TrendingVenueCard';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Recommendations() {
   const [venues, setVenues] = useState([]);         // Store fetched venue data
   const [loading, setLoading] = useState(true);     // Track loading state
   const [isMock, setIsMock] = useState(false);      // Flag to show if using mock fallback
   const navigate = useNavigate();
+  const { makeAuthenticatedRequest } = useAuth(); // Get the authenticated fetch helper
+
   const handleGetDirections = (venue) => {
   navigate('/map', { state: { selectedVenue: venue } });
   };
 
   // Fetch venue data from mock JSON file
   useEffect(() => {
-    fetch('http://localhost:8080/api/location/trending')
+    makeAuthenticatedRequest('http://localhost:8080/api/location/trending')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch venue data');
         return res.json();
@@ -141,4 +144,3 @@ export default function Recommendations() {
     </PageWrapper>
   );
 }
-
