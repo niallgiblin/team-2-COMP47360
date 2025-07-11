@@ -16,116 +16,111 @@ import { useNavigate } from "react-router-dom";
 import PlanSummary from '../components/PlanSummary';
 
 export default function FindMyVibe() {
-  // State hooks for user input and results
-  const [input, setInput] = useState("");           // manual text input 
-  const [results, setResults] = useState([]);       // search results (list of venues)
-  const [vibe, setVibe] = useState("");             // vibe filter
-  const [venueType, setVenueType] = useState("");   //venue type
-  const [cuisine, setCuisine] = useState("");       // cuisine filter
-  const navigate = useNavigate();                   // navigation handler
-  const [hasSearched, setHasSearched] = useState(false); // track if a search has been triggered, so the plan summary is displayed
+  // State for form inputs
+  const [input, setInput] = useState("");
+  const [vibe, setVibe] = useState("");
+  const [venueType, setVenueType] = useState("");
+  const [cuisine, setCuisine] = useState("");
+
+  // State for results and UI
+  const [allResults, setAllResults] = useState([]); // Stores all results from the API
+  const [paginatedResults, setPaginatedResults] = useState([]); // Stores results for the current page
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Pagination state
-  const [page, setPage] = useState(0);                      // current page index
-  const [pageSize, setPageSize] = useState(20);             // number of items per page
-  const [totalPages, setTotalPages] = useState(0);          // total number of pages
-  const [totalElements, setTotalElements] = useState(0);    // total number of search results
-  const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1); // Use 1-based indexing for user-facing page number
+  const [pageSize, setPageSize] = useState(10);
+  const [totalElements, setTotalElements] = useState(0);
 
-  // handle get directions button
+  // Navigation
+  const navigate = useNavigate();
+
+  // Handle navigation to map page
   const handleGetDirections = (venue) => {
-    navigate("/map", { state: { selectedVenue: venue } }); // navigates to map page
+    navigate("/map", { state: { selectedVenue: venue } });
   };
 
-  // Main search function
-  const handleSearch = useCallback(() => {
-    if (!input && !vibe && !venueType && !cuisine) {      // prevent search if no filters or text input provided
-      setResults([]);
-      setTotalPages(0);
-      setTotalElements(0);
+  // Main search function to fetch data from the backend
+  const performSearch = useCallback(async () => {
+    // Prevent search if no filters or text input are provided
+    if (!input && !vibe && !venueType && !cuisine) {
+      setAllResults([]);
+      setHasSearched(true);
       return;
     }
 
-    setIsLoading(true);                                 // start loading state
-    setHasSearched(true);                               // mark that the user has searched
+    setIsLoading(true);
+    setHasSearched(true);
 
-    // Build the request body for vibe search
     const requestBody = {
       vibeDescription: input || `${vibe} ${venueType} ${cuisine}`.trim(),
-      maxResults: pageSize * 10, // Get more results for pagination
+      maxResults: 50, // Fetch a larger set of results for client-side pagination
     };
 
-    // call backend API to perform search
-    fetch(`http://localhost:8080/vibe/search`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Search failed");
-        return res.json();
-      })
-      .then((data) => {
-        // Extract locations from the vibe search response
-        const locations = (data.locations || []).slice(0, 5); // Take top 5 only
+    try {
+      const res = await fetch(`http://localhost:8080/vibe/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
 
-        // Handle pagination manually since vibe search doesn't support it natively
-        const totalElements = locations.length;
-        const totalPages = Math.ceil(totalElements / pageSize);
-        const startIndex = page * pageSize;
-        const endIndex = startIndex + pageSize;
-        const paginatedResults = locations.slice(startIndex, endIndex);
+      if (!res.ok) throw new Error("Search failed");
+      const data = await res.json();
 
-        // save results and pagination info to state
-        const normalizedResults = paginatedResults.map((v) => ({
-          ...v,
-          latitude: v.lat,
-          longitude: v.lng,
-          address: v.addr || v.address || 'No address provided',
-          zone: v.zone || 'Unknown',
-          price: v.price || '',
-          description: v.description || '',
-        }));
+      // The API seems to cap at 5 results, so we'll work with that.
+      const locations = (data.locations || []).slice(0, 5);
 
-        // Debug logging
-        console.log('Raw vibe search results:', locations);
-        console.log('Paginated results (before normalization):', paginatedResults);
-        console.log('First normalized venue:', normalizedResults[0]);
-        console.log('Total results:', totalElements, '| Showing page:', page + 1);
+      const normalizedResults = locations.map((v, index) => ({
+        ...v,
+        id: v.id || `${v.name}-${index}`, // Ensure a unique key
+        latitude: v.lat,
+        longitude: v.lng,
+        address: v.addr || v.address || "No address provided",
+        zone: v.zone || "Unknown",
+        price: v.price || "",
+        description: v.description || "",
+      }));
 
-        setResults(normalizedResults);
+      setAllResults(normalizedResults);
+      setPage(1); // Reset to the first page on a new search
+    } catch (err) {
+      console.error("Error fetching search results:", err);
+      setAllResults([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [input, vibe, venueType, cuisine]);
 
+  // Effect for client-side pagination
+  // This runs when the full result set changes, or when page/pageSize is updated.
+  useEffect(() => {
+    const total = allResults.length;
+    setTotalElements(total);
 
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    setPaginatedResults(allResults.slice(startIndex, endIndex));
+  }, [allResults, page, pageSize]);
 
-        setTotalPages(totalPages);
-        setTotalElements(totalElements);
-      })
-      .catch((err) => {
-        console.error("Error fetching search results:", err);
-        setResults([]);
-        setTotalPages(0);
-        setTotalElements(0);
-      })
-      .finally(() => setIsLoading(false));
-  }, [input, vibe, venueType, cuisine, page, pageSize]);
+  // Form submission handler
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    performSearch();
+  };
 
-  // Handle page change
+  // Handle page change from Pagination component
   const handlePageChange = (event, newPage) => {
-    setPage(newPage - 1); // MUI Pagination uses 1-based index
+    setPage(newPage);
   };
 
   // Handle page size change
   const handlePageSizeChange = (e) => {
-    setPageSize(e.target.value);
-    setPage(0); // Reset to first page when changing size
+    setPageSize(parseInt(e.target.value, 10));
+    setPage(1); // Reset to first page
   };
 
-  // Trigger search when filters or pagination changes
-  useEffect(() => {
-    handleSearch();
-  }, [handleSearch]);
+  const totalPages = Math.ceil(totalElements / pageSize);
 
   return (
     <PageWrapper fullWidth>
@@ -153,10 +148,7 @@ export default function FindMyVibe() {
 
         <Box
           component="form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setPage(0); // Reset to first page on new search
-          }}
+          onSubmit={handleFormSubmit}
           sx={{
             display: "flex",
             gap: 2,
@@ -184,6 +176,7 @@ export default function FindMyVibe() {
           <Button
             variant="contained"
             type="submit"
+            disabled={isLoading}
             sx={{
               background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
               height: "56px",
@@ -200,7 +193,7 @@ export default function FindMyVibe() {
               },
             }}
           >
-            Find My Vibe
+            {isLoading ? "Searching..." : "Find My Vibe"}
           </Button>
         </Box>
 
@@ -293,100 +286,66 @@ export default function FindMyVibe() {
         </Box>
 
         {isLoading ? (
-          <Typography align="center" sx={{ color: "#aaa", mb: 4 }}>
+          <Typography align="center" sx={{ color: "#aaa", my: 4 }}>
             Loading...
           </Typography>
-        ) : results.length === 0 && (input || vibe || venueType || cuisine) ? (
-          <Typography align="center" sx={{ color: "#aaa", mb: 4 }}>
-            No matching venues found.
+        ) : hasSearched && paginatedResults.length === 0 ? (
+          <Typography align="center" sx={{ color: "#aaa", my: 4 }}>
+            No matching venues found. Try a different vibe!
           </Typography>
         ) : null}
 
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            alignItems: 'flex-start',
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: "flex-start",
             gap: 3,
           }}
         >
-          {/* Left: Sidebar PlanSummary */}
-          {hasSearched && (
-          <Box
-            sx={{
-              width: { xs: '100%', md: 320 },
-              position: { md: 'sticky' },
-              top: { md: 80 },
-              alignSelf: 'flex-start',
-            }}
-          >
-            <PlanSummary />
-          </Box>
-          )}
-
-          {/* Right: Venue list */}
-          <Box sx={{ flex: 1 }}>
-            {results.map((venue, index) => (
+          <Box sx={{ flex: 3, width: "100%" }}>
+            {paginatedResults.map((venue) => (
               <TrendingVenueCard
                 key={venue.id}
                 venue={venue}
-                rank={index + 1}
-                onGetDirections={handleGetDirections}
-                onClick={() =>
-                  navigate("/map-view", { state: { selectedVenue: venue } })
-                }
+                onGetDirections={() => handleGetDirections(venue)}
               />
             ))}
+            {totalPages > 1 && (
+              <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", mt: 4, gap: 2, flexWrap: 'wrap' }}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={handlePageChange}
+                  color="primary"
+                  sx={{
+                    "& .MuiPaginationItem-root": { color: "white" },
+                    "& .Mui-selected": {
+                      background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+                      color: "black",
+                    },
+                  }}
+                />
+                <FormControl size="small" sx={{ minWidth: 120, backgroundColor: 'white', borderRadius: 1 }}>
+                  <InputLabel id="page-size-label">Per Page</InputLabel>
+                  <Select
+                    labelId="page-size-label"
+                    value={pageSize}
+                    label="Per Page"
+                    onChange={handlePageSizeChange}
+                  >
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={20}>20</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
+          </Box>
+          <Box sx={{ flex: 2, width: "100%", position: "sticky", top: "20px" }}>
+            <PlanSummary />
           </Box>
         </Box>
-
-
-
-        {totalPages > 1 && (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              mt: 3,
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            <Pagination
-              count={totalPages}
-              page={page + 1}
-              onChange={handlePageChange}
-              color="primary"
-              showFirstButton
-              showLastButton
-              sx={{ my: 2 }}
-            />
-            <FormControl sx={{ minWidth: 120, mt: 2 }}>
-              <InputLabel>Items per page</InputLabel>
-              <Select
-                value={pageSize}
-                label="Items per page"
-                onChange={handlePageSizeChange}
-              >
-                <MenuItem value={10}>10</MenuItem>
-                <MenuItem value={20}>20</MenuItem>
-                <MenuItem value={50}>50</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-        )}
-
-        {totalElements > 0 && (
-          <Typography
-            variant="body2"
-            align="center"
-            sx={{ color: "#aaa", mt: 2 }}
-          >
-            Showing {page * pageSize + 1}-
-            {Math.min((page + 1) * pageSize, totalElements)} of {totalElements}{" "}
-            venues
-          </Typography>
-        )}
       </Box>
     </PageWrapper>
   );
