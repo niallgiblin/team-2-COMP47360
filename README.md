@@ -90,7 +90,8 @@ docker-compose up --build
 # Stop all containers
 docker-compose down
 
-# Stop and remove all data (fresh start)
+# Stop and remove all data (fresh start).
+# Use this if you have issues with database initialization or want a clean slate.
 docker-compose down -v
 ```
 
