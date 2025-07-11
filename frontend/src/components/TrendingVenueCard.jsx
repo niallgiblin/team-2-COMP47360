@@ -28,7 +28,6 @@ export default function TrendingVenueCard({ venue}) {
         'price level expensive': 4,
         'price level very expensive': 5,
     };
-    
 
     let level = 0;
     if (typeof venue.price === 'number') {

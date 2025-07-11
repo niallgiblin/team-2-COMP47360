@@ -13,7 +13,6 @@ export default function PlanSummary() {
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [tempPlanName, setTempPlanName] = useState('');
 
-
   const [savedDialogOpen, setSavedDialogOpen] = useState(false);
   const [lastSavedPlan, setLastSavedPlan] = useState(null);
 
@@ -59,17 +58,6 @@ export default function PlanSummary() {
       }}
     >
       <Box>
-        <Typography
-          variant="h6"
-          sx={{
-            color: '#fff',
-            fontWeight: 'bold',
-            textAlign: { xs: 'center', md: 'left' },
-          }}
-        >
-          {user?.firstName ? `Plan for ${user.firstName}` : 'My Plan'}
-        </Typography>
-
         <Typography
           variant="body2"
           sx={{
