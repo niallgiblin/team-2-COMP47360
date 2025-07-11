@@ -47,6 +47,7 @@ public class VibeController {
             result.put("query", request.getVibeDescription());
             result.put("locations", response.getLocations());
             result.put("llmExplanation", response.getExplanation());
+            result.put("busyness", response.getBusyness());
             result.put("totalResults", response.getLocations().size());
 
             return ResponseEntity.ok(result);
@@ -54,6 +55,49 @@ public class VibeController {
             logger.error("Error during vibe search for query: {}", request.getVibeDescription(), e);
             Map<String, Object> error = new HashMap<>();
             error.put("error", "An internal server error occurred during the search.");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @GetMapping("/trending")
+    public ResponseEntity<Map<String, Object>> getTrendingWithBusyness() {
+        try {
+            VibeSearchResponse response = vibeService.getTrendingWithBusyness();
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "Trending locations fetched successfully");
+            result.put("locations", response.getLocations());
+            result.put("llmExplanation", response.getExplanation());
+            result.put("busyness", response.getBusyness());
+            result.put("totalResults", response.getLocations().size());
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error fetching trending locations", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "An internal server error occurred while fetching trending locations.");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @GetMapping("/map-data")
+    public ResponseEntity<Map<String, Object>> getMapData() {
+        try {
+            VibeSearchResponse response = vibeService.getMapData();
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "Map data fetched successfully");
+            result.put("locations", response.getLocations());
+            result.put("busyness", response.getBusyness());
+            result.put("totalResults", response.getLocations().size());
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error fetching map data", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "An internal server error occurred while fetching map data.");
             error.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
