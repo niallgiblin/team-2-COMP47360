@@ -160,13 +160,22 @@ export const AuthProvider = ({ children }) => {
   // Update user profile
   const updateProfile = async (userId, updateData) => {
     try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/auth/profile/${userId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(updateData)
-        }
-      );
+      const isFormData = updateData instanceof FormData;
+
+      const response = await fetch(`${API_BASE_URL}/auth/profile/${userId}`, {
+        method: 'PUT',
+        body: isFormData ? updateData : JSON.stringify(updateData),
+        credentials: 'include',
+        headers: isFormData
+          ? {
+              Authorization: `Bearer ${token}`,
+              // No 'Content-Type': let browser set correct boundary
+            }
+          : {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+      });
 
       const data = await response.json();
 
@@ -184,6 +193,7 @@ export const AuthProvider = ({ children }) => {
       throw error;
     }
   };
+
 
   // Logout function
   const logout = () => {
