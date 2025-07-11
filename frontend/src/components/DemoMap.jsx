@@ -48,7 +48,7 @@ export default function DemoMap({
   const [routeKey, setRouteKey] = useState(0);
   const [activeZoneVenues, setActiveZoneVenues] = useState([]);
   const allVenuesRef = useRef([]);
-  const { selectedVenue } = usePlan(); // ⛔️ don't use fromPlan from context anymore
+  const { selectedVenue } = usePlan(); 
 
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
@@ -252,7 +252,7 @@ export default function DemoMap({
     ? activeZoneVenues
     : selectedVenue
     ? [selectedVenue]
-    : [];
+    : venues;
 
   return (
     <Box sx={{ width: "100%", height: "100%" }}>
@@ -337,7 +337,11 @@ export default function DemoMap({
           />
         )}
         {showDirections && routeCoords.length > 0 && (
-          <Polyline positions={routeCoords} color="#3ABEFF" weight={4} />
+          <Polyline 
+            positions={routeCoords} 
+            color="#FF4ECD" 
+            weight={4}
+          />
         )}
       </MapContainer>
     </Box>

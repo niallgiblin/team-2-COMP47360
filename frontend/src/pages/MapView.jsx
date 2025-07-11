@@ -21,6 +21,7 @@ import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
 import CompactSavedPlans from '../components/CompactSavedPlans';
+import { DateTime } from "luxon";
 
 // Data and context
 import mockVenues from "../data/mockVenues";
@@ -30,6 +31,17 @@ import { usePlan } from "../context/PlanContext";
 import polyline from "@mapbox/polyline";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
+
+const generateNext12Hours = () => {
+  const timestamps = [];
+
+  for (let i = 0; i < 12; i++) {
+    const dt = DateTime.now().setZone("America/New_York").plus({ hours: i });
+    timestamps.push(dt.toISO()); // ISO string in NY time
+  }
+
+  return timestamps;
+};
 
 export default function MapView() {
 
@@ -87,7 +99,7 @@ export default function MapView() {
   // State for map mode (live vs. forecast)
   const [mode, setMode] = useState("live");
   const [predictionData, setPredictionData] = useState([]);
-  const [selectedTimestamp, setSelectedTimestamp] = useState(null);
+  const [selectedTimestamp, setSelectedTimestamp] = useState(generateNext12Hours()[0]);
 
   // State for route directions
   const [travelMode, setTravelMode] = useState("WALK");
@@ -217,13 +229,7 @@ export default function MapView() {
           ? manhattanZoneIds
           : zoneData.features.map((f) => f.properties.LocationID);
 
-      const timestamps = [
-        "2025-07-04T18:00:00Z",
-        "2025-07-04T19:00:00Z",
-        "2025-07-04T20:00:00Z",
-        "2025-07-04T21:00:00Z",
-        "2025-07-04T22:00:00Z",
-      ];
+      const timestamps = generateNext12Hours();
 
       // Generate predictions for every Manhattan zone
       return zonesToUse.map((zoneId) => ({
@@ -363,11 +369,21 @@ export default function MapView() {
   };
 
   // Refetch directions when mode changes (walk/ public transport)
-  useEffect(() => {
-    if (showDirections && directions.length > 0) {
-      handleGetDirections();
-    }
-  }, [travelMode]);
+useEffect(() => {
+  if (!showDirections) return;
+
+  const hasValidStart = userLocation || (fromPlan && plan.length > 0);
+  const hasValidDestination = selectedVenue || (fromPlan && plan.length > 0);
+
+  const venuesReady = fromPlan ? plan.length > 0 : selectedVenue;
+  const zonesReady = zoneData !== null;
+  const allReady = hasValidStart && hasValidDestination && venuesReady && zonesReady;
+
+  if (allReady) {
+    handleGetDirections();
+  }
+}, [travelMode, showDirections, userLocation, selectedVenue, plan, zoneData]);
+
 
   
   if (loading) {
@@ -593,7 +609,6 @@ export default function MapView() {
               sx={{
                 width: "100%",
                 maxWidth: "700px",
-                mt: 2,
                 px: 1,
               }}
             >

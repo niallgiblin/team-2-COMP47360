@@ -16,6 +16,9 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import logo from '../assets/urban-gala-logo.svg';
 import { useAuth } from '../context/AuthContext';
+import Badge from '@mui/material/Badge';
+import { useFriendRequests } from '../context/FriendRequestContext'; 
+
 
 const navItems = [
     { label: 'Home', to: '/' },
@@ -27,7 +30,9 @@ const navItems = [
 
 export default function NavBar() {
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const { isAuthenticated, user, logout } = useAuth();
+    const { isAuthenticated, logout } = useAuth();
+    const { pendingRequests } = useFriendRequests();
+
 
     return (
         <>
@@ -140,7 +145,29 @@ export default function NavBar() {
                             ))}
 
                             {isAuthenticated ? (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Box 
+                                    sx={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 2 
+                                    }}
+                                >
+                                
+                                    {/* Profile icon with friend request notification*/}
+                                    
+                                    {/* Friend request notification */}
+                                    <Badge
+                                        badgeContent={pendingRequests.length}
+                                        color="secondary"
+                                        overlap="circular"
+                                        invisible={pendingRequests.length === 0}
+                                        sx={{
+                                        '& .MuiBadge-badge': {
+                                        backgroundColor: '#FF4ECD',
+                                        color: 'white',
+                                        }
+                                        }}
+                                    >
                                     <IconButton
                                         component={Link}
                                         to="/profile"
@@ -148,6 +175,10 @@ export default function NavBar() {
                                     >
                                         <AccountCircleIcon fontSize="medium" />
                                     </IconButton>
+                                    </Badge>
+
+                                    
+                                    {/* Notification bell */}
                                     <IconButton
                                         component={Link}
                                         to="/notifications"
@@ -155,6 +186,7 @@ export default function NavBar() {
                                     >
                                         <NotificationsIcon fontSize="medium" />
                                     </IconButton>
+                                    
                                     <Button
                                         onClick={logout}
                                         sx={{
@@ -267,11 +299,35 @@ export default function NavBar() {
                                 component={Link}
                                 to="/profile"
                                 onClick={() => setDrawerOpen(false)}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                                sx={{ 
+                                    color: '#FFFFFF', 
+                                    py: 1.5, 
+                                    borderBottom: '1px solid #333' 
+                                }}
                             >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box 
+                                    sx={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 1 
+                                    }}
+                                >
+                                    <Badge
+                                    badgeContent={pendingRequests.length}
+                                    color="secondary"
+                                    overlap="circular"
+                                    invisible={pendingRequests.length === 0}
+                                    sx={{
+                                        '& .MuiBadge-badge': {
+                                        backgroundColor: '#FF4ECD',
+                                        color: 'white',
+                                        }
+                                        }}
+                                    >
                                     <AccountCircleIcon />
+                                    </Badge>
                                     <Typography sx={drawerLinkStyles}>Profile</Typography>
+
                                 </Box>
                             </ListItem>
 
@@ -280,7 +336,11 @@ export default function NavBar() {
                                 component={Link}
                                 to="/notifications"
                                 onClick={() => setDrawerOpen(false)}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                                sx={{ 
+                                    color: '#FFFFFF', 
+                                    py: 1.5, 
+                                    borderBottom: '1px solid #333' 
+                                }}
                             >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <NotificationsIcon />
