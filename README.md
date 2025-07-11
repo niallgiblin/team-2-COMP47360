@@ -1,60 +1,74 @@
-# team-2-COMP47360
+# Urban Gala
 
-# Urban Gala Application - Docker Setup Guide
+Urban Gala is a full-stack web application designed to help users discover educational, social, and cultural locations around Manhattan. It features an interactive map with live and forecasted busyness levels, personalized recommendations based on user-described "vibes", and an AI-powered chatbot for conversational search.
 
-## Prerequisites
+## Key Features
 
-Before you begin, make sure you have the following installed on your computer:
+-   **Interactive Map:** Visualize venues across Manhattan with real-time busyness data.
+-   **Vibe-Based Search:** Use natural language to find locations that match your desired atmosphere (e.g., "a quiet cafe with good coffee").
+-   **AI Chatbot:** Engage in a conversation to get location suggestions and information.
+-   **Itinerary Planning:** Create and save custom plans for your outings.
+-   **User Authentication & Profiles:** Sign up, log in, and manage your profile.
 
-### 1. Install Docker Desktop
+## Architecture Overview
 
-**Windows:**
-1. Download Docker Desktop from [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
-2. Run the installer and follow the setup wizard
-3. Restart your computer when prompted
-4. Open Docker Desktop and complete the initial setup
+The application is built on a microservice architecture, orchestrated with Docker Compose.
 
-**Mac:**
-1. Download Docker Desktop from [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
-2. Drag Docker.app to your Applications folder
-3. Launch Docker Desktop from Applications
-4. Complete the initial setup
+-   **`frontend`**: A React application built with Vite, using Material-UI for components.
+-   **`backend`**: A Java Spring Boot application that serves as the main API gateway, handling user authentication, plans, and core business logic.
+-   **`llm-service`**: A Python Flask microservice that handles:
+    -   Semantic search for the "Find My Vibe" feature.
+    -   Orchestration for the AI Chatbot, communicating with the Hugging Face API.
+-   **`busyness-service`**: A Python Flask microservice that predicts and serves location busyness data.
+-   **`db`**: A MySQL database for persistent storage.
 
-### 2. Verify Installation
+---
 
-Open your terminal/command prompt and run:
+## Getting Started
+
+Follow these instructions to set up and run the project locally.
+
+### Prerequisites
+
+-   **Docker Desktop:** Download and install. This includes Docker Compose.
+-   **Git LFS:** Required for handling large model files. Install from here.
+
+### 1. Clone the Repository
+
+First, install Git LFS on your machine to ensure the machine learning models are downloaded correctly.
+
 ```bash
-docker --version
-docker-compose --version
-```
+# Install Git LFS (once per machine)
+git lfs install
 
-You should see version numbers for both commands.
-
-### 3. Install Git LFS (Large File Storage)
-
-This project uses Git LFS to manage large files, such as machine learning models. You must install it to clone the repository correctly.
-
-1.  **Install Git LFS.** Follow the instructions at [https://git-lfs.github.com](https://git-lfs.github.com).
-    -   On macOS with Homebrew: `brew install git-lfs`
-    -   On Windows: Download and run the installer from the website.
-
-2.  **Set up Git LFS from the project root directory.** Run this command once per machine:
-    ```bash
-    git lfs install
-    ```
-
-## Getting the Application Running
-
-### Step 1: Clone the Repository
-```bash
+# Clone the repository
 git clone https://github.com/niallgiblin/team-2-COMP47360
 cd team-2-COMP47360
 ```
+*Note: If you cloned the repository before installing Git LFS, you may need to run `git lfs pull` inside the project directory to download the model files.*
 
-### Step 2: Start the Application
-In your terminal, navigate to the project root directory and run:
+### 2. Configure Environment Variables
 
-```zsh
+The application requires API keys to function correctly. You'll need to create a `.env` file in the project root.
+
+1.  **Create the `.env` file** by copying the example file:
+    ```bash
+    cp .env.example .env
+    ```
+
+2.  **Edit the `.env` file** and add your keys:
+    ```
+    VITE_GOOGLE_API_KEY=AIzaSy...
+    HF_TOKEN=hf_...
+    ```
+    -   `VITE_GOOGLE_API_KEY`: Required for Google Maps. Get a key from the Google Cloud Console. You will need to enable the "Maps JavaScript API" and the "Routes API".
+    -   `HF_TOKEN`: Required for the AI Chatbot. Get a free "read" access token from your Hugging Face account settings.
+
+### 3. Build and Run the Application
+
+With Docker Desktop running, start all services using Docker Compose.
+
+```bash
 docker-compose up --build
 ```
 

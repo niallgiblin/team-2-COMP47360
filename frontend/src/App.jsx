@@ -11,6 +11,7 @@ import About from './pages/About';
 import Skyline from './components/Skyline';
 import Footer from './components/Footer';
 import Login from './pages/Login.jsx';
+import AIChatWidget from './components/AIChatWidget';
 import Signup from './pages/Signup.jsx';
 
 // Import new authentication components
@@ -40,6 +41,7 @@ function AppLayout({ children }) {
         <>
           <Skyline />
           <Footer />
+          <AIChatWidget />
         </>
       )}
     </Box>
@@ -127,4 +129,3 @@ function AppContent() {
 
 
 export default App;
-
