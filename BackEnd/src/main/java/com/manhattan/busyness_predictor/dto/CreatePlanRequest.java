@@ -1,29 +1,26 @@
 package com.manhattan.busyness_predictor.dto;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 public class CreatePlanRequest {
-    private LocalDateTime date;
+    private String name;
     private List<Integer> locationIds;
-    private List<LocalDateTime> locationTimes;
 
     public CreatePlanRequest() {
     }
 
-    public CreatePlanRequest(LocalDateTime date, List<Integer> locationIds, List<LocalDateTime> locationTimes) {
-        this.date = date;
+    public CreatePlanRequest(String name, List<Integer> locationIds) {
+        this.name = name;
         this.locationIds = locationIds;
-        this.locationTimes = locationTimes;
     }
 
     // Getters and Setters
-    public LocalDateTime getDate() {
-        return date;
+    public String getName() {
+        return name;
     }
 
-    public void setDate(LocalDateTime date) {
-        this.date = date;
+    public void setName(String name) {
+        this.name = name;
     }
 
     public List<Integer> getLocationIds() {
@@ -32,13 +29,5 @@ public class CreatePlanRequest {
 
     public void setLocationIds(List<Integer> locationIds) {
         this.locationIds = locationIds;
-    }
-
-    public List<LocalDateTime> getLocationTimes() {
-        return locationTimes;
-    }
-
-    public void setLocationTimes(List<LocalDateTime> locationTimes) {
-        this.locationTimes = locationTimes;
     }
 }
