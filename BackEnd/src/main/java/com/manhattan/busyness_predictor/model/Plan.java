@@ -1,13 +1,9 @@
 package com.manhattan.busyness_predictor.model;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "plan")
@@ -17,32 +13,33 @@ public class Plan {
     @Column(name = "id")
     private Integer id;
 
-    @Column(name = "date")
-    private LocalDateTime date;
+    @Column(name = "name", nullable = false)
+    private String name;
 
-    @Column(name = "created_by")
+    @Column(name = "created_by", nullable = false)
     private Integer createdBy;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "location_1")
-    private Integer loc1;
-
-    @Column(name = "location_2")
-    private Integer loc2;
-
-    @Column(name = "location_3")
-    private Integer loc3;
+    @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<PlanVenue> venues;
 
     // Constructors
     public Plan() {
     }
 
-    public Plan(LocalDateTime date, Integer createdBy, LocalDateTime createdAt) {
-        this.date = date;
+    public Plan(String name, Integer createdBy, LocalDateTime createdAt) {
+        this.name = name;
         this.createdBy = createdBy;
         this.createdAt = createdAt;
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
     }
 
     // Getters and Setters
@@ -54,12 +51,12 @@ public class Plan {
         this.id = id;
     }
 
-    public LocalDateTime getDate() {
-        return date;
+    public String getName() {
+        return name;
     }
 
-    public void setDate(LocalDateTime date) {
-        this.date = date;
+    public void setName(String name) {
+        this.name = name;
     }
 
     public Integer getCreatedBy() {
@@ -78,27 +75,11 @@ public class Plan {
         this.createdAt = createdAt;
     }
 
-    public Integer getLoc1() {
-        return loc1;
+    public List<PlanVenue> getVenues() {
+        return venues;
     }
 
-    public void setLoc1(Integer loc1) {
-        this.loc1 = loc1;
-    }
-
-    public Integer getLoc2() {
-        return loc2;
-    }
-
-    public void setLoc2(Integer loc2) {
-        this.loc2 = loc2;
-    }
-
-    public Integer getLoc3() {
-        return loc3;
-    }
-
-    public void setLoc3(Integer loc3) {
-        this.loc3 = loc3;
+    public void setVenues(List<PlanVenue> venues) {
+        this.venues = venues;
     }
 }
