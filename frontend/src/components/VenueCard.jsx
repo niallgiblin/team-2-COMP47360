@@ -51,6 +51,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
     <Card
     sx={{
         position: 'relative',
+        overflow: 'visible',
         color: '#fff',
         backgroundColor: '#222',
         boxSizing: 'border-box',
@@ -65,19 +66,24 @@ export default function VenueCard({ venue, variant = 'default' }) {
 
       {/* remove from plan x button */}
       {isInPlan && (
-      <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 2 }}>
+      <Box sx={{ position: 'absolute', top: -12, right: -4, zIndex: 2 }}>
         <Tooltip title="Remove from Plan" arrow>
           <Button
             onClick={() => removeFromPlan(venue.id)}
             sx={{
-              minWidth: 'auto',
-              padding: 0.5,
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              color: '#FF4ECD',
+              minWidth: 0,
+              width: 32,
+              height: 32,
+              padding: 0,
+              background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+              color: '#fff',
               fontSize: '1.5rem',
               lineHeight: 1,
               fontWeight: 'bold',
               borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               '&:hover': {
                 backgroundColor: 'rgba(0,0,0,0.9)',
               },
@@ -86,6 +92,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
             ×
           </Button>
         </Tooltip>
+
       </Box>
     )}
 
