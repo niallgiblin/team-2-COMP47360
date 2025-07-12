@@ -113,44 +113,6 @@ public class LocationController {
         return ResponseEntity.ok(trending);
     }
 
-    // Add to favourites - alter user profile with API
-    @PostMapping("/{id}/favourite")
-    public ResponseEntity<Map<String, String>> addToFavourites(
-            @PathVariable Integer id,
-            @RequestParam Integer userId) {
-
-        try {
-            favouriteService.addToFavourites(userId, id);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Location added to favourites successfully");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    // Remove from favourites
-    @DeleteMapping("/{id}/favourite")
-    public ResponseEntity<Map<String, String>> removeFromFavourites(
-            @PathVariable Integer id,
-            @RequestParam Integer userId) {
-
-        try {
-            favouriteService.removeFromFavourites(userId, id);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Location removed from favourites successfully");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
     // Leave a review - Simple post request to update Locations DB
     @PostMapping("/{id}/review")
     public ResponseEntity<Map<String, Object>> leaveReview(
@@ -210,20 +172,6 @@ public class LocationController {
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    // Get user's favourite locations
-    @GetMapping("/favourite")
-    public ResponseEntity<?> getFavouriteLocations(@RequestParam Integer userId) {
-        try {
-            List<Location> favourites = favouriteService.getFavouriteLocations(userId);
-            return ResponseEntity.ok(favourites);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Failed to retrieve favourite locations.");
-            error.put("message", e.getMessage());
-            return ResponseEntity.internalServerError().body(error);
         }
     }
 
