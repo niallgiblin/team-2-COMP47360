@@ -12,14 +12,22 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { usePlan } from '../context/PlanContext';
 import { categoryImages } from '../utils/tagMapping';
-import { Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Whatshot as WhatshotIcon, AttachMoney as AttachMoneyIcon, Launch as LaunchIcon } from '@mui/icons-material';
+import {
+    Favorite as FavoriteIcon,
+    FavoriteBorder as FavoriteBorderIcon,
+    Whatshot as WhatshotIcon,
+    AttachMoney as AttachMoneyIcon,
+    Launch as LaunchIcon
+} from '@mui/icons-material';
 
+import { useLikes } from '../context/LikeContext'; // for real like data
 
-export default function TrendingVenueCard({ venue}) {
-    const [liked, setLiked] = useState(false);
+export default function TrendingVenueCard({ venue, showLikeButton = true }) {
+    const { likedVenues, toggleLike } = useLikes();
+    const isLiked = likedVenues.some((v) => v.id === venue.id);
+
     const { setSelectedVenue, setFromPlan } = usePlan();
     const navigate = useNavigate();
-
 
     const priceLevels = {
         'price level very cheap': 1,
@@ -47,10 +55,9 @@ export default function TrendingVenueCard({ venue}) {
         if (venue.isClub) return 'club';
         if (venue.isLandmark) return 'landmark';
         return 'other';
-        };
+    };
 
-        const category = getCategoryFromFlags(venue);
-
+    const category = getCategoryFromFlags(venue);
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
     const handleWebsiteClick = () => {
@@ -61,27 +68,33 @@ export default function TrendingVenueCard({ venue}) {
 
     return (
         <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', mt: 4 }}>
-            <IconButton
-                onClick={() => setLiked(!liked)}
-                sx={{
-                    position: 'absolute',
-                    top: -12,
-                    right: 12,
-                    zIndex: 2,
-                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                    color: '#fff',
-                    width: 32,
-                    height: 32,
-                    padding: 0,
-                    borderRadius: '50%',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                    '&:hover': {
-                        background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
-                    },
-                }}
-            >
-                {liked ? <FavoriteIcon sx={{ fontSize: 16 }} /> : <FavoriteBorderIcon sx={{ fontSize: 16 }} />}
-            </IconButton>
+            {showLikeButton && (
+                <IconButton
+                    onClick={() => toggleLike(venue)}
+                    sx={{
+                        position: 'absolute',
+                        top: -12,
+                        right: 12,
+                        zIndex: 2,
+                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                        color: '#fff',
+                        width: 32,
+                        height: 32,
+                        padding: 0,
+                        borderRadius: '50%',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                        '&:hover': {
+                            background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+                        },
+                    }}
+                >
+                    {isLiked ? (
+                        <FavoriteIcon sx={{ fontSize: 16 }} />
+                    ) : (
+                        <FavoriteBorderIcon sx={{ fontSize: 16 }} />
+                    )}
+                </IconButton>
+            )}
 
             <Card
                 sx={{
@@ -121,36 +134,36 @@ export default function TrendingVenueCard({ venue}) {
                     }}
                 >
                     <Box sx={{ mt: 0.5 }}>
-                        <Typography 
-                            variant="subtitle1" 
-                            sx={{ 
-                                fontWeight: 'bold', 
-                                mb: 0.5 
+                        <Typography
+                            variant="subtitle1"
+                            sx={{
+                                fontWeight: 'bold',
+                                mb: 0.5,
                             }}
                         >
                             {venue.name}
                         </Typography>
-                        <Typography 
-                            variant="body2" 
-                            sx={{ 
-                                color: '#aaa', 
-                                mb: 0.5 
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: '#aaa',
+                                mb: 0.5,
                             }}
                         >
                             {category.charAt(0).toUpperCase() + category.slice(1)} · {venue.zone && venue.zone !== 'nan' ? venue.zone : 'Manhattan'}
                         </Typography>
 
-                        <Box 
-                            sx={{ 
-                                display: 'flex', 
-                                gap: 1, 
-                                flexWrap: 'wrap' 
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                gap: 1,
+                                flexWrap: 'wrap',
                             }}
                         >
                             <Button
                                 variant="text"
                                 size="small"
-                                  onClick={() => {
+                                onClick={() => {
                                     setSelectedVenue(venue);
                                     setFromPlan(false);
                                     navigate("/map");
