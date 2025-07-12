@@ -15,7 +15,7 @@ import { categoryImages } from '../utils/tagMapping';
 import { Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Whatshot as WhatshotIcon, AttachMoney as AttachMoneyIcon, Launch as LaunchIcon } from '@mui/icons-material';
 
 
-export default function TrendingVenueCard({ venue}) {
+export default function TrendingVenueCard({ venue, busynessMap = [] }) {
     const [liked, setLiked] = useState(false);
     const { setSelectedVenue, setFromPlan } = usePlan();
     const navigate = useNavigate();
@@ -53,11 +53,30 @@ export default function TrendingVenueCard({ venue}) {
         const category = getCategoryFromFlags(venue);
 
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
+    
 
     const handleWebsiteClick = () => {
         if (venue.uri) {
             window.open(venue.uri, '_blank');
         }
+    };
+
+    // function to get busyness data (based on zone)
+    const getBusynessLabel = () => {
+        if (!venue.zone || venue.zone === 'nan') return null;
+
+        const zoneKey = String(venue.zoneId);
+        const value = busynessMap[zoneKey];
+
+        console.warn("Zone:", zoneKey, "→ busyness:", value);
+
+        if (typeof value !== 'number') return null;
+
+        const percent = value * 100;
+        if (percent >= 75) return 'Very Busy';
+        if (percent >= 50) return 'Busy';
+        if (percent >= 25) return 'Moderate';
+        return 'Quiet';
     };
 
     return (
@@ -194,18 +213,19 @@ export default function TrendingVenueCard({ venue}) {
                             mt: 0.5,
                         }}
                     >
+                        {getBusynessLabel() && (
                         <Chip
                             icon={<WhatshotIcon sx={{ color: '#fff' }} />}
-                            label="Trending"
+                            label={getBusynessLabel()}
                             size="small"
                             sx={{
-                                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                                color: '#fff',
-                                fontWeight: 600,
-                                height: 24,
+                            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                            color: '#fff',
+                            fontWeight: 600,
+                            height: 24,
                             }}
                         />
-
+                        )}
                         <Box sx={{ display: 'flex', gap: '0.5px' }}>
                             {[1, 2, 3, 4, 5].map((i) => (
                                 <AttachMoneyIcon

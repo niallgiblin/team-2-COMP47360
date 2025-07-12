@@ -13,7 +13,9 @@ import {
 import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
-import PlanSummary from '../components/PlanSummary';
+import PlanSummary from "../components/PlanSummary";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { point as turfPoint } from "@turf/helpers";
 
 export default function FindMyVibe() {
   // State hooks for user input and results
@@ -32,14 +34,39 @@ export default function FindMyVibe() {
   const [totalElements, setTotalElements] = useState(0);    // total number of search results
   const [isLoading, setIsLoading] = useState(false);
 
+  // state for zone data
+  const [zoneData, setZoneData] = useState(null);
+  // Busyness state
+  const [busynessMap, setBusynessMap] = useState({});
+
+  useEffect(() => {
+    fetch("/manhattanZones.geojson")
+      .then((res) => res.json())
+      .then((data) => setZoneData(data))
+      .catch((err) => {
+        console.error("Failed to load zone data:", err);
+      });
+  }, []);
+
+  useEffect(() => {
+    fetch("http://localhost:8080/vibe/map-data")
+      .then((res) => res.json())
+      .then((data) => {
+        setBusynessMap(data.busyness || {});
+      })
+      .catch((err) => {
+        console.error("Failed to fetch map-data:", err);
+      });
+  }, []);
+
   // handle get directions button
   const handleGetDirections = (venue) => {
     navigate("/map", { state: { selectedVenue: venue } }); // navigates to map page
   };
-
+  
   // Main search function
   const handleSearch = useCallback(() => {
-    if (!input && !vibe && !venueType && !cuisine) {      // prevent search if no filters or text input provided
+    if (!input && !vibe && !venueType && !cuisine) {    // prevent search if no filters or text input provided
       setResults([]);
       setTotalPages(0);
       setTotalElements(0);
@@ -55,52 +82,63 @@ export default function FindMyVibe() {
       maxResults: pageSize * 10, // Get more results for pagination
     };
 
-    // call backend API to perform search
+    // Perform the vibe search
     fetch(`http://localhost:8080/vibe/search`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json",                     // tell the server we're using JSON
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(requestBody),                        // convert request body to JSON string
     })
       .then((res) => {
         if (!res.ok) throw new Error("Search failed");
         return res.json();
       })
       .then((data) => {
-        // Extract locations from the vibe search response
-        const locations = (data.locations || []).slice(0, 5); // Take top 5 only
+        const locations = (data.locations || []).slice(0, 5);       //extract up to 5 top-matching locations
 
-        // Handle pagination manually since vibe search doesn't support it natively
-        const totalElements = locations.length;
-        const totalPages = Math.ceil(totalElements / pageSize);
+        const totalElements = locations.length;                      // pagination logic - total number of venues returned
+        const totalPages = Math.ceil(totalElements / pageSize);      
         const startIndex = page * pageSize;
         const endIndex = startIndex + pageSize;
         const paginatedResults = locations.slice(startIndex, endIndex);
 
-        // save results and pagination info to state
-        const normalizedResults = paginatedResults.map((v) => ({
-          ...v,
-          latitude: v.lat,
-          longitude: v.lng,
-          address: v.addr || v.address || 'No address provided',
-          zone: v.zone || 'Unknown',
-          price: v.price || '',
-          description: v.description || '',
-        }));
+        // normalise and enrich venue data for frontend usage
+        const normalizedResults = paginatedResults.map((v) => {
+          const enriched = {
+            ...v,
+            latitude: v.lat,
+            longitude: v.lng,
+            address: v.addr || v.address || "No address provided",
+            zone: v.zone || "Unknown",
+            price: v.price || "",
+            description: v.description || "",
+          };
 
-        // Debug logging
-        console.log('Raw vibe search results:', locations);
-        console.log('Paginated results (before normalization):', paginatedResults);
-        console.log('First normalized venue:', normalizedResults[0]);
-        console.log('Total results:', totalElements, '| Showing page:', page + 1);
+          // use turf to find which zone this venue is in
+          if (zoneData && enriched.latitude && enriched.longitude) {
+            const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
+            const matchingZone = zoneData.features.find((feature) =>
+              booleanPointInPolygon(venuePoint, feature.geometry)
+            );
+            // if a match is found, attach locationID to the venue 
+            if (matchingZone) {
+              enriched.zoneId = matchingZone.properties.LocationID;
+            }
+          }
+
+          return enriched;
+        });
 
         setResults(normalizedResults);
-
-
-
         setTotalPages(totalPages);
         setTotalElements(totalElements);
+
+        // DEBUGGING log
+        console.log("Raw vibe search results:", locations);
+        console.log("Paginated results (before normalization):", paginatedResults);
+        console.log("First normalized venue:", normalizedResults[0]);
+        console.log("Total results:", totalElements, "| Showing page:", page + 1);
       })
       .catch((err) => {
         console.error("Error fetching search results:", err);
@@ -109,23 +147,20 @@ export default function FindMyVibe() {
         setTotalElements(0);
       })
       .finally(() => setIsLoading(false));
-  }, [input, vibe, venueType, cuisine, page, pageSize]);
+  }, [input, vibe, venueType, cuisine, page, pageSize, zoneData]);
 
-  // Handle page change
-  const handlePageChange = (event, newPage) => {
-    setPage(newPage - 1); // MUI Pagination uses 1-based index
-  };
-
-  // Handle page size change
-  const handlePageSizeChange = (e) => {
-    setPageSize(e.target.value);
-    setPage(0); // Reset to first page when changing size
-  };
-
-  // Trigger search when filters or pagination changes
   useEffect(() => {
     handleSearch();
   }, [handleSearch]);
+
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage - 1);
+  };
+
+  const handlePageSizeChange = (e) => {
+    setPageSize(e.target.value);
+    setPage(0);
+  };
 
   return (
     <PageWrapper fullWidth>
@@ -151,11 +186,12 @@ export default function FindMyVibe() {
           Describe your perfect night out — or choose from the filters below.
         </Typography>
 
+        {/* Search Form */}
         <Box
           component="form"
           onSubmit={(e) => {
             e.preventDefault();
-            setPage(0); // Reset to first page on new search
+            setPage(0);
           }}
           sx={{
             display: "flex",
@@ -204,6 +240,7 @@ export default function FindMyVibe() {
           </Button>
         </Box>
 
+        {/* Filter Selects */}
         <Box
           sx={{
             display: "flex",
@@ -213,25 +250,10 @@ export default function FindMyVibe() {
             mb: 4,
           }}
         >
-          <FormControl
-            sx={{
-              flex: 1,
-              minWidth: 120,
-              backgroundColor: "#fff",
-              borderRadius: 1,
-              mt: 1,
-            }}
-          >
+          <FormControl sx={{ flex: 1, minWidth: 120, backgroundColor: "#fff", borderRadius: 1, mt: 1 }}>
             <InputLabel id="vibe-label">Vibe</InputLabel>
-            <Select
-              labelId="vibe-label"
-              value={vibe}
-              label="Vibe"
-              onChange={(e) => setVibe(e.target.value)}
-            >
-              <MenuItem value="">
-                <em>None</em>
-              </MenuItem>
+            <Select labelId="vibe-label" value={vibe} label="Vibe" onChange={(e) => setVibe(e.target.value)}>
+              <MenuItem value=""><em>None</em></MenuItem>
               <MenuItem value="cozy">Cozy</MenuItem>
               <MenuItem value="jazz">Jazz</MenuItem>
               <MenuItem value="trendy">Trendy</MenuItem>
@@ -239,25 +261,10 @@ export default function FindMyVibe() {
             </Select>
           </FormControl>
 
-          <FormControl
-            sx={{
-              flex: 1,
-              minWidth: 120,
-              backgroundColor: "#fff",
-              borderRadius: 1,
-              mt: 1,
-            }}
-          >
+          <FormControl sx={{ flex: 1, minWidth: 120, backgroundColor: "#fff", borderRadius: 1, mt: 1 }}>
             <InputLabel id="type-label">Venue Type</InputLabel>
-            <Select
-              labelId="type-label"
-              value={venueType}
-              label="Venue Type"
-              onChange={(e) => setVenueType(e.target.value)}
-            >
-              <MenuItem value="">
-                <em>None</em>
-              </MenuItem>
+            <Select labelId="type-label" value={venueType} label="Venue Type" onChange={(e) => setVenueType(e.target.value)}>
+              <MenuItem value=""><em>None</em></MenuItem>
               <MenuItem value="bar">Bar</MenuItem>
               <MenuItem value="club">Club</MenuItem>
               <MenuItem value="restaurant">Restaurant</MenuItem>
@@ -265,25 +272,10 @@ export default function FindMyVibe() {
             </Select>
           </FormControl>
 
-          <FormControl
-            sx={{
-              flex: 1,
-              minWidth: 120,
-              backgroundColor: "#fff",
-              borderRadius: 1,
-              mt: 1,
-            }}
-          >
+          <FormControl sx={{ flex: 1, minWidth: 120, backgroundColor: "#fff", borderRadius: 1, mt: 1 }}>
             <InputLabel id="cuisine-label">Cuisine</InputLabel>
-            <Select
-              labelId="cuisine-label"
-              value={cuisine}
-              label="Cuisine"
-              onChange={(e) => setCuisine(e.target.value)}
-            >
-              <MenuItem value="">
-                <em>None</em>
-              </MenuItem>
+            <Select labelId="cuisine-label" value={cuisine} label="Cuisine" onChange={(e) => setCuisine(e.target.value)}>
+              <MenuItem value=""><em>None</em></MenuItem>
               <MenuItem value="italian">Italian</MenuItem>
               <MenuItem value="thai">Thai</MenuItem>
               <MenuItem value="greek">Greek</MenuItem>
@@ -292,66 +284,37 @@ export default function FindMyVibe() {
           </FormControl>
         </Box>
 
+        {/* Loading / Empty States */}
         {isLoading ? (
-          <Typography align="center" sx={{ color: "#aaa", mb: 4 }}>
-            Loading...
-          </Typography>
+          <Typography align="center" sx={{ color: "#aaa", mb: 4 }}>Loading...</Typography>
         ) : results.length === 0 && (input || vibe || venueType || cuisine) ? (
-          <Typography align="center" sx={{ color: "#aaa", mb: 4 }}>
-            No matching venues found.
-          </Typography>
+          <Typography align="center" sx={{ color: "#aaa", mb: 4 }}>No matching venues found.</Typography>
         ) : null}
 
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            alignItems: 'flex-start',
-            gap: 3,
-          }}
-        >
-          {/* Left: Sidebar PlanSummary */}
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'flex-start', gap: 3 }}>
           {hasSearched && (
-          <Box
-            sx={{
-              width: { xs: '100%', md: 320 },
-              position: { md: 'sticky' },
-              top: { md: 80 },
-              alignSelf: 'flex-start',
-            }}
-          >
-            <PlanSummary />
-          </Box>
+            <Box sx={{ width: { xs: '100%', md: 320 }, position: { md: 'sticky' }, top: { md: 80 }, alignSelf: 'flex-start' }}>
+              <PlanSummary />
+            </Box>
           )}
 
-          {/* Right: Venue list */}
           <Box sx={{ flex: 1 }}>
             {results.map((venue, index) => (
               <TrendingVenueCard
                 key={venue.id}
                 venue={venue}
+                busynessMap={busynessMap}
                 rank={index + 1}
                 onGetDirections={handleGetDirections}
-                onClick={() =>
-                  navigate("/map-view", { state: { selectedVenue: venue } })
-                }
+                onClick={() => navigate("/map-view", { state: { selectedVenue: venue } })}
               />
             ))}
           </Box>
         </Box>
 
-
-
+        {/* Pagination */}
         {totalPages > 1 && (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              mt: 3,
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 3, flexDirection: "column", alignItems: "center" }}>
             <Pagination
               count={totalPages}
               page={page + 1}
@@ -363,11 +326,7 @@ export default function FindMyVibe() {
             />
             <FormControl sx={{ minWidth: 120, mt: 2 }}>
               <InputLabel>Items per page</InputLabel>
-              <Select
-                value={pageSize}
-                label="Items per page"
-                onChange={handlePageSizeChange}
-              >
+              <Select value={pageSize} label="Items per page" onChange={handlePageSizeChange}>
                 <MenuItem value={10}>10</MenuItem>
                 <MenuItem value={20}>20</MenuItem>
                 <MenuItem value={50}>50</MenuItem>
@@ -377,14 +336,9 @@ export default function FindMyVibe() {
         )}
 
         {totalElements > 0 && (
-          <Typography
-            variant="body2"
-            align="center"
-            sx={{ color: "#aaa", mt: 2 }}
-          >
+          <Typography variant="body2" align="center" sx={{ color: "#aaa", mt: 2 }}>
             Showing {page * pageSize + 1}-
-            {Math.min((page + 1) * pageSize, totalElements)} of {totalElements}{" "}
-            venues
+            {Math.min((page + 1) * pageSize, totalElements)} of {totalElements} venues
           </Typography>
         )}
       </Box>
