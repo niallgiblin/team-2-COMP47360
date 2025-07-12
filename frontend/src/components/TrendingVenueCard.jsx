@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
     Card,
     CardMedia,
@@ -12,22 +11,16 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { usePlan } from '../context/PlanContext';
 import { categoryImages } from '../utils/tagMapping';
-import {
-    Favorite as FavoriteIcon,
-    FavoriteBorder as FavoriteBorderIcon,
-    Whatshot as WhatshotIcon,
-    AttachMoney as AttachMoneyIcon,
-    Launch as LaunchIcon
-} from '@mui/icons-material';
+import { Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Whatshot as WhatshotIcon, AttachMoney as AttachMoneyIcon, Launch as LaunchIcon } from '@mui/icons-material';
 
 import { useLikes } from '../context/LikeContext'; // for real like data
 
-export default function TrendingVenueCard({ venue, showLikeButton = true }) {
-    const { likedVenues, toggleLike } = useLikes();
-    const isLiked = likedVenues.some((v) => v.id === venue.id);
-
+export default function TrendingVenueCard({ venue, busynessMap = {}, showLikeButton = true }) {
     const { setSelectedVenue, setFromPlan } = usePlan();
     const navigate = useNavigate();
+
+    const { likedVenues, toggleLike } = useLikes();
+    const isLiked = likedVenues.some((v) => v.id === venue.id);
 
     const priceLevels = {
         'price level very cheap': 1,
@@ -55,9 +48,10 @@ export default function TrendingVenueCard({ venue, showLikeButton = true }) {
         if (venue.isClub) return 'club';
         if (venue.isLandmark) return 'landmark';
         return 'other';
-    };
+        };
 
     const category = getCategoryFromFlags(venue);
+
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
     const handleWebsiteClick = () => {
@@ -66,197 +60,251 @@ export default function TrendingVenueCard({ venue, showLikeButton = true }) {
         }
     };
 
+    // function to get busyness data (based on zone)
+    const getBusynessLabel = () => {
+        if (!venue.zone || venue.zone === 'nan') return null;
+
+        const zoneKey = String(venue.zoneId);
+        const value = busynessMap[zoneKey];
+
+        console.warn("Zone:", zoneKey, "→ busyness:", value);
+
+        if (typeof value !== 'number') return null;
+
+        const percent = value * 100;
+        if (percent >= 75) return 'Very Busy';
+        if (percent >= 50) return 'Busy';
+        if (percent >= 25) return 'Moderate';
+        return 'Quiet';
+    };
+
     return (
         <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', mt: 4 }}>
-            {showLikeButton && (
-                <IconButton
-                    onClick={() => toggleLike(venue)}
-                    sx={{
-                        position: 'absolute',
-                        top: -12,
-                        right: 12,
-                        zIndex: 2,
-                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                        color: '#fff',
-                        width: 32,
-                        height: 32,
-                        padding: 0,
-                        borderRadius: '50%',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                        '&:hover': {
-                            background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
-                        },
-                    }}
-                >
-                    {isLiked ? (
-                        <FavoriteIcon sx={{ fontSize: 16 }} />
-                    ) : (
-                        <FavoriteBorderIcon sx={{ fontSize: 16 }} />
-                    )}
-                </IconButton>
-            )}
-
-            <Card
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    p: 2,
-                    mb: 3,
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: 3,
-                    color: '#fff',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                    width: '100%',
-                    maxWidth: 600,
-                }}
+        
+        {/* Heart icon - now using context */}
+        {showLikeButton && <IconButton
+            onClick={() => toggleLike(venue)}
+            sx={{
+                position: 'absolute',
+                top: -12, // Half in/out
+                right: 12,
+                zIndex: 2,
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#fff',
+                width: 32,
+                height: 32,
+                padding: 0,
+                borderRadius: '50%',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                '&:hover': {
+                background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+                },
+            }}
             >
-                <CardMedia
-                    component="img"
-                    image={imageUrl}
-                    alt={venue.name}
-                    sx={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 2,
-                        objectFit: 'cover',
-                    }}
-                />
+            {isLiked ? (
+                <FavoriteIcon sx={{ fontSize: 18 }} />
+            ) : (
+                <FavoriteBorderIcon sx={{ fontSize: 18 }} />
+            )}
+            </IconButton>}
 
-                <Box
-                    sx={{
-                        flexGrow: 1,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 2,
-                    }}
-                >
-                    <Box sx={{ mt: 0.5 }}>
-                        <Typography
-                            variant="subtitle1"
-                            sx={{
-                                fontWeight: 'bold',
-                                mb: 0.5,
-                            }}
-                        >
-                            {venue.name}
-                        </Typography>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: '#aaa',
-                                mb: 0.5,
-                            }}
-                        >
-                            {category.charAt(0).toUpperCase() + category.slice(1)} · {venue.zone && venue.zone !== 'nan' ? venue.zone : 'Manhattan'}
-                        </Typography>
+  <Card
+    sx={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 2,
+      p: 2,
+      mb: 3,
+      backgroundColor: '#1a1a1a',
+      borderRadius: 3,
+      color: '#fff',
+      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+      width: '100%',
+      maxWidth: 600,
+      minHeight: 120, // Ensures consistent height
+      position: 'relative', // For positioning heart icon inside
+    }}
+  >
 
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 1,
-                                flexWrap: 'wrap',
-                            }}
-                        >
-                            <Button
-                                variant="text"
-                                size="small"
-                                onClick={() => {
-                                    setSelectedVenue(venue);
-                                    setFromPlan(false);
-                                    navigate("/map");
-                                }}
-                                sx={{
-                                    color: '#3ABEFF',
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    px: 0,
-                                }}
-                            >
-                                View on Map
-                            </Button>
+    {/* Left section */}
+    <Box 
+        sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            flex: 1, 
+            minWidth: 0 }}>
+      <CardMedia
+        component="img"
+        image={imageUrl}
+        alt={venue.name}
+        sx={{
+          width: 80,
+          height: 80,
+          borderRadius: 2,
+          objectFit: 'cover',
+          flexShrink: 0,
+        }}
+      />
 
-                            {venue.uri && (
-                                <Button
-                                    variant="text"
-                                    size="small"
-                                    onClick={handleWebsiteClick}
-                                    startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
-                                    sx={{
-                                        color: '#FF4ECD',
-                                        textTransform: 'none',
-                                        fontWeight: 600,
-                                        px: 0,
-                                    }}
-                                >
-                                    Website
-                                </Button>
-                            )}
-                        </Box>
-                    </Box>
-
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-start',
-                            gap: 1,
-                            mt: 0.5,
-                        }}
-                    >
-                        <Chip
-                            icon={<WhatshotIcon sx={{ color: '#fff' }} />}
-                            label="Trending"
-                            size="small"
-                            sx={{
-                                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                                color: '#fff',
-                                fontWeight: 600,
-                                height: 24,
-                            }}
-                        />
-
-                        <Box sx={{ display: 'flex', gap: '0.5px' }}>
-                            {[1, 2, 3, 4, 5].map((i) => (
-                                <AttachMoneyIcon
-                                    key={i}
-                                    sx={{
-                                        fontSize: 16,
-                                        color: i <= level ? '#FFD700' : '#555555',
-                                    }}
-                                />
-                            ))}
-                        </Box>
-
-                        <Button
-                            onClick={() =>
-                                isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)
-                            }
-                            disabled={!isInPlan && isPlanFull}
-                            variant="outlined"
-                            size="small"
-                            sx={{
-                                mt: 1,
-                                textTransform: 'none',
-                                fontWeight: 'bold',
-                                borderRadius: 2,
-                                borderColor: '#FF4ECD',
-                                color: '#FF4ECD',
-                                minWidth: 140,
-                                minHeight: 32,
-                                '&:hover': {
-                                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                                    color: '#000',
-                                },
-                            }}
-                        >
-                            {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
-                        </Button>
-                    </Box>
-                </Box>
-            </Card>
+      {/* Text content */}
+      <Box 
+        sx={{ 
+            flexGrow: 1, 
+            minWidth: 0 
+        }}
+    >
+        <Box 
+            sx={{ 
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 1,
+                flexWrap: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+            }}
+        >
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+                fontWeight: 'bold', 
+                color: '#fff' 
+            }}
+        >
+            {venue.name}
+          </Typography>
+          
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+                fontWeight: 'bold',
+                color: '#ccc',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '80%', 
+            }}
+        >
+            · {category.charAt(0).toUpperCase() + category.slice(1)} · {venue.zone && venue.zone !== 'nan' ? venue.zone : 'Manhattan'}
+          </Typography>
         </Box>
+
+        {/* Description with Read More */}
+        <Typography 
+            variant="body2"
+            sx={{
+                color: '#aaa',
+                mb: 1,
+                display: '-webkit-box',
+                WebkitLineClamp: 2, // limits the description to 2 lines
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            }}
+        >
+          {venue.summary || venue.description || ''}
+        </Typography>
+
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="text"
+            size="small"
+            onClick={() => {
+              setSelectedVenue(venue);
+              setFromPlan(false);
+              navigate('/map');
+            }}
+            sx={{
+              color: '#3ABEFF',
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 0,
+            }}
+          >
+            View on Map
+          </Button>
+
+          {venue.uri && (
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleWebsiteClick}
+              startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                color: '#FF4ECD',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 0,
+              }}
+            >
+              Website
+            </Button>
+          )}
+        </Box>
+      </Box>
+    </Box>
+
+    {/* Right section */}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 1,
+        mt: 0.5,
+        pt: 2,
+        minWidth: 120,
+      }}
+    >
+      {getBusynessLabel() && (
+        <Chip
+          icon={<WhatshotIcon sx={{ color: '#fff' }} />}
+          label={getBusynessLabel()}
+          size="small"
+          sx={{
+            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+            color: '#fff',
+            fontWeight: 600,
+            height: 24,
+          }}
+        />
+      )}
+      <Box sx={{ display: 'flex', gap: '0.5px' }}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <AttachMoneyIcon
+            key={i}
+            sx={{ fontSize: 16, color: i <= level ? '#FFD700' : '#555555' }}
+          />
+        ))}
+      </Box>
+
+      <Button
+        onClick={() =>
+          isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)
+        }
+        disabled={!isInPlan && isPlanFull}
+        variant="outlined"
+        size="small"
+        sx={{
+          textTransform: 'none',
+          fontWeight: 'bold',
+          borderRadius: 2,
+          borderColor: '#FF4ECD',
+          color: '#FF4ECD',
+          minWidth: 140,
+          minHeight: 32,
+          '&:hover': {
+            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+            color: '#000',
+          },
+        }}
+      >
+        {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
+      </Button>
+    </Box>
+  </Card>
+</Box>
+
     );
 }

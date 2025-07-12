@@ -21,6 +21,7 @@ import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
 import CompactSavedPlans from '../components/CompactSavedPlans';
+import { DateTime } from "luxon";
 
 // Data and context
 import mockVenues from "../data/mockVenues";
@@ -31,27 +32,39 @@ import polyline from "@mapbox/polyline";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
+const generateNext12Hours = () => {
+  const timestamps = [];
+
+  for (let i = 0; i < 12; i++) {
+    const dt = DateTime.now().setZone("America/New_York").plus({ hours: i });
+    timestamps.push(dt.toISO()); // ISO string in NY time
+  }
+
+  return timestamps;
+};
+
 export default function MapView() {
+
   // Define tab styles
   const tabStyles = {
-    textTransform: "uppercase",
-    fontWeight: "bold",
-    color: "#BBB",
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    color: '#BBB',
     minWidth: 120,
-    "&.Mui-selected": {
-      background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-      WebkitBackgroundClip: "text",
-      WebkitTextFillColor: "transparent",
-      color: "#FFF",
+    '&.Mui-selected': {
+      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      color: '#FFF',
     },
-    "&:focus": {
-      outline: "none",
-      border: "none",
+    '&:focus': {
+      outline: 'none',
+      border: 'none',
     },
-    borderLeft: "none",
-    borderRight: "none",
+    borderLeft: 'none',
+    borderRight: 'none',
   };
-
+ 
   // Get state from route (eg when coming from a plan)
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
@@ -59,7 +72,7 @@ export default function MapView() {
 
   const { plan } = usePlan();
   const { setFromPlan } = usePlan();
-
+  
   const mapSectionRef = useRef(null);
 
   // Core app states
@@ -85,7 +98,7 @@ export default function MapView() {
   // State for map mode (live vs. forecast)
   const [mode, setMode] = useState("live");
   const [predictionData, setPredictionData] = useState([]);
-  const [selectedTimestamp, setSelectedTimestamp] = useState(null);
+  const [selectedTimestamp, setSelectedTimestamp] = useState(generateNext12Hours()[0]);
 
   // State for route directions
   const [travelMode, setTravelMode] = useState("WALK");
@@ -93,7 +106,7 @@ export default function MapView() {
   const [showDirections, setShowDirections] = useState(false);
   const [directionsPolyline, setDirectionsPolyline] = useState([]);
 
-  const [viewMode, setViewMode] = useState("plan");
+  const [viewMode, setViewMode] = useState('plan');
 
   // Ensure fromPlan is only true if user navigated via route state
   useEffect(() => {
@@ -214,13 +227,7 @@ export default function MapView() {
           ? manhattanZoneIds
           : zoneData.features.map((f) => f.properties.LocationID);
 
-      const timestamps = [
-        "2025-07-04T18:00:00Z",
-        "2025-07-04T19:00:00Z",
-        "2025-07-04T20:00:00Z",
-        "2025-07-04T21:00:00Z",
-        "2025-07-04T22:00:00Z",
-      ];
+      const timestamps = generateNext12Hours();
 
       // Generate predictions for every Manhattan zone
       return zonesToUse.map((zoneId) => ({
@@ -250,7 +257,6 @@ export default function MapView() {
   }, [showDirections]);
 
   // Fetch walking directions using the Google Routes API
-  // Improved handleGetDirections function with better error handling and coordinate format support
   const handleGetDirections = async () => {
     const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
     if (!GOOGLE_API_KEY) {
@@ -261,199 +267,70 @@ export default function MapView() {
 
     const hasPlan = fromPlan && plan.length > 0;
     const destinationVenue = hasPlan ? plan[plan.length - 1] : selectedVenue;
-
-    if (!destinationVenue) {
-      console.error("❌ No destination venue selected.");
-      alert("Please select a destination venue first.");
-      return;
-    }
+    if (!destinationVenue) return;
 
     const start = userLocation || (hasPlan ? plan[0] : selectedVenue);
-
-    if (!start) {
-      console.error("❌ No starting location available.");
-      alert("Please set a starting location first.");
-      return;
-    }
-
-    // Helper function to normalize coordinate format
-    const normalizeCoordinates = (location) => {
-      if (!location) return null;
-
-      // Handle both lat/lng and latitude/longitude formats
-      const lat = location.lat || location.latitude;
-      const lng = location.lng || location.longitude;
-
-      if (typeof lat !== "number" || typeof lng !== "number") {
-        console.error("❌ Invalid coordinate format:", location);
-        return null;
-      }
-
-      return { lat, lng };
-    };
-
-    const normalizedStart = normalizeCoordinates(start);
-    const normalizedDestination = normalizeCoordinates(destinationVenue);
-
-    if (!normalizedStart || !normalizedDestination) {
-      console.error("❌ Invalid coordinates for start or destination.");
-      alert("Invalid location coordinates. Please check your selected venues.");
-      return;
-    }
-
-    // Build the request payload
     const origin = {
-      location: {
-        latLng: {
-          latitude: normalizedStart.lat,
-          longitude: normalizedStart.lng,
-        },
-      },
+      location: { latLng: { latitude: start.lat, longitude: start.lng } },
     };
-
     const destination = {
       location: {
         latLng: {
-          latitude: normalizedDestination.lat,
-          longitude: normalizedDestination.lng,
+          latitude: destinationVenue.lat,
+          longitude: destinationVenue.lng,
         },
       },
     };
-
-    // Handle intermediate waypoints for multi-stop plans
     const intermediates = hasPlan
-      ? plan
-          .slice(1, -1)
-          .map((venue) => {
-            const normalized = normalizeCoordinates(venue);
-            if (!normalized) {
-              console.warn("❌ Skipping invalid intermediate venue:", venue);
-              return null;
-            }
-            return {
-              location: {
-                latLng: {
-                  latitude: normalized.lat,
-                  longitude: normalized.lng,
-                },
-              },
-            };
-          })
-          .filter(Boolean) // Remove null entries
+      ? plan.slice(1, -1).map((v) => ({
+          location: { latLng: { latitude: v.lat, longitude: v.lng } },
+        }))
       : [];
 
-    const requestBody = {
-      origin,
-      destination,
-      travelMode,
-      ...(intermediates.length > 0 && { intermediates }),
-    };
-
     try {
-      console.log("🚀 Fetching directions...", {
-        travelMode,
-        intermediatesCount: intermediates.length,
-      });
-
       const response = await fetch(
         "https://routes.googleapis.com/directions/v2:computeRoutes",
         {
           method: "POST",
           headers: {
             "X-Goog-Api-Key": GOOGLE_API_KEY,
-            "X-Goog-FieldMask":
-              "routes.legs,routes.polyline.encodedPolyline,routes.duration,routes.distanceMeters",
+            "X-Goog-FieldMask": "routes.legs,routes.polyline.encodedPolyline",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({
+            origin,
+            destination,
+            intermediates,
+            travelMode,
+          }),
         }
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          "❌ Google Directions API HTTP error:",
-          response.status,
-          errorText
-        );
-        throw new Error(
-          `API request failed: ${response.status} ${response.statusText}`
-        );
-      }
-
       const data = await response.json();
-      console.log("✅ Directions API response:", data);
+      const encoded = data?.routes?.[0]?.polyline?.encodedPolyline;
+      if (!encoded) throw new Error("No encoded polyline in API response");
 
-      // Validate the response structure
-      if (!data.routes || data.routes.length === 0) {
-        console.error("❌ No routes found in API response:", data);
-        throw new Error(
-          "No routes found. Try a different travel mode or check your locations."
-        );
-      }
-
-      const route = data.routes[0];
-      const encoded = route.polyline?.encodedPolyline;
-
-      if (!encoded) {
-        console.error("❌ No encoded polyline in API response:", route);
-        throw new Error("No route polyline data received from API.");
-      }
-
-      // Decode the polyline
       const decodedPath = polyline.decode(encoded);
       setDirectionsPolyline(decodedPath);
       setShowDirections(true);
 
-      // Process turn-by-turn directions
-      const steps = route.legs.flatMap((leg, legIndex) => {
-        if (!leg.steps) return [];
-
-        return leg.steps.map((step, stepIndex) => ({
-          summary: `Leg ${legIndex + 1}, Step ${stepIndex + 1}`,
-          instructions:
-            step.navigationInstruction?.instructions ||
-            step.localizedValues?.instruction?.text ||
-            step.instruction ||
-            "Continue forward",
-          transitDetails: step.transitDetails || null,
-          duration: step.duration || null,
-          distance: step.distanceMeters || null,
-        }));
-      });
+      const steps = data.routes[0].legs.flatMap(
+        (leg, i) =>
+          leg.steps?.map((step, j) => ({
+            summary: `Leg ${i + 1}, Step ${j + 1}`,
+            instructions:
+              step.navigationInstruction?.instructions || step.text || "",
+            transitDetails: step.transitDetails || null, // 👈 Add this
+          })) || []
+      );
 
       setDirections(steps);
-
-      // Log success info
-      const totalDistance = route.distanceMeters
-        ? `${Math.round((route.distanceMeters / 1000) * 100) / 100} km`
-        : "Unknown";
-      const totalDuration = route.duration
-        ? `${Math.round(parseInt(route.duration.replace("s", "")) / 60)} min`
-        : "Unknown";
-
-      console.log(
-        `✅ Directions loaded successfully! Distance: ${totalDistance}, Duration: ${totalDuration}`
-      );
     } catch (err) {
       console.error("❌ Google Directions API failed:", err);
-
-      // Provide more specific error messages
-      if (err.message.includes("API request failed")) {
-        alert(
-          `Failed to load directions: ${err.message}\n\nThis might be due to:\n- Invalid API key\n- API quota exceeded\n- Network issues\n- Invalid coordinates`
-        );
-      } else if (err.message.includes("No routes found")) {
-        alert(
-          `No routes found between your locations.\n\nTry:\n- Checking if locations are accessible by ${travelMode.toLowerCase()}\n- Using a different travel mode\n- Verifying your start and end locations`
-        );
-      } else {
-        alert(
-          `An error occurred while loading directions: ${err.message}\n\nPlease try again or check the console for more details.`
-        );
-      }
+      alert("Failed to load directions. Check console for details.");
     }
   };
+
 
   // Geocode manually input start address
   const handleGeocodeStart = async () => {
@@ -490,12 +367,23 @@ export default function MapView() {
   };
 
   // Refetch directions when mode changes (walk/ public transport)
-  useEffect(() => {
-    if (showDirections && directions.length > 0) {
-      handleGetDirections();
-    }
-  }, [travelMode]);
+useEffect(() => {
+  if (!showDirections) return;
 
+  const hasValidStart = userLocation || (fromPlan && plan.length > 0);
+  const hasValidDestination = selectedVenue || (fromPlan && plan.length > 0);
+
+  const venuesReady = fromPlan ? plan.length > 0 : selectedVenue;
+  const zonesReady = zoneData !== null;
+  const allReady = hasValidStart && hasValidDestination && venuesReady && zonesReady;
+
+  if (allReady) {
+    handleGetDirections();
+  }
+}, [travelMode, showDirections, userLocation, selectedVenue, plan, zoneData]);
+
+
+  
   if (loading) {
     return (
       <PageWrapper fullWidth fullHeight>
@@ -529,9 +417,9 @@ export default function MapView() {
           mb: 2,
         }}
       >
-        <Typography
-          sx={{
-            color: "#fff",
+        <Typography 
+          sx={{ 
+            color: "#fff" 
           }}
         >
           Check Busyness Level:
@@ -577,6 +465,7 @@ export default function MapView() {
           Forecast
         </Button>
       </Box>
+      
 
       {/* Main Content Area */}
       <Box
@@ -591,11 +480,11 @@ export default function MapView() {
         }}
       >
         {/* Reset map button */}
-        <Box
-          sx={{
-            textAlign: "left",
-            mb: 1,
-            pl: 2,
+        <Box 
+          sx={{ 
+            textAlign: "left", 
+            mb: 1, 
+            pl: 2, 
             mt: { xs: 2, lg: 3 },
           }}
         >
@@ -622,7 +511,7 @@ export default function MapView() {
             flexDirection: { xs: "column", lg: "row" },
             alignItems: "center",
             justifyContent: "space-between",
-            maxWidth: "800px",
+            maxWidth: '800px',
             px: 2,
             mb: 3,
             gap: 3,
@@ -689,8 +578,7 @@ export default function MapView() {
                 Set
               </Button>
             </Box>
-            {((fromPlan && (userLocation || plan.length > 0)) ||
-              selectedVenue) && (
+            {((fromPlan && (userLocation || plan.length > 0)) || selectedVenue) && (
               <Button
                 variant="contained"
                 onClick={toggleDirections}
@@ -713,125 +601,124 @@ export default function MapView() {
               </Button>
             )}
 
-            {/* Forecast Slider */}
-            {mode === "forecast" && predictionData.length > 0 && (
-              <Box
-                sx={{
-                  width: "100%",
-                  maxWidth: "700px",
-                  mt: 2,
-                  px: 1,
-                }}
-              >
-                <ForecastSlider
-                  timestamps={predictionData[0]?.predictions?.map(
-                    (p) => p.timestamp
-                  )}
-                  selectedTimestamp={selectedTimestamp}
-                  onChange={setSelectedTimestamp}
-                  mode={mode}
-                />
-              </Box>
-            )}
-          </Box>
+          {/* Forecast Slider */}
+          {mode === "forecast" && predictionData.length > 0 && (
+            <Box
+              sx={{
+                width: "100%",
+                maxWidth: "700px",
+                px: 1,
+              }}
+            >
+              <ForecastSlider
+                timestamps={predictionData[0]?.predictions?.map(
+                  (p) => p.timestamp
+                )}
+                selectedTimestamp={selectedTimestamp}
+                onChange={setSelectedTimestamp}
+                mode={mode}
+              />
+            </Box>
+          )}
+        </Box>
+
 
           {/* Vertical Divider */}
           <Box
             sx={{
-              display: { xs: "none", lg: "block" },
-              width: "6px",
-              height: "100%",
-              minHeight: "300px", // ensures it doesn't collapse
-              background:
-                "linear-gradient(to bottom, rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)",
-              borderRadius: "3px",
+              display: { xs: 'none', lg: 'block' },
+              width: '6px',
+              height: '100%',
+              minHeight: '300px', // ensures it doesn't collapse
+              background: 'linear-gradient(to bottom, rgba(255, 78, 205, 0) 0%, #900B6A 20%, #900B6A 80%, rgba(255, 78, 205, 0) 100%)',
+              borderRadius: '3px',
               flexShrink: 0,
-              alignSelf: "stretch",
+              alignSelf: 'stretch',
               mx: 2,
             }}
           />
 
-          {/* Right Panel with Toggle */}
-          <Box
+
+        {/* Right Panel with Toggle */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', lg: 'row' },
+            width: '100%',
+            flexGrow: 1,
+            mt: { xs: 2, md: 0 },
+            gap: 2,
+          }}
+        >
+          {/* Vertical Tabs */}
+          <Tabs
+            orientation="vertical"
+            value={viewMode}
+            onChange={(e, newValue) => setViewMode(newValue)}
             sx={{
-              display: "flex",
-              flexDirection: { xs: "column", lg: "row" },
-              width: "100%",
-              flexGrow: 1,
-              mt: { xs: 2, md: 0 },
-              gap: 2,
+              borderRight: '1px solid #333',
+              minWidth: 140,
+              display: { xs: 'none', lg: 'flex' },
+              '& .MuiTabs-indicator': {
+                width: '3px',
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              },
             }}
           >
-            {/* Vertical Tabs */}
-            <Tabs
-              orientation="vertical"
-              value={viewMode}
-              onChange={(e, newValue) => setViewMode(newValue)}
-              sx={{
-                borderRight: "1px solid #333",
-                minWidth: 140,
-                display: { xs: "none", lg: "flex" },
-                "& .MuiTabs-indicator": {
-                  width: "3px",
-                  background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                },
+            <Tab label="Current Plan" value="plan" sx={tabStyles} />
+            <Tab label="Saved Plans" value="saved" sx={tabStyles} />
+            <Tab label="Favourites" value="favourites" sx={tabStyles} />
+          </Tabs>
+
+          {/* Horizontal Tabs on mobile only */}
+          <Tabs
+            value={viewMode}
+            onChange={(e, newValue) => setViewMode(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              display: { xs: 'flex', lg: 'none' },
+              borderBottom: '1px solid #333',
+              mb: 2,
+              '& .MuiTabs-indicator': {
+                height: '3px',
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              },
+            }}
+          >
+            <Tab label="Current Plan" value="plan" sx={tabStyles} />
+            <Tab label="Saved Plans" value="saved" sx={tabStyles} />
+            <Tab label="Favourites" value="favourites" sx={tabStyles} />
+          </Tabs>
+
+
+          {/* Conditional View Content */}
+          <Box 
+            sx={{ 
+              flexGrow: 1,
+              minWidth: 0,
+              overflow: 'hidden',
               }}
             >
-              <Tab label="Current Plan" value="plan" sx={tabStyles} />
-              <Tab label="Saved Plans" value="saved" sx={tabStyles} />
-              <Tab label="Favourites" value="favourites" sx={tabStyles} />
-            </Tabs>
+            {viewMode === 'plan' && (
+              fromPlan ? (
+                <CompactPlanSummary />
+              ) : (
+                selectedVenue && <VenueCard venue={selectedVenue} variant="compact" />
+              )
+            )}
 
-            {/* Horizontal Tabs on mobile only */}
-            <Tabs
-              value={viewMode}
-              onChange={(e, newValue) => setViewMode(newValue)}
-              variant="scrollable"
-              scrollButtons="auto"
-              sx={{
-                display: { xs: "flex", lg: "none" },
-                borderBottom: "1px solid #333",
-                mb: 2,
-                "& .MuiTabs-indicator": {
-                  height: "3px",
-                  background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                },
-              }}
-            >
-              <Tab label="Current Plan" value="plan" sx={tabStyles} />
-              <Tab label="Saved Plans" value="saved" sx={tabStyles} />
-              <Tab label="Favourites" value="favourites" sx={tabStyles} />
-            </Tabs>
+            {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
 
-            {/* Conditional View Content */}
-            <Box
-              sx={{
-                flexGrow: 1,
-                minWidth: 0,
-                overflow: "hidden",
-              }}
-            >
-              {viewMode === "plan" &&
-                (fromPlan ? (
-                  <CompactPlanSummary />
-                ) : (
-                  selectedVenue && (
-                    <VenueCard venue={selectedVenue} variant="compact" />
-                  )
-                ))}
-
-              {viewMode === "saved" && (
-                <CompactSavedPlans setViewMode={setViewMode} />
-              )}
-
-              {viewMode === "favourites" && (
-                <Typography sx={{ color: "#888", mt: 2 }}>
-                  You haven’t added any favourites yet.
-                </Typography>
-              )}
-            </Box>
+            {viewMode === 'favourites' && (
+              <Typography sx={{ color: '#888', mt: 2 }}>
+                You haven’t added any favourites yet.
+              </Typography>
+            )}
           </Box>
         </Box>
+        </Box>
+
 
         {/* Map Section */}
         <Box

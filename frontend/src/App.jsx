@@ -16,6 +16,7 @@ import Signup from './pages/Signup.jsx';
 
 // Import new authentication components
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { FriendRequestProvider } from './context/FriendRequestContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Profile from './pages/Profile';
 
@@ -48,16 +49,19 @@ function AppLayout({ children }) {
   );
 }
 
-// Main App component wrapped with AuthProvider
+// Main App component wrapped with AuthProvider, FriendRequestProvider
 function App() {
   return (
     <AuthProvider>
       <PlanProvider>
-        <AppContent />
+        <FriendRequestProvider>
+          <AppContent />
+        </FriendRequestProvider>
       </PlanProvider>
     </AuthProvider>
   );
 }
+
 
 // App content with routes
 function AppContent() {
