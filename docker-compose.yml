@@ -23,7 +23,7 @@ services:
     volumes:
       - db_data:/var/lib/mysql
       - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro
-      - ./backend/docker/db-config/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
     networks:
       - app-network
 
@@ -79,13 +79,14 @@ services:
     container_name: urban-gala-llm
     ports:
       - "5001:5000"
-    # Mount only the data directory, models are now copied into the image
+    # Mount the entire data directory, which now includes the CSV file
     volumes:
       - ./backend/llm-service/data:/app/data:ro
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformers
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
+      - HF_TOKEN=${HF_TOKEN}
       - DATA_PATH=/app/data/locations.csv
       - PYTHONUNBUFFERED=1
     networks:
@@ -129,10 +130,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G  # Final memory increase to handle TensorFlow's peak usage
+          memory: 2G  # Final memory increase to handle TensorFlow's peak usage
           cpus: '2.0'
         reservations:
-          memory: 8G  # Guarantee the full memory amount to prevent swapping
+          memory: 2G  # Guarantee the full memory amount to prevent swapping
           cpus: '0.5'
     restart: unless-stopped
 
