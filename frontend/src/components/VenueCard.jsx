@@ -1,5 +1,7 @@
 import { Box, Typography, Chip, Button, Card, CardMedia, Tooltip } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
+import StarHalfIcon from '@mui/icons-material/StarHalf';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import LaunchIcon from '@mui/icons-material/Launch';
 import { getCategory, categoryImages } from '../utils/tagMapping';
@@ -20,6 +22,12 @@ export default function VenueCard({ venue, variant = 'default' }) {
     'price level expensive': 4,
     'price level very expensive': 5,
   };
+
+  // Rating
+  const parsedRating = typeof venue.review === 'string'
+    ? parseFloat(venue.rating.replace('Rating: ', ''))
+    : venue.review;
+
   
   // Handle both string and numeric price values
   let level = 0;
@@ -42,6 +50,8 @@ export default function VenueCard({ venue, variant = 'default' }) {
   return (
     <Card
     sx={{
+        position: 'relative',
+        overflow: 'visible',
         color: '#fff',
         backgroundColor: '#222',
         boxSizing: 'border-box',
@@ -53,6 +63,38 @@ export default function VenueCard({ venue, variant = 'default' }) {
         height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
     }}
     >
+
+      {/* remove from plan x button */}
+      {isInPlan && (
+      <Box sx={{ position: 'absolute', top: -12, right: -4, zIndex: 2 }}>
+        <Tooltip title="Remove from Plan" arrow>
+          <Button
+            onClick={() => removeFromPlan(venue.id)}
+            sx={{
+              minWidth: 0,
+              width: 32,
+              height: 32,
+              padding: 0,
+              background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+              color: '#fff',
+              fontSize: '1.5rem',
+              lineHeight: 1,
+              fontWeight: 'bold',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.9)',
+              },
+            }}
+          >
+            ×
+          </Button>
+        </Tooltip>
+
+      </Box>
+    )}
 
       {/* Display the venue's image using CardMedia */}
       <CardMedia
@@ -93,32 +135,35 @@ export default function VenueCard({ venue, variant = 'default' }) {
             sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 5,
             mt: 1,
             }}
         >
             {/* Rating */}
-            <Box 
-                sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center' }}>
-            <StarIcon 
-                sx={{ 
-                    color: '#FFD700', 
-                    fontSize: 18, 
-                    mr: 0.5 
-                }} 
-            />
-            <Typography variant="body2" sx={{ color: '#fff' }}>
-                {venue.rating}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+              {[1, 2, 3, 4, 5].map((i) => {
+                if (parsedRating >= i) {
+                  return <StarIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                } else if (parsedRating >= i - 0.5) {
+                  return <StarHalfIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                } else {
+                  return <StarBorderIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                }
+              })}
+              <Typography variant="body2" sx={{ color: '#fff', ml: 1 }}>
+                {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
+              </Typography>
             </Box>
+
+
 
             {/* Price */}
             <Box 
                 sx={{ 
                     display: 'flex', 
-                    gap: '0.5px' 
+                    alignItems: 'center',
+                    gap: '0.25',
+                    flexWrap:'nowrap',
                 }}>
             {[1, 2, 3, 4, 5].map((i) => (
                 <AttachMoneyIcon
@@ -183,61 +228,6 @@ export default function VenueCard({ venue, variant = 'default' }) {
             </Button>
           </Box>
         )}
-
-        {/* Add/Remove Button */}
-        <Box 
-            sx={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                mt: variant === 'compact' ? 1 : 2,
-                mb: variant === 'compact' ? 1.5 : 1, 
-            }}>
-            
-            <Tooltip
-            title={
-                !isInPlan && isPlanFull
-                ? 'You can only add up to 3 venues to your plan.'
-                : ''
-            }
-            arrow
-            placement="top"
-            >
-            <span>
-                <Button
-                onClick={() =>
-                    isInPlan ? removeFromPlan(venue.id) : addToPlan(venue)
-                }
-                disabled={!isInPlan && isPlanFull}
-                variant="contained"
-                sx={{
-                    background: isInPlan
-                    ? 'linear-gradient(to right, #FF4ECD, #3ABEFF)'
-                    : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                    color: '#000',
-                    fontWeight: 'bold',
-                    textTransform: 'none',
-                    px: variant === 'compact' ? 2 : variant === 'map' ? 3 : 4,
-                    py: variant === 'compact' ? 0.3 : variant === 'map' ? 1 : 1.5,
-                    fontSize:
-                    variant === 'compact'
-                        ? '0.8rem'
-                        : variant === 'map'
-                        ? '0.9rem'
-                        : '1rem',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                    '&:hover': {
-                    background: isInPlan
-                        ? 'linear-gradient(to right, #FF6EDB, #5F3AFF)'
-                        : 'linear-gradient(to right, #5F3AFF, #FF6EDB)',
-                    },
-                }}
-                >
-                {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
-                </Button>
-            </span>
-            </Tooltip>
-        </Box>
         </Box>
     </Card>
   );

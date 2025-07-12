@@ -30,7 +30,7 @@ export default function ProfileForm() {
     currentPassword: '',
     newPassword: '',
     confirmNewPassword: '',
-    profileImageFile: null, // for uploading profile picture later
+    profileImageFile: null, // for uploading profile picture
   });
 
   // UI states for messages and loading
@@ -46,43 +46,40 @@ export default function ProfileForm() {
 
   // Load user data into form when component mounts or user updates
   useEffect(() => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        username: user.username || '',
-        phoneNumber: user.phoneNumber || '',
-        currentPassword: '',
-        newPassword: '',
-        confirmNewPassword: '',
-        profileImageFile: null,
-      });
+      if (user) {
+        setFormData((prev) => ({
+          ...prev,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          username: user.username || '',
+          phoneNumber: user.phoneNumber || '',
+        }));
 
-      // If user already has a profile image, use it for preview
-      if (user.profileImage) setPreview(user.profileImage);
-    }
-  }, [user]);
+        // if image exists, use it for avatar 
+        if (user.profileImage) setPreview(user.profileImage);
+      }
+    }, [user]);
 
-  // Handle input changes for all text fields
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError('');
-    setSuccess('');
-  };
+    // handle all text input changes
+    const handleChange = (e) => {
+      setFormData({ ...formData, [e.target.name]: e.target.value });
+      setError('');
+      setSuccess('');
+    };
 
-  // Handle avatar image selection and show preview
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file); // temp preview URL
-      setPreview(imageUrl);
-      setFormData((prev) => ({
-        ...prev,
-        profileImageFile: file, // actual file for future upload
-      }));
-    }
-  };
+    // handle image file selection and preview
+    const handleImageChange = (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const imageUrl = URL.createObjectURL(file);
+        setPreview(imageUrl);
+        setFormData((prev) => ({
+          ...prev,
+          profileImageFile: file,
+        }));
+      }
+    };
 
   // Validate the form fields before submission
   const validateForm = () => {
@@ -121,44 +118,25 @@ export default function ProfileForm() {
 
     try {
       // Current implementation using plain object (no image upload yet)
-      const updateData = {
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim(),
-        username: formData.username.trim(),
-        phoneNumber: formData.phoneNumber.trim() || null,
-      };
-
-      if (formData.newPassword) {
-        updateData.currentPassword = formData.currentPassword;
-        updateData.newPassword = formData.newPassword;
-      }
-
-      await updateProfile(user.id, updateData);
-
-      // Future image upload:
-      /*
       const updateData = new FormData();
       updateData.append('firstName', formData.firstName.trim());
       updateData.append('lastName', formData.lastName.trim());
       updateData.append('email', formData.email.trim());
       updateData.append('username', formData.username.trim());
-      updateData.append('phoneNumber', formData.phoneNumber.trim() || '');
+      updateData.append('phoneNumber', formData.phoneNumber.trim());
+
       if (formData.profileImageFile) {
         updateData.append('profileImage', formData.profileImageFile);
       }
+
       if (formData.newPassword) {
         updateData.append('currentPassword', formData.currentPassword);
         updateData.append('newPassword', formData.newPassword);
       }
-      await fetch('/api/profile/update', {
-        method: 'POST',
-        body: updateData,
-        headers: {
-          // Authorization: `Bearer ${token}`,
-        },
-      });
-      */
+
+      // call auth context update function
+      await updateProfile(user.id, updateData);
+
 
       // Reset password fields after update
       setFormData((prev) => ({
@@ -176,7 +154,7 @@ export default function ProfileForm() {
     }
   };
 
-  // While loading user data
+  // Loading spinner While loading user data
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="40vh">
@@ -264,9 +242,7 @@ export default function ProfileForm() {
         <Typography variant="body2" color="gray" sx={{ mt: 0.5 }}>
           {formData.email}
         </Typography>
-        <Typography variant="caption" sx={{ mt: 0.5 }}>
-          Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'N/A'}
-        </Typography>
+
       </Box>
 
       {/* Display error or success message */}
@@ -277,7 +253,14 @@ export default function ProfileForm() {
       <Box component="form" onSubmit={handleSubmit} mt={3}>
 
         {/* Personal Info Section */}
-        <Typography variant="h6" sx={{ mb: 2, textTransform: 'uppercase', fontWeight: 'bold' }}>
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            mb: 2, 
+            textTransform: 'uppercase', 
+            fontWeight: 'bold' 
+          }}
+        >
           Personal Information
         </Typography>
 
