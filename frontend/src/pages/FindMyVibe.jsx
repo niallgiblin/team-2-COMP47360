@@ -105,15 +105,53 @@ export default function FindMyVibe() {
 
         // normalise and enrich venue data for frontend usage
         const normalizedResults = paginatedResults.map((v) => {
-          const enriched = {
-            ...v,
-            latitude: v.lat,
-            longitude: v.lng,
-            address: v.addr || v.address || "No address provided",
-            zone: v.zone || "Unknown",
-            price: v.price || "",
-            description: v.description || "",
-          };
+        const rawPrice = v.price;
+        console.log("Original price from backend:", v.price);
+
+        const priceMap = {
+          "price level very cheap": 1,
+          "price level cheap": 2,
+          "price level moderate": 3,
+          "price level expensive": 4,
+          "price level very expensive": 5,
+        };
+
+        let parsedPrice = 0;
+
+        if (typeof rawPrice === "number") {
+          parsedPrice = rawPrice;
+        } else if (typeof rawPrice === "string") {
+          const lower = rawPrice.trim().toLowerCase();
+          parsedPrice = priceMap[lower] || 0;
+        }
+
+        const enriched = {
+          ...v,
+          latitude: v.lat,
+          longitude: v.lng,
+          address: v.addr || v.address || "No address provided",
+          zone: v.zone || "Unknown",
+          price: parsedPrice,
+          description: v.description || "",
+          summary: v.summary || v.description || "",
+          imageUrl: v.imageUrl || v.image_url || v.image || null,
+        };
+          
+          const text = (
+            (v.tags || "") +
+            " " +
+            (v.loc_type || "") +
+            " " +
+            (v.description || "") +
+            " " +
+            (v.summary || "")
+          ).toLowerCase();
+
+          enriched.isRestaurant = text.includes("restaurant");
+          enriched.isBar = text.includes("bar");
+          enriched.isClub = text.includes("club");
+          enriched.isLandmark = text.includes("landmark");
+
 
           // use turf to find which zone this venue is in
           if (zoneData && enriched.latitude && enriched.longitude) {

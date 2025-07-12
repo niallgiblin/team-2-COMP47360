@@ -76,10 +76,11 @@ export default function Recommendations() {
 
           return enriched;
         });
-
+        console.log("First enriched venue in Recommendations:", transformed[0]);
         setVenues(transformed);
         setLoading(false);
       })
+      
       .catch(async (err) => {
         console.warn('Falling back to mock data due to error:', err);
 
@@ -102,7 +103,7 @@ export default function Recommendations() {
 
         setLoading(false);
       });
-  }, [zoneData]); // 🔁 Important: wait for zoneData
+  }, [zoneData]); //wait for zoneData
 
   if (loading) {
     return (
@@ -116,7 +117,7 @@ export default function Recommendations() {
 
   return (
     <PageWrapper>
-      <Box sx={{ maxWidth: 500, mx: 'auto', mt: 0, mb: 10, px: 2 }}>
+      <Box sx={{ maxWidth: 700, mx: 'auto', mt: 0, mb: 10, px: 2 }}>
         <Typography variant="h4" sx={{ color: '#fff', mb: 2, textAlign: 'center' }}>
           What’s Hot Tonight
         </Typography>
