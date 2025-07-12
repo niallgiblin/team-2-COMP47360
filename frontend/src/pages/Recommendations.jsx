@@ -5,18 +5,46 @@ import TrendingVenueCard from '../components/TrendingVenueCard';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Turf imports
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { point as turfPoint } from "@turf/helpers";
+
 export default function Recommendations() {
-  const [venues, setVenues] = useState([]);         // Store fetched venue data
-  const [loading, setLoading] = useState(true);     // Track loading state
-  const [isMock, setIsMock] = useState(false);      // Flag to show if using mock fallback
+  const [venues, setVenues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isMock, setIsMock] = useState(false);
+  const [busynessMap, setBusynessMap] = useState([]);
+  const [zoneData, setZoneData] = useState(null);
+
   const navigate = useNavigate();
-  const { makeAuthenticatedRequest } = useAuth(); // Get the authenticated fetch helper
+  const { makeAuthenticatedRequest } = useAuth();
 
   const handleGetDirections = (venue) => {
-  navigate('/map', { state: { selectedVenue: venue } });
+    navigate('/map', { state: { selectedVenue: venue } });
   };
 
-  // Fetch venue data from mock JSON file
+  // 1. Fetch Manhattan GeoJSON
+  useEffect(() => {
+    fetch('/manhattanZones.geojson')
+      .then((res) => res.json())
+      .then(setZoneData)
+      .catch(err => console.error('Failed to load zone data:', err));
+  }, []);
+
+  // 2. Fetch busyness map data
+  useEffect(() => {
+    fetch('http://localhost:8080/vibe/map-data')
+      .then((res) => res.json())
+      .then((data) => {
+        setBusynessMap(data.busyness || {});
+      })
+      .catch((err) => {
+        console.error("Failed to fetch busyness map-data:", err);
+        setBusynessMap({});
+      });
+  }, []);
+
+  // 3. Fetch venue data and enrich with zone ID
   useEffect(() => {
     makeAuthenticatedRequest('http://localhost:8080/api/location/trending')
       .then((res) => {
@@ -24,31 +52,41 @@ export default function Recommendations() {
         return res.json();
       })
       .then((data) => {
-        console.log('API Response:', data); // Add this to see the structure
-        
-        // If the API returns { locations: [...] } like vibe search:
-        const venues = data.locations || data; // Try both patterns
-        
-        const transformed = venues.map((venue) => ({
-          ...venue,
-          id: venue.id || venue.placeId,
-          latitude: venue.latitude || venue.lat,
-          longitude: venue.longitude || venue.lng,
-          address: venue.address || 'No address provided',
-        }));
-        
+        const venues = data.locations || data;
+
+        const transformed = venues.map((venue) => {
+          const enriched = {
+            ...venue,
+            id: venue.id || venue.placeId,
+            latitude: venue.latitude || venue.lat,
+            longitude: venue.longitude || venue.lng,
+            address: venue.address || 'No address provided',
+            zone: venue.zone || venue.Zone || 'Unknown',
+          };
+
+          if (zoneData && enriched.latitude && enriched.longitude) {
+            const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
+            const matchingZone = zoneData.features.find((feature) =>
+              booleanPointInPolygon(venuePoint, feature.geometry)
+            );
+            if (matchingZone) {
+              enriched.zoneId = matchingZone.properties.LocationID;
+            }
+          }
+
+          return enriched;
+        });
+
         setVenues(transformed);
         setLoading(false);
       })
-      
       .catch(async (err) => {
-        console.warn('Falling back to mock data de to fetch error:', err);
-        
+        console.warn('Falling back to mock data due to error:', err);
+
         try {
           const res = await fetch('/mock/venues.json');
           const mockData = await res.json();
 
-          // Transform fields to match what your components expect
           const transformed = mockData.map((v) => ({
             ...v,
             latitude: v.lat,
@@ -61,21 +99,15 @@ export default function Recommendations() {
         } catch (mockErr) {
           console.error('Error loading mock data:', mockErr);
         }
-        
+
         setLoading(false);
       });
-  }, []);
-
+  }, [zoneData]); // 🔁 Important: wait for zoneData
 
   if (loading) {
     return (
       <PageWrapper>
-        <Typography 
-          sx={{ 
-            color: 'white', 
-            p: 4 
-          }}
-        >
+        <Typography sx={{ color: 'white', p: 4 }}>
           Loading trending venues...
         </Typography>
       </PageWrapper>
@@ -84,62 +116,30 @@ export default function Recommendations() {
 
   return (
     <PageWrapper>
-      <Box 
-        sx={{ 
-          maxWidth: 500, 
-          mx: 'auto', 
-          mt: 0,
-          mb: 10,
-          px: 2
-        }}
-      >
-        <Typography variant="h4" 
-          sx={{ 
-            color: '#fff', 
-            mb: 2,
-            textAlign: 'center' 
-          }}
-          >
+      <Box sx={{ maxWidth: 500, mx: 'auto', mt: 0, mb: 10, px: 2 }}>
+        <Typography variant="h4" sx={{ color: '#fff', mb: 2, textAlign: 'center' }}>
           What’s Hot Tonight
         </Typography>
 
-        <Typography variant="body2" 
-          sx={{ 
-            color: '#aaa', 
-            mb: 3,
-            textAlign: 'center' 
-            }}
-          >
+        <Typography variant="body2" sx={{ color: '#aaa', mb: 3, textAlign: 'center' }}>
           See the top trending venues based on footfall, reviews, and vibe activity.
         </Typography>
 
-        {/* Notice if mock data is being used */}
         {isMock && (
-          <Typography
-            variant="body2"
-            sx={{ 
-              color: 'orange', 
-              mb: 2, 
-              textAlign: 'center' 
-            }}
-          >
+          <Typography variant="body2" sx={{ color: 'orange', mb: 2, textAlign: 'center' }}>
             (Mock data displayed — backend unavailable)
           </Typography>
         )}
-        
-        {/* Display trending venues */}
-        {venues.map((venue, index) => {
-          console.log('Rendering venue:', venue); // DEBUGGING
 
-          return (
-            <TrendingVenueCard
-              key={venue.id || index} // fallback in case id is missing
-              venue={venue}
-              rank={index + 1}
-              onGetDirections={handleGetDirections}
-            />
-          );
-        })}
+        {venues.map((venue, index) => (
+          <TrendingVenueCard
+            key={venue.id || index}
+            venue={venue}
+            busynessMap={busynessMap}
+            rank={index + 1}
+            onGetDirections={handleGetDirections}
+          />
+        ))}
       </Box>
     </PageWrapper>
   );

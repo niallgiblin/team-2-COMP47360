@@ -1,5 +1,7 @@
 import { Box, Typography, Chip, Button, Card, CardMedia, Tooltip } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
+import StarHalfIcon from '@mui/icons-material/StarHalf';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import LaunchIcon from '@mui/icons-material/Launch';
 import { getCategory, categoryImages } from '../utils/tagMapping';
@@ -20,6 +22,12 @@ export default function VenueCard({ venue, variant = 'default' }) {
     'price level expensive': 4,
     'price level very expensive': 5,
   };
+
+  // Rating
+  const parsedRating = typeof venue.review === 'string'
+    ? parseFloat(venue.rating.replace('Rating: ', ''))
+    : venue.review;
+
   
   // Handle both string and numeric price values
   let level = 0;
@@ -98,21 +106,22 @@ export default function VenueCard({ venue, variant = 'default' }) {
             }}
         >
             {/* Rating */}
-            <Box 
-                sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center' }}>
-            <StarIcon 
-                sx={{ 
-                    color: '#FFD700', 
-                    fontSize: 18, 
-                    mr: 0.5 
-                }} 
-            />
-            <Typography variant="body2" sx={{ color: '#fff' }}>
-                {venue.rating}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {[1, 2, 3, 4, 5].map((i) => {
+                if (parsedRating >= i) {
+                  return <StarIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                } else if (parsedRating >= i - 0.5) {
+                  return <StarHalfIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                } else {
+                  return <StarBorderIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                }
+              })}
+              <Typography variant="body2" sx={{ color: '#fff', ml: 1 }}>
+                {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
+              </Typography>
             </Box>
+
+
 
             {/* Price */}
             <Box 
