@@ -130,14 +130,14 @@ public class FrontendPlanService {
         if (plan.getVenues() != null) {
             plan.getVenues().stream()
                 .sorted((a, b) -> a.getOrderIndex().compareTo(b.getOrderIndex()))
-                .forEach(pv -> {
-                    Location loc = pv.getLocation();
-                    PlanResponse.VenueInfo info = new PlanResponse.VenueInfo(
-                        loc.getId(), loc.getName(), loc.getAddress(), loc.getUri(),
-                        loc.getLat(), loc.getLng(), loc.getReview(), loc.getNumReviews(),
-                        loc.getIsRestaurant(), loc.getIsLandmark(), loc.getIsClub(),
-                        loc.getIsBar(), loc.getDescription(), loc.getPrice(), loc.getZone());
-                    infoList.add(info);
+                .forEach(planVenue -> {
+                    Location location = planVenue.getLocation();
+                    PlanResponse.VenueInfo venueInfo = new PlanResponse.VenueInfo(
+                        location.getId(), location.getName(), location.getAddress(), location.getUri(),
+                        location.getLat(), location.getLng(), location.getReview(), location.getNumReviews(),
+                        location.getIsRestaurant(), location.getIsLandmark(), location.getIsClub(),
+                        location.getIsBar(), location.getDescription(), location.getPrice(), location.getZone(), location.getInformation(), location.getSummary(), location.getTags());
+                    infoList.add(venueInfo);
                 });
         }
 
