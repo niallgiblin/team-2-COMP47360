@@ -1,15 +1,13 @@
 package com.manhattan.busyness_predictor.service;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
+import com.manhattan.busyness_predictor.model.Favourite;
+import com.manhattan.busyness_predictor.model.User;
+import com.manhattan.busyness_predictor.repository.FavouriteRepository;
+import com.manhattan.busyness_predictor.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.manhattan.busyness_predictor.model.Favourite;
-import com.manhattan.busyness_predictor.model.Location;
-import com.manhattan.busyness_predictor.repository.FavouriteRepository;
-import com.manhattan.busyness_predictor.repository.LocationRepository;
+import java.util.List;
 
 @Service
 public class FavouriteService {
@@ -18,40 +16,24 @@ public class FavouriteService {
     private FavouriteRepository favouriteRepository;
 
     @Autowired
-    private LocationRepository locationRepository;
+    private UserRepository userRepository;
 
-    public void addToFavourites(Integer userId, Integer locationId) {
-        // Check if location exists
-        locationRepository.findById(locationId)
-                .orElseThrow(() -> new RuntimeException("Location not found"));
+    public List<Favourite> getFavouritesByUser(Integer userId) {
+        return favouriteRepository.findByUserId(userId);
+    }
 
-        // Check if already favourited
-        if (favouriteRepository.existsByUserIdAndLocationId(userId, locationId)) {
-            throw new RuntimeException("Location is already in favourites");
+    public Favourite addFavourite(Integer userId, Integer venueId) {
+        if (favouriteRepository.findByUserIdAndVenueId(userId, venueId).isPresent()) {
+            throw new RuntimeException("Already favourited.");
         }
-
-        Favourite favourite = new Favourite(userId, locationId);
-        favouriteRepository.save(favourite);
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        Favourite fav = new Favourite();
+        fav.setUser(user);
+        fav.setVenueId(venueId);
+        return favouriteRepository.save(fav);
     }
 
-    public void removeFromFavourites(Integer userId, Integer locationId) {
-        Favourite favourite = favouriteRepository.findByUserIdAndLocationId(userId, locationId)
-                .orElseThrow(() -> new RuntimeException("Location is not in favourites"));
-
-        favouriteRepository.delete(favourite);
-    }
-
-    public List<Location> getFavouriteLocations(Integer userId) {
-        List<Favourite> favourites = favouriteRepository.findByUserId(userId);
-
-        return favourites.stream()
-                .map(fav -> locationRepository.findById(fav.getLocationId()))
-                .filter(opt -> opt.isPresent())
-                .map(opt -> opt.get())
-                .collect(Collectors.toList());
-    }
-
-    public boolean isFavourited(Integer userId, Integer locationId) {
-        return favouriteRepository.existsByUserIdAndLocationId(userId, locationId);
+    public void removeFavourite(Integer userId, Integer venueId) {
+        favouriteRepository.deleteByUserIdAndVenueId(userId, venueId);
     }
 }

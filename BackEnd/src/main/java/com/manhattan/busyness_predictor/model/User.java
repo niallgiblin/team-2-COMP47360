@@ -8,6 +8,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.CascadeType;
+import java.util.List;
 
 @Entity
 @Table(name = "user")
@@ -54,6 +57,17 @@ public class User {
         this.lastName = lastName;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Favourite> favourites;
+
+    // getter/setter
+    public List<Favourite> getFavourites() {
+        return favourites;
+    }
+    public void setFavourites(List<Favourite> favourites) {
+        this.favourites = favourites;
     }
 
     // Getters and Setters
