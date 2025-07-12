@@ -59,6 +59,15 @@ public class Location {
     @Column(name = "zone")
     private String zone;
 
+    @Column(name = "information")
+    private String information;
+
+    @Column(name = "summary", length = 1000)
+    private String summary;
+
+    @Column(name = "tags", length = 1000)
+    private String tags;
+
     @Transient // This field is not persisted in the database
     private Double similarity;
 
@@ -83,6 +92,9 @@ public class Location {
         this.description = description;
         this.price = price;
         this.zone = zone;
+        this.information = information;
+        this.summary = summary;
+        this.tags = tags;
     }
 
     // Getters and Setters
@@ -204,6 +216,30 @@ public class Location {
 
     public void setZone(String zone) {
         this.zone = zone;
+    }
+
+    public String getInformation() {
+        return information;
+    }
+
+    public void setInformation(String information) {
+        this.information = information;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    public void setSummary(String summary) {
+        this.summary = summary;
+    }
+
+    public String getTags() {
+        return tags;
+    }
+
+    public void setTags(String tags) {
+        this.tags = tags;
     }
 
     public Double getSimilarity() {
