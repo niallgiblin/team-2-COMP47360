@@ -68,6 +68,9 @@ public class PlanResponse {
         private String description;
         private Integer price;
         private String zone;
+        private String information;
+        private String summary;
+        private String tags;
 
         public VenueInfo() {
         }
@@ -77,7 +80,7 @@ public class PlanResponse {
                     Double lat, Double lng, Float review,  
                     Integer numReviews, Boolean isRestaurant, Boolean isLandmark, 
                     Boolean isClub, Boolean isBar, String description, 
-                    Integer price, String zone) {
+                    Integer price, String zone, String information, String summary, String tags) {
             this.id = id;
             this.name = name;
             this.address = address;
@@ -93,6 +96,9 @@ public class PlanResponse {
             this.description = description;
             this.price = price;
             this.zone = zone;
+            this.information = information;    
+            this.summary = summary;
+            this.tags = tags;
         }
 
         // all Getters and Setters
@@ -140,5 +146,14 @@ public class PlanResponse {
         
         public String getZone() { return zone; }
         public void setZone(String zone) { this.zone = zone; }
+
+        public String getInformation() { return information; }
+        public void setInformation(String information) { this.information = information; }  
+
+        public String getSummary() { return summary; }
+        public void setSummary(String summary) { this.summary = summary; }
+        
+        public String getTags() { return tags; }
+        public void setTags(String tags) { this.tags = tags; }
     }
 }
