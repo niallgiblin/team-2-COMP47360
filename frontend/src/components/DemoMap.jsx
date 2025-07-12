@@ -252,7 +252,7 @@ export default function DemoMap({
     ? activeZoneVenues
     : selectedVenue
     ? [selectedVenue]
-    : [];
+    : venues;
 
   return (
     <Box sx={{ width: "100%", height: "100%" }}>
@@ -337,7 +337,11 @@ export default function DemoMap({
           />
         )}
         {showDirections && routeCoords.length > 0 && (
-          <Polyline positions={routeCoords} color="#3ABEFF" weight={4} />
+          <Polyline 
+            positions={routeCoords} 
+            color="#FF4ECD" 
+            weight={4}
+          />
         )}
       </MapContainer>
     </Box>
