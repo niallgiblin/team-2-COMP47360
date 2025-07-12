@@ -74,7 +74,12 @@ public interface LocationRepository extends JpaRepository<Location, Integer>, Jp
 
         // Text search queries
         @Query("SELECT l FROM Location l WHERE " +
-                        "LOWER(l.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                        "LOWER(l.address) LIKE LOWER(CONCAT('%', :query, '%'))")
+                "LOWER(l.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                "LOWER(l.address) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                "LOWER(l.description) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                "LOWER(l.information) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                "LOWER(l.summary) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                "LOWER(l.tags) LIKE LOWER(CONCAT('%', :query, '%'))")
         List<Location> searchByText(@Param("query") String query);
+
 }
