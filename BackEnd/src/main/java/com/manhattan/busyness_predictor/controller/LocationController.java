@@ -249,6 +249,9 @@ public class LocationController {
             @RequestParam(required = false) Boolean isClub,
             @RequestParam(required = false) Boolean isBar,
             @RequestParam(required = false) Integer maxPrice,
+            @RequestParam(required = false) String information,
+            @RequestParam(required = false) String summary,
+            @RequestParam(required = false) String tags,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "name") String sort,
@@ -262,9 +265,11 @@ public class LocationController {
                 page,
                 size,
                 Sort.by(sortDirection, sort));
-
+        
         Page<Location> results = locationService.searchLocations(
-                input, isRestaurant, isLandmark, isClub, isBar, maxPrice, pageable);
+                input, isRestaurant, isLandmark, isClub, isBar, maxPrice,
+                information, summary, tags,
+                pageable);
 
         return ResponseEntity.ok(results);
     }

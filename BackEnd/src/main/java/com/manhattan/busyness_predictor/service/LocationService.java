@@ -70,6 +70,7 @@ public class LocationService {
     public Page<Location> searchLocations(String input, Boolean isRestaurant,
             Boolean isLandmark, Boolean isClub,
             Boolean isBar, Integer maxPrice,
+            String information, String summary, String tags,
             Pageable pageable) {
 
         return locationRepository.findAll((root, query, cb) -> {
@@ -108,6 +109,25 @@ public class LocationService {
             // Price filter
             if (maxPrice != null) {
                 predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get("price"), maxPrice));
+            }
+
+
+            if (information != null && !information.isEmpty()) {
+                predicate = cb.and(predicate,
+                    cb.like(cb.lower(root.get("information")),
+                            "%" + information.toLowerCase() + "%"));
+            }
+
+            if (summary != null && !summary.isEmpty()) {
+                predicate = cb.and(predicate,
+                    cb.like(cb.lower(root.get("summary")),
+                            "%" + summary.toLowerCase() + "%"));
+            }
+
+            if (tags != null && !tags.isEmpty()) {
+                predicate = cb.and(predicate,
+                    cb.like(cb.lower(root.get("tags")),
+                            "%" + tags.toLowerCase() + "%"));
             }
 
             return predicate;
