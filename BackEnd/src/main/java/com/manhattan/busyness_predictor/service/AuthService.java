@@ -13,6 +13,7 @@ import com.manhattan.busyness_predictor.dto.SignUpRequest;
 import com.manhattan.busyness_predictor.dto.UpdateProfileRequest;
 import com.manhattan.busyness_predictor.model.User;
 import com.manhattan.busyness_predictor.repository.UserRepository;
+import com.manhattan.busyness_predictor.security.JwtTokenProvider;
 
 @Service
 public class AuthService {
@@ -22,6 +23,9 @@ public class AuthService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     public AuthResponse signUp(SignUpRequest request) {
         // Check if username already exists
@@ -146,7 +150,7 @@ public class AuthService {
     }
 
     private String generateToken(User user) {
-        // Simplified token generation - in production, use JWT
-        return "token_" + user.getId() + "_" + System.currentTimeMillis();
+        // Use the real JWT provider to generate a secure token
+        return jwtTokenProvider.generateToken(user);
     }
 }

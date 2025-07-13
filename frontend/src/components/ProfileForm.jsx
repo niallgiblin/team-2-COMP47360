@@ -13,12 +13,12 @@ import {
   Chip,
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
-import { useAuth } from '../context/AuthContext'; // custom context for auth/user management
+import { useAuth } from '../hooks/useAuth'; // custom context for auth/user management
 
 // Main profile form component
 export default function ProfileForm() {
   // Access user object and relevant auth functions
-  const { user, updateProfile, logout, loading } = useAuth();
+  const { user, updateProfile, uploadAvatar, deleteAvatar, logout, loading } = useAuth();
 
   // Main form state – holds all user input and file selection
   const [formData, setFormData] = useState({
@@ -30,7 +30,7 @@ export default function ProfileForm() {
     currentPassword: '',
     newPassword: '',
     confirmNewPassword: '',
-    profileImageFile: null, // for uploading profile picture
+    profileImageFile: null, // for uploading profile picture later
   });
 
   // UI states for messages and loading
@@ -46,40 +46,60 @@ export default function ProfileForm() {
 
   // Load user data into form when component mounts or user updates
   useEffect(() => {
-      if (user) {
-        setFormData((prev) => ({
-          ...prev,
-          firstName: user.firstName || '',
-          lastName: user.lastName || '',
-          email: user.email || '',
-          username: user.username || '',
-          phoneNumber: user.phoneNumber || '',
-        }));
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        username: user.username || '',
+        phoneNumber: user.phoneNumber || '',
+        currentPassword: '',
+        newPassword: '',
+        confirmNewPassword: '',
+        profileImageFile: null,
+      });
 
-        // if image exists, use it for avatar 
-        if (user.profileImage) setPreview(user.profileImage);
-      }
-    }, [user]);
+      // If user already has an avatar, use its URL for the preview
+      if (user.avatarUrl) setPreview(user.avatarUrl);
+    }
+  }, [user]);
 
-    // handle all text input changes
-    const handleChange = (e) => {
-      setFormData({ ...formData, [e.target.name]: e.target.value });
-      setError('');
-      setSuccess('');
-    };
+  // Handle input changes for all text fields
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError('');
+    setSuccess('');
+  };
 
-    // handle image file selection and preview
-    const handleImageChange = (e) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        const imageUrl = URL.createObjectURL(file);
-        setPreview(imageUrl);
-        setFormData((prev) => ({
-          ...prev,
-          profileImageFile: file,
-        }));
-      }
-    };
+  // Handle avatar image selection and show preview
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const imageUrl = URL.createObjectURL(file); // temp preview URL
+      setPreview(imageUrl);
+      setFormData((prev) => ({
+        ...prev,
+        profileImageFile: file, // actual file for future upload
+      }));
+    }
+  };
+
+  // Handle avatar removal
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setError('');
+    setSuccess('');
+    setUpdating(true);
+    try {
+      await deleteAvatar(user.id);
+      setPreview(null); // Clear the preview immediately
+      setSuccess('Avatar removed successfully!');
+    } catch (err) {
+      setError(err.message || 'Failed to remove avatar');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   // Validate the form fields before submission
   const validateForm = () => {
@@ -117,26 +137,26 @@ export default function ProfileForm() {
     setUpdating(true);
 
     try {
-      // Current implementation using plain object (no image upload yet)
-      const updateData = new FormData();
-      updateData.append('firstName', formData.firstName.trim());
-      updateData.append('lastName', formData.lastName.trim());
-      updateData.append('email', formData.email.trim());
-      updateData.append('username', formData.username.trim());
-      updateData.append('phoneNumber', formData.phoneNumber.trim());
-
-      if (formData.profileImageFile) {
-        updateData.append('profileImage', formData.profileImageFile);
-      }
-
+      // Step 1: Update text-based profile data
+      const updateData = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        username: formData.username.trim(),
+        phoneNumber: formData.phoneNumber.trim() || null,
+      };
       if (formData.newPassword) {
-        updateData.append('currentPassword', formData.currentPassword);
-        updateData.append('newPassword', formData.newPassword);
+        updateData.currentPassword = formData.currentPassword;
+        updateData.newPassword = formData.newPassword;
       }
-
-      // call auth context update function
       await updateProfile(user.id, updateData);
 
+      // Step 2: If a new avatar file was selected, upload it
+      if (formData.profileImageFile) {
+        await uploadAvatar(user.id, formData.profileImageFile);
+        // Clear the file from state after successful upload
+        setFormData(prev => ({ ...prev, profileImageFile: null }));
+      }
 
       // Reset password fields after update
       setFormData((prev) => ({
@@ -154,7 +174,7 @@ export default function ProfileForm() {
     }
   };
 
-  // Loading spinner While loading user data
+  // While loading user data
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="40vh">
@@ -194,24 +214,44 @@ export default function ProfileForm() {
           onChange={handleImageChange}
         />
 
-        <Button
-          onClick={() => fileInputRef.current.click()}
-          size="small"
-          variant="outlined"
-          sx={{
-            mt: 1,
-            borderColor: '#3ABEFF',
-            color: '#3ABEFF',
-            fontWeight: 'bold',
-            '&:hover': {
-              borderColor: '#FF4ECD',
-              background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-              color: '#000',
-            },
-          }}
-        >
-          Upload Photo
-        </Button>
+        <Box display="flex" gap={1} mt={1}>
+          <Button
+            onClick={() => fileInputRef.current.click()}
+            size="small"
+            variant="outlined"
+            sx={{
+              borderColor: '#3ABEFF',
+              color: '#3ABEFF',
+              fontWeight: 'bold',
+              '&:hover': {
+                borderColor: '#FF4ECD',
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: '#000',
+              },
+            }}
+          >
+            Upload Photo
+          </Button>
+          {preview && (
+            <Button
+              onClick={handleRemoveAvatar}
+              size="small"
+              variant="outlined"
+              color="error"
+              sx={{
+                borderColor: '#f44336',
+                color: '#f44336',
+                fontWeight: 'bold',
+                '&:hover': {
+                  backgroundColor: '#f44336',
+                  color: '#fff',
+                },
+              }}
+            >
+              Remove
+            </Button>
+          )}
+        </Box>
 
         {/* Display name, username, email */}
         <Typography
@@ -242,7 +282,9 @@ export default function ProfileForm() {
         <Typography variant="body2" color="gray" sx={{ mt: 0.5 }}>
           {formData.email}
         </Typography>
-
+        <Typography variant="caption" sx={{ mt: 0.5 }}>
+          Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'N/A'}
+        </Typography>
       </Box>
 
       {/* Display error or success message */}
@@ -253,14 +295,7 @@ export default function ProfileForm() {
       <Box component="form" onSubmit={handleSubmit} mt={3}>
 
         {/* Personal Info Section */}
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            mb: 2, 
-            textTransform: 'uppercase', 
-            fontWeight: 'bold' 
-          }}
-        >
+        <Typography variant="h6" sx={{ mb: 2, textTransform: 'uppercase', fontWeight: 'bold' }}>
           Personal Information
         </Typography>
 
@@ -468,4 +503,3 @@ export default function ProfileForm() {
     </Box>
   );
 }
-

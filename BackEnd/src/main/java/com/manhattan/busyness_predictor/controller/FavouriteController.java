@@ -1,41 +1,43 @@
 package com.manhattan.busyness_predictor.controller;
 
-import com.manhattan.busyness_predictor.model.Favourite;
-import com.manhattan.busyness_predictor.model.User;
-import com.manhattan.busyness_predictor.repository.UserRepository;
-import com.manhattan.busyness_predictor.service.FavouriteService;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-import java.util.Map;
+import com.manhattan.busyness_predictor.dto.FavouriteRequest;
+import com.manhattan.busyness_predictor.model.Favourite;
+import com.manhattan.busyness_predictor.service.FavouriteService;
 
 @RestController
-@RequestMapping("/api/likes")
-public class FavouriteController {
+@RequestMapping("/api/favourites")
+public class FavouriteController extends BaseController {
 
     @Autowired
     private FavouriteService favouriteService;
 
-    @Autowired
-    private UserRepository userRepository;
-
     // Get all favourites for the current user
     @GetMapping
     public ResponseEntity<List<Favourite>> getFavourites(@AuthenticationPrincipal UserDetails userDetails) {
-        Integer userId = extractUserIdFromPrincipal(userDetails);
+        Integer userId = getCurrentUser(userDetails).getId();
         List<Favourite> list = favouriteService.getFavouritesByUser(userId);
         return ResponseEntity.ok(list);
     }
 
     // Add a venue to the user's favourites
     @PostMapping
-    public ResponseEntity<Favourite> likeVenue(@RequestBody Map<String, Object> body, @AuthenticationPrincipal UserDetails userDetails) {
-        Integer venueId = Integer.valueOf(body.get("venueId").toString());
-        Integer userId = extractUserIdFromPrincipal(userDetails);
+    public ResponseEntity<Favourite> likeVenue(@RequestBody FavouriteRequest request, @AuthenticationPrincipal UserDetails userDetails) {
+        Integer venueId = request.getVenueId();
+        Integer userId = getCurrentUser(userDetails).getId();
         Favourite fav = favouriteService.addFavourite(userId, venueId);
         return ResponseEntity.ok(fav);
     }
@@ -43,17 +45,8 @@ public class FavouriteController {
     // Remove a venue from the user's favourites
     @DeleteMapping("/{venueId}")
     public ResponseEntity<?> unlikeVenue(@PathVariable Integer venueId, @AuthenticationPrincipal UserDetails userDetails) {
-        Integer userId = extractUserIdFromPrincipal(userDetails);
+        Integer userId = getCurrentUser(userDetails).getId();
         favouriteService.removeFavourite(userId, venueId);
         return ResponseEntity.ok().build();
     }
-
-    // Extract the user ID from the JWT/Spring Security principal
-    private Integer extractUserIdFromPrincipal(UserDetails userDetails) {
-        String username = userDetails.getUsername();
-        User user = userRepository.findByUsername(username)
-            .orElseThrow(() -> new RuntimeException("User not found"));
-        return user.getId();
-    }
 }
-

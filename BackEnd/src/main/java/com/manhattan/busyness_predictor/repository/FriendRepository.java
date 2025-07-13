@@ -9,43 +9,28 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.manhattan.busyness_predictor.model.Friend;
+import com.manhattan.busyness_predictor.model.Friend.FriendStatus;
 
 @Repository
 public interface FriendRepository extends JpaRepository<Friend, Integer> {
 
-    // Find friendship between two users
+    // Find a specific friendship request (pending or accepted)
     @Query("SELECT f FROM Friend f WHERE " +
-           "(f.user1 = :userId1 AND f.user2 = :userId2) OR " +
-           "(f.user1 = :userId2 AND f.user2 = :userId1)")
-    Optional<Friend> findFriendshipBetweenUsers(@Param("userId1") Integer userId1, 
-                                               @Param("userId2") Integer userId2);
+           "(f.requesterId = :userId1 AND f.receiverId = :userId2) OR " +
+           "(f.requesterId = :userId2 AND f.receiverId = :userId1)")
+    Optional<Friend> findRelationshipBetweenUsers(@Param("userId1") Integer userId1, @Param("userId2") Integer userId2);
 
-    // Find all friendships for a user
-    @Query("SELECT f FROM Friend f WHERE f.user1 = :userId OR f.user2 = :userId")
-    List<Friend> findFriendshipsByUserId(@Param("userId") Integer userId);
+    // Find a specific pending request from a requester to a receiver
+    @Query("SELECT f FROM Friend f WHERE f.requesterId = :requesterId AND f.receiverId = :receiverId AND f.status = 'PENDING'")
+    Optional<Friend> findPendingRequest(@Param("requesterId") Integer requesterId, @Param("receiverId") Integer receiverId);
 
-    // Get friend IDs for a user
-    @Query("SELECT CASE " +
-           "WHEN f.user1 = :userId THEN f.user2 " +
-           "ELSE f.user1 END " +
-           "FROM Friend f WHERE f.user1 = :userId OR f.user2 = :userId")
-    List<Integer> findFriendIdsByUserId(@Param("userId") Integer userId);
+    // Find all friendships for a user with a given status
+    @Query("SELECT f FROM Friend f WHERE (f.requesterId = :userId OR f.receiverId = :userId) AND f.status = :status")
+    List<Friend> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") FriendStatus status);
 
-    // Check if friendship exists
-    @Query("SELECT COUNT(f) > 0 FROM Friend f WHERE " +
-           "(f.user1 = :userId1 AND f.user2 = :userId2) OR " +
-           "(f.user1 = :userId2 AND f.user2 = :userId1)")
-    boolean existsFriendshipBetweenUsers(@Param("userId1") Integer userId1, 
-                                        @Param("userId2") Integer userId2);
+    // Find all pending requests sent by a user (derived query)
+    List<Friend> findByRequesterIdAndStatus(Integer requesterId, FriendStatus status);
 
-    // Count friends for a user
-    @Query("SELECT COUNT(f) FROM Friend f WHERE f.user1 = :userId OR f.user2 = :userId")
-    Integer countFriendsByUserId(@Param("userId") Integer userId);
-
-    // Delete friendship between users
-    @Query("DELETE FROM Friend f WHERE " +
-           "(f.user1 = :userId1 AND f.user2 = :userId2) OR " +
-           "(f.user1 = :userId2 AND f.user2 = :userId1)")
-    void deleteFriendshipBetweenUsers(@Param("userId1") Integer userId1, 
-                                     @Param("userId2") Integer userId2);
+    // Find all pending requests received by a user (derived query)
+    List<Friend> findByReceiverIdAndStatus(Integer receiverId, FriendStatus status);
 }

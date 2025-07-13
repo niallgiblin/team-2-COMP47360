@@ -1,16 +1,18 @@
 package com.manhattan.busyness_predictor.model;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.CascadeType;
-import java.util.List;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "user")
@@ -60,14 +62,28 @@ public class User {
     }
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-favourites")
     private List<Favourite> favourites;
 
-    // getter/setter
+    @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-plans")
+    private List<Plan> plans;
+
+    // getter/setter for favourites
     public List<Favourite> getFavourites() {
         return favourites;
     }
     public void setFavourites(List<Favourite> favourites) {
         this.favourites = favourites;
+    }
+
+    // getter/setter for plans
+    public List<Plan> getPlans() {
+        return plans;
+    }
+
+    public void setPlans(List<Plan> plans) {
+        this.plans = plans;
     }
 
     // Getters and Setters

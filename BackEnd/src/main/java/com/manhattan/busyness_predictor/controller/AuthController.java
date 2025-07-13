@@ -5,13 +5,13 @@ import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.manhattan.busyness_predictor.dto.AuthResponse;
@@ -25,7 +25,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
-public class AuthController {
+public class AuthController extends BaseController {
 
     @Autowired
     private AuthService authService;
@@ -66,51 +66,21 @@ public class AuthController {
         }
     }
 
-    @PutMapping("/profile")
-    public ResponseEntity<Map<String, Object>> alterProfile(
-            @RequestParam Integer userId,
-            @Valid @RequestBody UpdateProfileRequest request) {
-        try {
-            User updatedUser = authService.updateProfile(userId, request);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Profile updated successfully");
-            response.put("user", updatedUser);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
     @PutMapping("/profile/{userId}")
     public ResponseEntity<Map<String, Object>> alterProfileById(
             @PathVariable Integer userId,
-            @Valid @RequestBody UpdateProfileRequest request) {
+            @Valid @RequestBody UpdateProfileRequest request,
+            @AuthenticationPrincipal UserDetails currentUserDetails) {
         try {
-            User updatedUser = authService.updateProfile(userId, request);
+            User currentUser = getCurrentUser(currentUserDetails);
+            if (!currentUser.getId().equals(userId)) {
+                throw new IllegalAccessException("You are not authorized to update this profile. You can only update your own.");
+            }
+            User updatedUser = authService.updateProfile(currentUser.getId(), request);
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Profile updated successfully");
             response.put("user", updatedUser);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    @GetMapping("/profile")
-    public ResponseEntity<Map<String, Object>> getProfile(@RequestParam Integer userId) {
-        try {
-            User user = authService.getUserById(userId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("user", user);
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {

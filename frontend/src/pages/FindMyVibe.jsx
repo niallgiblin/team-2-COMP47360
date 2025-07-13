@@ -51,7 +51,7 @@ export default function FindMyVibe() {
   }, []);
 
   useEffect(() => {
-    fetch("http://localhost:8080/vibe/map-data")
+    fetch(`/api/vibe/map-data`)
       .then((res) => res.json())
       .then((data) => {
         setBusynessMap(data.busyness || {});
@@ -84,7 +84,7 @@ export default function FindMyVibe() {
         maxResults: 50, // Fetch a larger set for client-side pagination
       };
 
-      const res = await fetch(`http://localhost:8080/vibe/search`, {
+      const res = await fetch(`/api/vibe/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),

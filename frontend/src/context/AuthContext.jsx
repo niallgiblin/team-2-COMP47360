@@ -1,236 +1,193 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { createContext, useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
-// Create the context
-const AuthContext = createContext();
+export const AuthContext = createContext(null);
 
-// Custom hook for easy access
-export const useAuth = () => useContext(AuthContext);
-
-// Base API URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
-
-// AuthProvider component that wraps your app
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    !!localStorage.getItem("token")
+  );
   const [loading, setLoading] = useState(true);
 
-  // On first load, check if user is already logged in (via localStorage)
-  useEffect(() => {
-    try {
-      const savedUser = JSON.parse(localStorage.getItem('user'));
-      const savedToken = localStorage.getItem('token');
-
-      if (savedUser && savedToken) {
-        setUser(savedUser);
-        setToken(savedToken);
-        setIsAuthenticated(true);
-      }
-    } catch (error) {
-      console.error('Error loading saved auth data:', error);
-      // Clear corrupted data
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Helper function to make authenticated API calls
-  const makeAuthenticatedRequest = async (url, options = {}) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    return fetch(url, {
-      ...options,
-      headers,
-    });
-  };
-
-  // Login function - matches backend LoginRequest format
-  const login = async (usernameOrEmail, password) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          usernameOrEmail,  // Backend expects this field name
-          password 
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      // Backend returns: { message, user, token }
-      setUser(data.user);
-      setToken(data.token);
-      setIsAuthenticated(true);
-
-      // Save to localStorage
-      localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('token', data.token);
-
-      navigate('/'); // Go to home page after login
-      return { success: true, user: data.user };
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Signup function - matches backend SignUpRequest format
-  const signup = async (userData) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: userData.username,    // Required
-          email: userData.email,          // Required
-          password: userData.password,    // Required
-          firstName: userData.firstName,  // Required
-          lastName: userData.lastName,    // Required
-          phoneNumber: userData.phoneNumber || null // Optional
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Signup failed');
-      }
-
-      // Backend returns: { message, user, token }
-      setUser(data.user);
-      setToken(data.token);
-      setIsAuthenticated(true);
-
-      // Save to localStorage
-      localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('token', data.token);
-
-      navigate('/'); // Go to home page after signup
-      return { success: true, user: data.user };
-    } catch (error) {
-      console.error('Signup failed:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Get user profile by ID
-  const getUserProfile = async (userId) => {
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/auth/profile?userId=${userId}`
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to get user profile');
-      }
-
-      return data.user;
-    } catch (error) {
-      console.error('Get profile failed:', error);
-      throw error;
-    }
-  };
-
-  // Update user profile
-  const updateProfile = async (userId, updateData) => {
-    try {
-      const isFormData = updateData instanceof FormData;
-
-      const response = await fetch(`${API_BASE_URL}/auth/profile/${userId}`, {
-        method: 'PUT',
-        body: isFormData ? updateData : JSON.stringify(updateData),
-        credentials: 'include',
-        headers: isFormData
-          ? {
-              Authorization: `Bearer ${token}`,
-              // No 'Content-Type': let browser set correct boundary
-            }
-          : {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update profile');
-      }
-
-      // Update local user data
-      setUser(data.user);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      return data.user;
-    } catch (error) {
-      console.error('Update profile failed:', error);
-      throw error;
-    }
-  };
-
-
-  // Logout function
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     setToken(null);
     setIsAuthenticated(false);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    navigate("/login");
+  }, [navigate]);
 
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    navigate('/login');
+  // On first load, validate the token from localStorage with the backend.
+  // The dependency array [logout] ensures this runs only once on mount.
+  useEffect(() => {
+    const validateToken = async () => {
+      const savedToken = localStorage.getItem("token");
+      if (savedToken) {
+        try {
+          const response = await fetch(`/api/users/me`, {
+            headers: { Authorization: `Bearer ${savedToken}` },
+          });
+
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData);
+            setToken(savedToken);
+            setIsAuthenticated(true);
+            // Also update user in localStorage to keep it fresh
+            localStorage.setItem("user", JSON.stringify(userData));
+          } else {
+            // Token is invalid or expired, so log out
+            logout();
+          }
+        } catch (error) {
+          console.error("Token validation failed:", error);
+          logout();
+        }
+      }
+      setLoading(false);
+    };
+
+    validateToken();
+  }, [logout]);
+
+  // Helper function to make authenticated API calls
+  const makeAuthenticatedRequest = useCallback(
+    async (url, options = {}) => {
+      const currentToken = localStorage.getItem("token");
+      if (!currentToken) {
+        logout();
+        throw new Error("Not authenticated. Please log in.");
+      }
+
+      const headers = { ...options.headers };
+      // Don't set Content-Type for FormData, let the browser do it
+      if (!(options.body instanceof FormData)) {
+        headers["Content-Type"] = "application/json";
+      }
+      headers["Authorization"] = `Bearer ${currentToken}`;
+
+      const response = await fetch(url, { ...options, headers });
+
+      // If token is expired or invalid, log out automatically
+      if (response.status === 401) {
+        logout();
+        throw new Error("Session expired. Please log in again.");
+      }
+      return response;
+    },
+    [logout]
+  );
+
+  // Login function
+  const login = async (usernameOrEmail, password) => {
+    const response = await fetch(`/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usernameOrEmail, password }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Login failed");
+
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
+    setToken(data.token);
+    setIsAuthenticated(true);
+    navigate("/");
+    return { success: true, user: data.user };
   };
 
-  // Check if user is authenticated (useful for protected routes)
-  const checkAuth = () => {
-    return isAuthenticated && user && token;
+  // Signup function
+  const signup = async (userData) => {
+    const response = await fetch(`/api/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userData),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Signup failed");
+
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
+    setToken(data.token);
+    setIsAuthenticated(true);
+    navigate("/");
+    return { success: true, user: data.user };
+  };
+
+  // Update user profile (text data)
+  const updateProfile = async (userId, updateData) => {
+    const response = await makeAuthenticatedRequest(
+      `/api/auth/profile/${userId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(updateData),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to update profile");
+    setUser(data.user);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    return data.user;
+  };
+
+  // Upload user avatar (file data)
+  const uploadAvatar = async (userId, file) => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const response = await makeAuthenticatedRequest(
+      `/api/auth/profile/${userId}/avatar`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to upload avatar");
+    setUser(data.user);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    return data.user;
+  };
+
+  // Delete user avatar
+  const deleteAvatar = async (userId) => {
+    const response = await makeAuthenticatedRequest(
+      `/api/auth/profile/${userId}/avatar`,
+      {
+        method: "DELETE",
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to delete avatar");
+    setUser(data.user);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    return data.user;
   };
 
   const value = {
-    // State
     user,
     token,
     isAuthenticated,
     loading,
-    
-    // Actions
     login,
     signup,
     logout,
-    getUserProfile,
     updateProfile,
-    checkAuth,
-    makeAuthenticatedRequest
+    uploadAvatar,
+    deleteAvatar,
+    makeAuthenticatedRequest,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  // Prevents a "flash" of the logged-out page while the token is being validated.
+  if (loading) {
+    return null; // Or a loading spinner
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

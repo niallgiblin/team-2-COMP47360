@@ -14,9 +14,11 @@ import com.manhattan.busyness_predictor.dto.PlanResponse;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.model.Plan;
 import com.manhattan.busyness_predictor.model.PlanVenue;
+import com.manhattan.busyness_predictor.model.User;
 import com.manhattan.busyness_predictor.repository.LocationRepository;
 import com.manhattan.busyness_predictor.repository.PlanRepository;
 import com.manhattan.busyness_predictor.repository.PlanVenueRepository;
+import com.manhattan.busyness_predictor.repository.UserRepository;
 
 /**
  * Service class responsible for handling user plan operations initiated by the frontend.
@@ -33,6 +35,9 @@ public class FrontendPlanService {
     @Autowired
     private LocationRepository locationRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     /**
      * Creates a new plan for the given user.
      *
@@ -48,10 +53,13 @@ public class FrontendPlanService {
             throw new RuntimeException("One or more venues were not found");
         }
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
+
         // Build and persist the Plan entity
         Plan plan = new Plan();
         plan.setName(request.getName());
-        plan.setCreatedBy(userId);
+        plan.setCreatedBy(user);
         plan.setCreatedAt(LocalDateTime.now());
         Plan savedPlan = planRepository.save(plan);
 
@@ -80,7 +88,7 @@ public class FrontendPlanService {
      * @return       A list of PlanResponse DTOs
      */
     public List<PlanResponse> getAllPlansForUser(Integer userId) {
-        List<Plan> plans = planRepository.findByCreatedByOrderByCreatedAtDesc(userId);
+        List<Plan> plans = planRepository.findByCreatedBy_IdOrderByCreatedAtDesc(userId);
         return convertToResponseList(plans);
     }
 
@@ -92,7 +100,7 @@ public class FrontendPlanService {
      * @return       A PlanResponse DTO
      */
     public PlanResponse getPlanById(Integer planId, Integer userId) {
-        Optional<Plan> opt = planRepository.findByIdAndCreatedBy(planId, userId);
+        Optional<Plan> opt = planRepository.findByIdAndCreatedBy_Id(planId, userId);
         if (opt.isEmpty()) {
             throw new RuntimeException("Plan not found or access denied");
         }
@@ -107,7 +115,7 @@ public class FrontendPlanService {
      */
     @Transactional
     public void deletePlan(Integer planId, Integer userId) {
-        Optional<Plan> opt = planRepository.findByIdAndCreatedBy(planId, userId);
+        Optional<Plan> opt = planRepository.findByIdAndCreatedBy_Id(planId, userId);
         if (opt.isEmpty()) {
             throw new RuntimeException("Plan not found or access denied");
         }

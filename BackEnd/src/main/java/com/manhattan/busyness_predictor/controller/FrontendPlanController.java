@@ -7,7 +7,15 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.manhattan.busyness_predictor.dto.CreatePlanRequest;
 import com.manhattan.busyness_predictor.dto.PlanResponse;
@@ -19,8 +27,7 @@ import com.manhattan.busyness_predictor.service.FrontendPlanService;
  */
 @RestController
 @RequestMapping("/api/plans")
-@CrossOrigin(origins = "*")
-public class FrontendPlanController {
+public class FrontendPlanController extends BaseController {
 
     @Autowired
     private FrontendPlanService frontendPlanService;
@@ -35,9 +42,10 @@ public class FrontendPlanController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> createPlan(
             @RequestBody CreatePlanRequest request,
-            @RequestAttribute User user) {
+            @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            PlanResponse planResponse = frontendPlanService.createPlan(request, user.getId());
+            User currentUser = getCurrentUser(userDetails);
+            PlanResponse planResponse = frontendPlanService.createPlan(request, currentUser.getId());
 
             Map<String, Object> responseBody = new HashMap<>();
             responseBody.put("message", "Plan created successfully");
@@ -59,9 +67,10 @@ public class FrontendPlanController {
      */
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllPlans(
-            @RequestAttribute User user) {
+            @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            List<PlanResponse> plans = frontendPlanService.getAllPlansForUser(user.getId());
+            User currentUser = getCurrentUser(userDetails);
+            List<PlanResponse> plans = frontendPlanService.getAllPlansForUser(currentUser.getId());
 
             Map<String, Object> responseBody = new HashMap<>();
             responseBody.put("plans", plans);
@@ -85,9 +94,10 @@ public class FrontendPlanController {
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getPlanById(
             @PathVariable Integer id,
-            @RequestAttribute User user) {
+            @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            PlanResponse planResponse = frontendPlanService.getPlanById(id, user.getId());
+            User currentUser = getCurrentUser(userDetails);
+            PlanResponse planResponse = frontendPlanService.getPlanById(id, currentUser.getId());
 
             Map<String, Object> responseBody = new HashMap<>();
             responseBody.put("plan", planResponse);
@@ -110,9 +120,10 @@ public class FrontendPlanController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deletePlan(
             @PathVariable Integer id,
-            @RequestAttribute User user) {
+            @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            frontendPlanService.deletePlan(id, user.getId());
+            User currentUser = getCurrentUser(userDetails);
+            frontendPlanService.deletePlan(id, currentUser.getId());
 
             Map<String, Object> responseBody = new HashMap<>();
             responseBody.put("message", "Plan deleted successfully");

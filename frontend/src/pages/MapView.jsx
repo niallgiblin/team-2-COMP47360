@@ -159,7 +159,7 @@ export default function MapView() {
         return;
       }
       try {
-        const res = await fetch("http://localhost:8080/vibe/map-data");
+        const res = await fetch(`/api/vibe/map-data`);
         if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
         setVenues(data.locations || []);

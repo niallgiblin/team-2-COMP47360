@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -21,25 +23,29 @@ public class Friend {
     @Column(name = "timestamp")
     private LocalDateTime timestamp;
 
-    @Column(name = "user1_id")
-    private Integer user1;
+    @Column(name = "requester_id", nullable = false)
+    private Integer requesterId;
 
-    @Column(name = "user2_id")
-    private Integer user2;
+    @Column(name = "receiver_id", nullable = false)
+    private Integer receiverId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private FriendStatus status;
+
+    public enum FriendStatus {
+        PENDING,
+        ACCEPTED
+    }
 
     // Constructors
     public Friend() {
     }
 
-    public Friend(Integer user1, Integer user2) {
-        // 确保 user1 总是较小的ID，保持一致性
-        if (user1 < user2) {
-            this.user1 = user1;
-            this.user2 = user2;
-        } else {
-            this.user1 = user2;
-            this.user2 = user1;
-        }
+    public Friend(Integer requesterId, Integer receiverId) {
+        this.requesterId = requesterId;
+        this.receiverId = receiverId;
+        this.status = FriendStatus.PENDING; // Default status is pending
         this.timestamp = LocalDateTime.now();
     }
 
@@ -60,33 +66,27 @@ public class Friend {
         this.timestamp = timestamp;
     }
 
-    public Integer getUser1() {
-        return user1;
+    public Integer getRequesterId() {
+        return requesterId;
     }
 
-    public void setUser1(Integer user1) {
-        this.user1 = user1;
+    public void setRequesterId(Integer requesterId) {
+        this.requesterId = requesterId;
     }
 
-    public Integer getUser2() {
-        return user2;
+    public Integer getReceiverId() {
+        return receiverId;
     }
 
-    public void setUser2(Integer user2) {
-        this.user2 = user2;
+    public void setReceiverId(Integer receiverId) {
+        this.receiverId = receiverId;
     }
 
-    // Helper methods
-    public Integer getOtherUser(Integer userId) {
-        if (userId.equals(user1)) {
-            return user2;
-        } else if (userId.equals(user2)) {
-            return user1;
-        }
-        return null;
+    public FriendStatus getStatus() {
+        return status;
     }
 
-    public boolean containsUser(Integer userId) {
-        return userId.equals(user1) || userId.equals(user2);
+    public void setStatus(FriendStatus status) {
+        this.status = status;
     }
 }

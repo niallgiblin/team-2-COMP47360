@@ -15,7 +15,8 @@ import AIChatWidget from './components/AIChatWidget';
 import Signup from './pages/Signup.jsx';
 
 // Import new authentication components
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./hooks/useAuth";
 import { FriendRequestProvider } from './context/FriendRequestContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Profile from './pages/Profile';

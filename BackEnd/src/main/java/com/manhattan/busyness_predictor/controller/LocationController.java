@@ -10,6 +10,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +25,7 @@ import com.manhattan.busyness_predictor.dto.ReviewRequest;
 import com.manhattan.busyness_predictor.dto.ShareRequest;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.model.Review;
+import com.manhattan.busyness_predictor.model.User;
 import com.manhattan.busyness_predictor.service.FavouriteService;
 import com.manhattan.busyness_predictor.service.HistoryService;
 import com.manhattan.busyness_predictor.service.LocationService;
@@ -32,8 +35,8 @@ import com.manhattan.busyness_predictor.service.SharedService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/location")
-public class LocationController {
+@RequestMapping("/api/locations")
+public class LocationController extends BaseController {
 
     @Autowired
     private LocationService locationService;
@@ -116,11 +119,12 @@ public class LocationController {
     @PostMapping("/{id}/review")
     public ResponseEntity<Map<String, Object>> leaveReview(
             @PathVariable Integer id,
-            @RequestParam Integer userId,
-            @Valid @RequestBody ReviewRequest reviewRequest) {
+            @Valid @RequestBody ReviewRequest reviewRequest,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
         try {
-            Review review = reviewService.createReview(userId, id, reviewRequest);
+            User user = getCurrentUser(userDetails);
+            Review review = reviewService.createReview(user.getId(), id, reviewRequest);
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Review created successfully");
@@ -137,11 +141,12 @@ public class LocationController {
     @PutMapping("/review/{id}")
     public ResponseEntity<Map<String, Object>> updateReview(
             @PathVariable Integer reviewId,
-            @RequestParam Integer userId,
-            @Valid @RequestBody ReviewRequest reviewRequest) {
+            @Valid @RequestBody ReviewRequest reviewRequest,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
         try {
-            Review review = reviewService.updateReview(reviewId, userId, reviewRequest);
+            User user = getCurrentUser(userDetails);
+            Review review = reviewService.updateReview(reviewId, user.getId(), reviewRequest);
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Review updated successfully");
@@ -158,11 +163,12 @@ public class LocationController {
     @PostMapping("/{id}/share")
     public ResponseEntity<Map<String, String>> shareLocation(
             @PathVariable Integer id,
-            @RequestParam Integer senderId,
-            @Valid @RequestBody ShareRequest shareRequest) {
+            @Valid @RequestBody ShareRequest shareRequest,
+            @AuthenticationPrincipal UserDetails userDetails) {
 
         try {
-            sharedService.shareLocation(senderId, shareRequest.getReceiverId(), id);
+            User user = getCurrentUser(userDetails);
+            sharedService.shareLocation(user.getId(), shareRequest.getReceiverId(), id);
 
             Map<String, String> response = new HashMap<>();
             response.put("message", "Location shared successfully");
@@ -176,9 +182,10 @@ public class LocationController {
 
     // Get user's search history
     @GetMapping("/history")
-    public ResponseEntity<?> getSearchHistory(@RequestParam Integer userId) {
+    public ResponseEntity<?> getSearchHistory(@AuthenticationPrincipal UserDetails userDetails) {
         try {
-            List<Location> history = historyService.getSearchHistory(userId);
+            User user = getCurrentUser(userDetails);
+            List<Location> history = historyService.getSearchHistory(user.getId());
             return ResponseEntity.ok(history);
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();

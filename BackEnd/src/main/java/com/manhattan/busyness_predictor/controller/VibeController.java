@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +24,7 @@ import com.manhattan.busyness_predictor.service.VibeService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/vibe")
+@RequestMapping("/api/vibe")
 public class VibeController {
 
     private static final Logger logger = LoggerFactory.getLogger(VibeController.class);
@@ -126,46 +125,6 @@ public class VibeController {
                 error.put("message", "Base location not found.");
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
             }
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-        }
-    }
-
-    // Get location details by ID (for LLM fallback)
-    @GetMapping("/api/location/{id}")
-    public ResponseEntity<Map<String, Object>> getLocationById(@PathVariable Integer id) {
-        try {
-            Location location = vibeService.getLocationById(id);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("location", location);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error fetching location by ID: {}", id, e);
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", "Location not found.");
-            error.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
-        }
-    }
-
-    // Get multiple locations by IDs (for batch LLM responses)
-    @PostMapping("/api/location/batch")
-    public ResponseEntity<Map<String, Object>> getLocationsByIds(
-            @RequestBody List<Integer> locationIds) {
-        try {
-            List<Location> locations = vibeService.getLocationsByIds(locationIds);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("locations", locations);
-            response.put("totalResults", locations.size());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error during batch location fetch for IDs: {}", locationIds, e);
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", "An internal server error occurred during batch fetch.");
-            error.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
