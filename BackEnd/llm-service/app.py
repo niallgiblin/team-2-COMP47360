@@ -23,17 +23,6 @@ def _safe_to_int(value, default=0):
     except (ValueError, TypeError):
         return default
 
-# Helper function for safe type conversion
-def _safe_to_int(value, default=0):
-    """Safely convert a value to an integer, handling pandas/numpy NaN."""
-    if pd.isna(value):
-        return default
-    try:
-        # Convert to float first to handle string representations of floats
-        return int(float(value))
-    except (ValueError, TypeError):
-        return default
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

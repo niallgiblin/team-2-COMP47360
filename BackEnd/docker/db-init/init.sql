@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS location (
+CREATE TABLE IF NOT EXISTS `location` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     latitude DOUBLE NOT NULL,
     longitude DOUBLE NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS location (
 
 -- Load data from CSV (inside the container)
 LOAD DATA LOCAL INFILE '/docker-entrypoint-initdb.d/locations_data_markIV.csv'
-INTO TABLE location
+INTO TABLE `location`
 FIELDS TERMINATED BY ','
 OPTIONALLY ENCLOSED BY '"'
 LINES TERMINATED BY '\n'

@@ -33,6 +33,17 @@ import polyline from "@mapbox/polyline";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
+const generateNext12Hours = () => {
+  const timestamps = [];
+
+  for (let i = 0; i < 12; i++) {
+    const dt = DateTime.now().setZone("America/New_York").plus({ hours: i });
+    timestamps.push(dt.toISO()); // ISO string in NY time
+  }
+
+  return timestamps;
+};
+
 export default function MapView() {
   // Define tab styles
   const tabStyles = {
