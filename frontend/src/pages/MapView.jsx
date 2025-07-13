@@ -21,7 +21,6 @@ import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
 import CompactSavedPlans from '../components/CompactSavedPlans';
-import { DateTime } from "luxon";
 
 // Data and context
 import mockVenues from "../data/mockVenues";
@@ -31,17 +30,6 @@ import { usePlan } from "../context/PlanContext";
 import polyline from "@mapbox/polyline";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-
-const generateNext12Hours = () => {
-  const timestamps = [];
-
-  for (let i = 0; i < 12; i++) {
-    const dt = DateTime.now().setZone("America/New_York").plus({ hours: i });
-    timestamps.push(dt.toISO()); // ISO string in NY time
-  }
-
-  return timestamps;
-};
 
 export default function MapView() {
 
@@ -69,6 +57,7 @@ export default function MapView() {
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
   const fromPlan = location.state?.fromPlan || false;
+  
 
   const { plan } = usePlan();
   const { setFromPlan } = usePlan();
@@ -80,6 +69,7 @@ export default function MapView() {
   const [zoneCenter, setZoneCenter] = useState(null);
   const [manualStart, setManualStart] = useState("");
   const [userLocation, setUserLocation] = useState(null);
+
 
   // Reset map by fully refreshing the page, when button is clicked
   const [resetMapKey] = useState(0);
@@ -98,7 +88,7 @@ export default function MapView() {
   // State for map mode (live vs. forecast)
   const [mode, setMode] = useState("live");
   const [predictionData, setPredictionData] = useState([]);
-  const [selectedTimestamp, setSelectedTimestamp] = useState(generateNext12Hours()[0]);
+  const [selectedTimestamp, setSelectedTimestamp] = useState(null);
 
   // State for route directions
   const [travelMode, setTravelMode] = useState("WALK");
@@ -113,6 +103,7 @@ export default function MapView() {
     const comingFromPlan = location.state?.fromPlan === true;
     setFromPlan(comingFromPlan);
   }, [location.state, setFromPlan]);
+
 
   // 1. Try to automatically retrieve user's geolocation
   useEffect(() => {
@@ -173,6 +164,7 @@ export default function MapView() {
         console.warn("Falling back to mock data due to fetch error:", err);
         setVenues(mockVenues);
         if (!selectedVenueFromState) setSelectedVenue(mockVenues[0]);
+        console.log("[MapView] setting selectedVenue from mock");
         setIsMock(true);
       } finally {
         setLoading(false);
@@ -227,7 +219,13 @@ export default function MapView() {
           ? manhattanZoneIds
           : zoneData.features.map((f) => f.properties.LocationID);
 
-      const timestamps = generateNext12Hours();
+      const timestamps = [
+        "2025-07-04T18:00:00Z",
+        "2025-07-04T19:00:00Z",
+        "2025-07-04T20:00:00Z",
+        "2025-07-04T21:00:00Z",
+        "2025-07-04T22:00:00Z",
+      ];
 
       // Generate predictions for every Manhattan zone
       return zonesToUse.map((zoneId) => ({
@@ -367,21 +365,11 @@ export default function MapView() {
   };
 
   // Refetch directions when mode changes (walk/ public transport)
-useEffect(() => {
-  if (!showDirections) return;
-
-  const hasValidStart = userLocation || (fromPlan && plan.length > 0);
-  const hasValidDestination = selectedVenue || (fromPlan && plan.length > 0);
-
-  const venuesReady = fromPlan ? plan.length > 0 : selectedVenue;
-  const zonesReady = zoneData !== null;
-  const allReady = hasValidStart && hasValidDestination && venuesReady && zonesReady;
-
-  if (allReady) {
-    handleGetDirections();
-  }
-}, [travelMode, showDirections, userLocation, selectedVenue, plan, zoneData]);
-
+  useEffect(() => {
+    if (showDirections && directions.length > 0) {
+      handleGetDirections();
+    }
+  }, [travelMode]);
 
   
   if (loading) {
@@ -607,6 +595,7 @@ useEffect(() => {
               sx={{
                 width: "100%",
                 maxWidth: "700px",
+                mt: 2,
                 px: 1,
               }}
             >
@@ -759,7 +748,7 @@ useEffect(() => {
             mode={mode}
             predictionData={predictionData}
             selectedTimestamp={selectedTimestamp}
-            plan={fromPlan ? enrichedVenues : plan}
+            plan={plan}
             routeCoords={directionsPolyline}
             showDirections={showDirections}
             resetMapKey={resetMapKey}
