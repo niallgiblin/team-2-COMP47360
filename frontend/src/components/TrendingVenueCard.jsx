@@ -199,44 +199,86 @@ export default function TrendingVenueCard({
                             {venue.summary || venue.description || ''}
                         </Typography>
 
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            <Button
-                                variant="text"
-                                size="small"
-                                onClick={() => {
-                                    setSelectedVenue(venue);
-                                    setFromPlan(false);
-                                    navigate('/map');
-                                }}
-                                sx={{
-                                    color: '#3ABEFF',
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    px: 0,
-                                }}
-                            >
-                                View on Map
-                            </Button>
+        <Box 
+            sx={{ 
+                display: 'flex', 
+                gap: 1, 
+                flexWrap: 'wrap' 
+            }}
+        >
+          <Button
+            variant="text"
+            size="small"
+            onClick={() => {
+              setSelectedVenue(venue);
+              setFromPlan(false);
+              navigate('/map');
+            }}
+            sx={{
+              color: '#3ABEFF',
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 0,
+            }}
+          >
+            View on Map
+          </Button>
 
-                            {venue.uri && (
-                                <Button
-                                    variant="text"
-                                    size="small"
-                                    onClick={handleWebsiteClick}
-                                    startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
-                                    sx={{
-                                        color: '#FF4ECD',
-                                        textTransform: 'none',
-                                        fontWeight: 600,
-                                        px: 0,
-                                    }}
-                                >
-                                    Website
-                                </Button>
-                            )}
-                        </Box>
-                    </Box>
-                </Box>
+          {venue.uri && (
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleWebsiteClick}
+              startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                color: '#FF4ECD',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 0,
+              }}
+            >
+              Website
+            </Button>
+          )}
+        </Box>
+        {Array.isArray(venue.tags) && venue.tags.length > 0 && (
+            <Box 
+                sx={{ 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
+                    gap: 1,
+                    mt: 1 
+                    }}
+                >
+                {venue.tags.map((tag) => (
+                <Chip
+                    key={tag}
+                    label={tag}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                        backgroundColor: '#1a1a1a', 
+                        color: '#3ABEFF',                            // bright cyan text
+                        borderColor: '#3ABEFF',
+                        borderWidth: '1px',
+                        borderRadius: '10px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.3px',
+                        paddingX: '8px',
+                        height: '24px',
+                        textTransform: 'capitalize',
+                        '& .MuiChip-label': {
+                        padding: 0,
+                        },
+                    }}
+                />
+                ))}
+            </Box>
+            )}
+
+      </Box>
+    </Box>
 
                 <Box
                     sx={{

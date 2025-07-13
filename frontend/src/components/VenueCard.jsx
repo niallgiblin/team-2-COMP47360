@@ -133,24 +133,55 @@ export default function VenueCard({ venue, variant = 'default' }) {
         {/* Rating and price */}
         <Box
             sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            mt: 1,
+              display: 'flex',
+              flexDirection: variant === 'compact' ? 'column' : 'row',
+              alignItems: variant === 'compact' ? 'flex-start' : 'center',
+              gap: variant === 'compact' ? 0.5 : 5,
+              mt: 1,
             }}
         >
             {/* Rating */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 0.25 
+              }}
+            >
               {[1, 2, 3, 4, 5].map((i) => {
                 if (parsedRating >= i) {
-                  return <StarIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                  return <StarIcon 
+                            key={i} 
+                            sx={{ 
+                              fontSize: 18, 
+                              color: '#FFD700' 
+                            }} 
+                          />;
                 } else if (parsedRating >= i - 0.5) {
-                  return <StarHalfIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                  return <StarHalfIcon 
+                            key={i} 
+                            sx={{ 
+                              fontSize: 18, 
+                              color: '#FFD700' 
+                            }} 
+                          />;
                 } else {
-                  return <StarBorderIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                  return <StarBorderIcon 
+                          key={i} 
+                          sx={{ 
+                            fontSize: 18, 
+                            color: '#FFD700' 
+                          }} 
+                        />;
                 }
               })}
-              <Typography variant="body2" sx={{ color: '#fff', ml: 1 }}>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: '#fff', 
+                  ml: 1 
+                }}
+              >
                 {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
               </Typography>
             </Box>
@@ -160,10 +191,10 @@ export default function VenueCard({ venue, variant = 'default' }) {
             {/* Price */}
             <Box 
                 sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
-                    gap: '0.25',
-                    flexWrap:'nowrap',
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  mt: variant === 'compact' ? 0.5 : 0,
                 }}>
             {[1, 2, 3, 4, 5].map((i) => (
                 <AttachMoneyIcon
