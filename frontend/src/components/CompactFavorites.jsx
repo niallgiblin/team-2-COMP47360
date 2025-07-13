@@ -35,16 +35,7 @@ export default function CompactFavorites() {
 
     return (
         <Box>
-            <Typography
-                variant="subtitle1"
-                sx={{
-                    color: "#fff",
-                    fontWeight: "bold",
-                    mb: 1,
-                }}
-            >
-                Your Favourite Venues
-            </Typography>
+
 
             <Box
                 sx={{
