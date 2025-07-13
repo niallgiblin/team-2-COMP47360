@@ -21,6 +21,7 @@ import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
 import CompactSavedPlans from '../components/CompactSavedPlans';
+import CompactFavorites from '../components/CompactFavorites';
 import { DateTime } from "luxon";
 
 // Data and context
@@ -831,33 +832,26 @@ export default function MapView() {
               <Tab label="Favourites" value="favourites" sx={tabStyles} />
             </Tabs>
 
-            {/* Conditional View Content */}
-            <Box
-              sx={{
-                flexGrow: 1,
-                minWidth: 0,
-                overflow: "hidden",
+          {/* Conditional View Content */}
+          <Box 
+            sx={{ 
+              flexGrow: 1,
+              minWidth: 0,
+              overflow: 'hidden',
               }}
             >
-              {viewMode === "plan" &&
-                (fromPlan ? (
-                  <CompactPlanSummary />
-                ) : (
-                  selectedVenue && (
-                    <VenueCard venue={selectedVenue} variant="compact" />
-                  )
-                ))}
+            {viewMode === 'plan' && (
+              fromPlan ? (
+                <CompactPlanSummary />
+              ) : (
+                selectedVenue && <VenueCard venue={selectedVenue} variant="compact" />
+              )
+            )}
 
-              {viewMode === "saved" && (
-                <CompactSavedPlans setViewMode={setViewMode} />
-              )}
+            {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
 
-              {viewMode === "favourites" && (
-                <Typography sx={{ color: "#888", mt: 2 }}>
-                  You haven’t added any favourites yet.
-                </Typography>
-              )}
-            </Box>
+            {viewMode === 'favourites' && <CompactFavorites />}
+          </Box>
           </Box>
         </Box>
 
