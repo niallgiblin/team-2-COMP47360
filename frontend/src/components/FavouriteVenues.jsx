@@ -47,7 +47,7 @@ function FavouriteVenues() {
 
             <Box
                 sx={{
-                    border: '1px solid #ff00cc',
+                    border: '1px solid #900B6A',
                     borderRadius: '16px',
                     padding: 3,
                     backgroundColor: '#000',
