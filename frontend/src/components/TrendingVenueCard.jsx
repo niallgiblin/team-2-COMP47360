@@ -206,7 +206,13 @@ export default function TrendingVenueCard({ venue, busynessMap = {}, showLikeBut
           {venue.summary || venue.description || ''}
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Box 
+            sx={{ 
+                display: 'flex', 
+                gap: 1, 
+                flexWrap: 'wrap' 
+            }}
+        >
           <Button
             variant="text"
             size="small"
@@ -242,6 +248,42 @@ export default function TrendingVenueCard({ venue, busynessMap = {}, showLikeBut
             </Button>
           )}
         </Box>
+        {Array.isArray(venue.tags) && venue.tags.length > 0 && (
+            <Box 
+                sx={{ 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
+                    gap: 1,
+                    mt: 1 
+                    }}
+                >
+                {venue.tags.map((tag) => (
+                <Chip
+                    key={tag}
+                    label={tag}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                        backgroundColor: '#1a1a1a', 
+                        color: '#3ABEFF',                            // bright cyan text
+                        borderColor: '#3ABEFF',
+                        borderWidth: '1px',
+                        borderRadius: '10px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.3px',
+                        paddingX: '8px',
+                        height: '24px',
+                        textTransform: 'capitalize',
+                        '& .MuiChip-label': {
+                        padding: 0,
+                        },
+                    }}
+                />
+                ))}
+            </Box>
+            )}
+
       </Box>
     </Box>
 
