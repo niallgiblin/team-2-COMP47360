@@ -21,6 +21,7 @@ import CompactPlanSummary from "../components/CompactPlanSummary";
 import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
 import CompactSavedPlans from '../components/CompactSavedPlans';
+import CompactFavorites from '../components/CompactFavorites';
 import { DateTime } from "luxon";
 
 // Data and context
@@ -710,11 +711,8 @@ useEffect(() => {
 
             {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
 
-            {viewMode === 'favourites' && (
-              <Typography sx={{ color: '#888', mt: 2 }}>
-                You haven’t added any favourites yet.
-              </Typography>
-            )}
+            {viewMode === 'favourites' &&  <CompactFavorites />}
+
           </Box>
         </Box>
         </Box>
