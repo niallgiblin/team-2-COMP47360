@@ -111,6 +111,7 @@ export default function FindMyVibe() {
           parsedPrice = priceMap[rawPrice.trim().toLowerCase()] || 0;
         }
 
+        //IMPORTANT!! REMOVE MOCK DATA FROM TAGS DEBUGGING
         const enriched = {
           ...v,
           id: v.id || `${v.name}-${v.lat}-${v.lng}`,
@@ -122,6 +123,7 @@ export default function FindMyVibe() {
           description: v.description || "",
           summary: v.summary || v.description || "",
           imageUrl: v.imageUrl || v.image_url || v.image || null,
+          tags: typeof v.tags === 'string' ? v.tags.split(',').map(t => t.trim()) : v.tags || ['art', 'historic', 'date night'],
         };
 
         const text = `${v.tags || ""} ${v.loc_type || ""} ${v.description || ""} ${v.summary || ""}`.toLowerCase();
