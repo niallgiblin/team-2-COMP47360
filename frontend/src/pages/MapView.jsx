@@ -33,17 +33,6 @@ import polyline from "@mapbox/polyline";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
-const generateNext12Hours = () => {
-  const timestamps = [];
-
-  for (let i = 0; i < 12; i++) {
-    const dt = DateTime.now().setZone("America/New_York").plus({ hours: i });
-    timestamps.push(dt.toISO()); // ISO string in NY time
-  }
-
-  return timestamps;
-};
-
 export default function MapView() {
   // Define tab styles
   const tabStyles = {
@@ -69,6 +58,7 @@ export default function MapView() {
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
   const fromPlan = location.state?.fromPlan || false;
+  
 
   const { plan } = usePlan();
   const { setFromPlan } = usePlan();
@@ -80,6 +70,7 @@ export default function MapView() {
   const [zoneCenter, setZoneCenter] = useState(null);
   const [manualStart, setManualStart] = useState("");
   const [userLocation, setUserLocation] = useState(null);
+
 
   // Reset map by fully refreshing the page, when button is clicked
   const [resetMapKey] = useState(0);
@@ -115,6 +106,7 @@ export default function MapView() {
     const comingFromPlan = location.state?.fromPlan === true;
     setFromPlan(comingFromPlan);
   }, [location.state, setFromPlan]);
+
 
   // 1. Try to automatically retrieve user's geolocation
   useEffect(() => {
@@ -175,6 +167,7 @@ export default function MapView() {
         console.warn("Falling back to mock data due to fetch error:", err);
         setVenues(mockVenues);
         if (!selectedVenueFromState) setSelectedVenue(mockVenues[0]);
+        console.log("[MapView] setting selectedVenue from mock");
         setIsMock(true);
       } finally {
         setLoading(false);
@@ -229,7 +222,13 @@ export default function MapView() {
           ? manhattanZoneIds
           : zoneData.features.map((f) => f.properties.LocationID);
 
-      const timestamps = generateNext12Hours();
+      const timestamps = [
+        "2025-07-04T18:00:00Z",
+        "2025-07-04T19:00:00Z",
+        "2025-07-04T20:00:00Z",
+        "2025-07-04T21:00:00Z",
+        "2025-07-04T22:00:00Z",
+      ];
 
       // Generate predictions for every Manhattan zone
       return zonesToUse.map((zoneId) => ({
@@ -742,27 +741,29 @@ export default function MapView() {
                 {showDirections ? "Hide Directions" : "Get Directions"}
               </Button>
             )}
+            
+          {/* Forecast Slider */}
+          {mode === "forecast" && predictionData.length > 0 && (
+            <Box
+              sx={{
+                width: "100%",
+                maxWidth: "700px",
+                mt: 2,
+                px: 1,
+              }}
+            >
+              <ForecastSlider
+                timestamps={predictionData[0]?.predictions?.map(
+                  (p) => p.timestamp
+                )}
+                selectedTimestamp={selectedTimestamp}
+                onChange={setSelectedTimestamp}
+                mode={mode}
+              />
+            </Box>
+          )}
+        </Box>
 
-            {/* Forecast Slider */}
-            {mode === "forecast" && predictionData.length > 0 && (
-              <Box
-                sx={{
-                  width: "100%",
-                  maxWidth: "700px",
-                  px: 1,
-                }}
-              >
-                <ForecastSlider
-                  timestamps={predictionData[0]?.predictions?.map(
-                    (p) => p.timestamp
-                  )}
-                  selectedTimestamp={selectedTimestamp}
-                  onChange={setSelectedTimestamp}
-                  mode={mode}
-                />
-              </Box>
-            )}
-          </Box>
 
           {/* Vertical Divider */}
           <Box
@@ -894,7 +895,7 @@ export default function MapView() {
             mode={mode}
             predictionData={predictionData}
             selectedTimestamp={selectedTimestamp}
-            plan={fromPlan ? enrichedVenues : plan}
+            plan={plan}
             routeCoords={directionsPolyline}
             showDirections={showDirections}
             resetMapKey={resetMapKey}

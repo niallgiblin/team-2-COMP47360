@@ -48,7 +48,9 @@ export default function DemoMap({
   const [routeKey, setRouteKey] = useState(0);
   const [activeZoneVenues, setActiveZoneVenues] = useState([]);
   const allVenuesRef = useRef([]);
-  const { selectedVenue } = usePlan(); // ⛔️ don't use fromPlan from context anymore
+  const { selectedVenue } = usePlan();
+  const [overridePlanMode, setOverridePlanMode] = useState(false);
+
 
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
@@ -81,7 +83,9 @@ export default function DemoMap({
 
   useEffect(() => {
     allVenuesRef.current = venues;
+    console.log("[DemoMap] allVenuesRef updated:", venues.length, venues.map(v => v.name || v.id));
   }, [venues]);
+
 
   const handleZoneClick = (feature) => {
     const zoneId = feature.properties.LocationID;
@@ -90,11 +94,13 @@ export default function DemoMap({
         (v) => String(v.zone) === String(zoneId)
       );
       setActiveZoneVenues(filteredVenues);
+      setOverridePlanMode(true); // 👈 important
     } catch (err) {
       console.error("Failed to load venues for zone:", err);
       setActiveZoneVenues([]);
     }
   };
+
 
   const onEachZone = (feature, layer) => {
     layer.on({
@@ -133,16 +139,32 @@ export default function DemoMap({
     );
   };
 
-  function FlyToVenue({ venue }) {
-    const map = useMap();
-    useEffect(() => {
-      if (venue?.lat && venue?.lng) {
-        const timeout = setTimeout(() => map.flyTo([venue.lat, venue.lng], 15), 300);
-        return () => clearTimeout(timeout);
-      }
-    }, [venue, map]);
-    return null;
-  }
+function FlyToVenue({ venue, showDirections }) {
+  const map = useMap();
+  const hasZoomedRef = useRef(false); // track zoom state
+
+  // Reset zoom when selected venue changes
+  useEffect(() => {
+    hasZoomedRef.current = false;
+  }, [venue?.id]);
+
+  // Only zoom when conditions are right
+  useEffect(() => {
+    if (!venue?.lat || !venue?.lng || showDirections || hasZoomedRef.current) return;
+
+    hasZoomedRef.current = true;
+
+    const timeout = setTimeout(() => {
+      map.flyTo([venue.lat, venue.lng], 15);
+    }, 500);      // slight delay to wait for state transition
+
+    return () => clearTimeout(timeout);
+  }, [venue, showDirections, map]);
+
+  return null;
+}
+
+
 
   function FlyToZone({ center }) {
     const map = useMap();
@@ -154,29 +176,25 @@ export default function DemoMap({
 
   function FlyToPlan({ venues, fromPlan }) {
     const map = useMap();
+
     useEffect(() => {
+      // only proceed if we are in "fromPlan" mode, there are one or more venues and all venues have valid coords
       if (
         !fromPlan ||
         !venues ||
         venues.length === 0 ||
         !venues.every((v) => typeof v.lat === "number" && typeof v.lng === "number")
       ) {
-        return;
+        return; // exit early if conditions are not met
       }
 
-      const coords = venues.map((v) => [v.lat, v.lng]);
-
-      if (coords.length === 1) {
-        map.flyTo(coords[0], 15);
-      } else {
-        const latSum = coords.reduce((sum, [lat]) => sum + lat, 0);
-        const lngSum = coords.reduce((sum, [, lng]) => sum + lng, 0);
-        map.flyTo([latSum / coords.length, lngSum / coords.length], 14);
-      }
-    }, [venues, fromPlan, map]);
+      const bounds = L.latLngBounds(venues.map((v) => [v.lat, v.lng]));      // convert coords to leaflet LatLng tuples
+      map.fitBounds(bounds, { padding: [40, 40] });                         // instruct the map to zoom and pan so all venues are visible, add padding around markers for clarity
+    }, [venues, fromPlan, map]);                                            // re-run effect if venues or fromPlan changes
 
     return null;
   }
+
 
   function FlyToUserLocation({ location }) {
     const map = useMap();
@@ -246,13 +264,16 @@ export default function DemoMap({
     return null;
   }
 
-  const displayedVenues = fromPlanProp
-    ? plan
-    : activeZoneVenues.length > 0
-    ? activeZoneVenues
-    : selectedVenue
-    ? [selectedVenue]
-    : venues;
+    const isZoneView = activeZoneVenues.length > 0;
+
+    const displayedVenues = isZoneView
+      ? activeZoneVenues
+      : fromPlanProp && !overridePlanMode
+      ? plan
+      : selectedVenue
+      ? [selectedVenue]
+      : []; // don't render any markers by default
+
 
   return (
     <Box sx={{ width: "100%", height: "100%" }}>
@@ -290,6 +311,26 @@ export default function DemoMap({
             onEachFeature={onEachZone}
           />
         )}
+
+        {/*debugging */}
+        {(() => {
+          console.log("Rendering markers:", {
+            isZoneView,
+            fromPlanProp,
+            selectedVenue,
+            activeZoneVenues: activeZoneVenues.length,
+            displayedVenues: displayedVenues.length,
+            fallback: fromPlanProp
+              ? plan
+              : activeZoneVenues.length > 0
+              ? activeZoneVenues
+              : selectedVenue
+              ? [selectedVenue]
+              : [],
+          });
+          return null;
+        })()}
+        
         {displayedVenues
           .filter((v) => v?.lat && v?.lng)
           .map((venue) => {
