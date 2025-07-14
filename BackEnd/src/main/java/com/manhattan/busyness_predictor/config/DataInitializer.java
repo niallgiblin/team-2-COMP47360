@@ -99,9 +99,12 @@ public class DataInitializer implements CommandLineRunner {
                         );
                     }
 
-                    location.setDescription(parseString(fields[13])); // Using summary column
                     location.setPrice(parsePrice(fields[10]));
                     location.setZone(parseString(fields[11]));
+                    location.setInformation(parseString(fields[12]));
+                    location.setSummary(parseString(fields[13]));
+                    location.setDescription(parseString(fields[13])); // Description can be same as summary
+                    location.setTags(parseString(fields[14]));
 
                     locationRepository.save(location);
                 } catch (Exception e) {

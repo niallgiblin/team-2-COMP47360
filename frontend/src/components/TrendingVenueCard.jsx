@@ -35,35 +35,13 @@ export default function TrendingVenueCard({
 
     const isLiked = likedVenues.some((v) => v.id === venue.id);
 
-    const priceLevels = {
-        'price level very cheap': 1,
-        'price level cheap': 2,
-        'price level moderate': 3,
-        'price level expensive': 4,
-        'price level very expensive': 5,
-    };
-
-    let level = 0;
-    if (typeof venue.price === 'number') {
-        level = venue.price;
-    } else if (typeof venue.price === 'string') {
-        const normalizedPrice = venue.price.trim().toLowerCase();
-        level = priceLevels[normalizedPrice] || 0;
-    }
+    const level = venue.price || 0;
 
     const { plan, addToPlan, removeFromPlan } = usePlan();
     const isInPlan = plan.some((v) => v.id === venue.id);
     const isPlanFull = plan.length >= 3;
-
-    const getCategoryFromFlags = (venue) => {
-        if (venue.isRestaurant) return 'restaurant';
-        if (venue.isBar) return 'bar';
-        if (venue.isClub) return 'club';
-        if (venue.isLandmark) return 'landmark';
-        return 'other';
-    };
-
-    const category = getCategoryFromFlags(venue);
+    
+    const category = (venue.type || 'other').toLowerCase();
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
     const handleAddToPlan = () => {

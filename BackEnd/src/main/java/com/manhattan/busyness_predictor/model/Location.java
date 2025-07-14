@@ -56,7 +56,7 @@ public class Location {
     @Column(name = "is_bar")
     private Boolean isBar;
 
-    @Column(name = "description")
+    @Column(name = "description", length = 1024)
     private String description;
 
     @Column(name = "price")
@@ -65,7 +65,7 @@ public class Location {
     @Column(name = "zone")
     private String zone;
 
-    @Column(name = "information")
+    @Column(name = "information", length = 1024)
     private String information;
 
     @Column(name = "summary", length = 1000)

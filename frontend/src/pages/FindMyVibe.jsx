@@ -14,8 +14,6 @@ import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
 import PlanSummary from "../components/PlanSummary";
-import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
-import { point as turfPoint } from "@turf/helpers";
 
 export default function FindMyVibe() {
   // State hooks for user input and results
@@ -36,19 +34,8 @@ export default function FindMyVibe() {
   const [pageSize, setPageSize] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
 
-  // state for zone data
-  const [zoneData, setZoneData] = useState(null); // GeoJSON data for zone lookups
   // Busyness state
   const [busynessMap, setBusynessMap] = useState({});
-
-  useEffect(() => {
-    fetch("/manhattanZones.geojson")
-      .then((res) => res.json())
-      .then((data) => setZoneData(data))
-      .catch((err) => {
-        console.error("Failed to load zone data:", err);
-      });
-  }, []);
 
   useEffect(() => {
     fetch(`/api/vibe/map-data`)
@@ -81,7 +68,7 @@ export default function FindMyVibe() {
     try {
       const requestBody = {
         vibeDescription: input || `${vibe} ${venueType} ${cuisine}`.trim(),
-        maxResults: 50, // Fetch a larger set for client-side pagination
+        maxResults: 5, // Fetch a reasonable number of top results from the backend
       };
 
       const res = await fetch(`/api/vibe/search`, {
@@ -92,59 +79,8 @@ export default function FindMyVibe() {
 
       if (!res.ok) throw new Error("Search failed");
       const data = await res.json();
-
       const locations = data.locations || [];
-
-      const normalizedResults = locations.map((v) => {
-        const priceMap = {
-          "price level very cheap": 1,
-          "price level cheap": 2,
-          "price level moderate": 3,
-          "price level expensive": 4,
-          "price level very expensive": 5,
-        };
-        let parsedPrice = 0;
-        const rawPrice = v.price;
-        if (typeof rawPrice === 'number') {
-          parsedPrice = rawPrice;
-        } else if (typeof rawPrice === 'string') {
-          parsedPrice = priceMap[rawPrice.trim().toLowerCase()] || 0;
-        }
-
-        //IMPORTANT!! REMOVE MOCK DATA FROM TAGS DEBUGGING
-        const enriched = {
-          ...v,
-          id: v.id || `${v.name}-${v.lat}-${v.lng}`,
-          latitude: v.lat,
-          longitude: v.lng,
-          address: v.addr || v.address || "No address provided",
-          zone: v.zone || "Unknown",
-          price: parsedPrice,
-          description: v.description || "",
-          summary: v.summary || v.description || "",
-          imageUrl: v.imageUrl || v.image_url || v.image || null,
-          tags: typeof v.tags === 'string' ? v.tags.split(',').map(t => t.trim()) : v.tags || ['art', 'historic', 'date night'],
-        };
-
-        const text = `${v.tags || ""} ${v.loc_type || ""} ${v.description || ""} ${v.summary || ""}`.toLowerCase();
-        enriched.isRestaurant = text.includes("restaurant");
-        enriched.isBar = text.includes("bar");
-        enriched.isClub = text.includes("club");
-        enriched.isLandmark = text.includes("landmark");
-
-        if (zoneData && enriched.latitude && enriched.longitude) {
-          const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
-          const matchingZone = zoneData.features.find((feature) =>
-            booleanPointInPolygon(venuePoint, feature.geometry)
-          );
-          if (matchingZone) {
-            enriched.zoneId = matchingZone.properties.LocationID;
-          }
-        }
-        return enriched;
-      });
-
-      setAllResults(normalizedResults);
+      setAllResults(locations); // Use the clean data directly from the API
       setPage(1); // Reset to the first page on a new search
     } catch (err) {
       console.error("Error fetching search results:", err);
@@ -152,7 +88,7 @@ export default function FindMyVibe() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, vibe, venueType, cuisine, zoneData]);
+  }, [input, vibe, venueType, cuisine]);
 
   // Effect for client-side pagination
   // This runs when the full result set changes, or when page/pageSize is updated.
