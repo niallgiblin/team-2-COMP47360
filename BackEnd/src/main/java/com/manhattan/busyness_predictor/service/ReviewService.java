@@ -9,8 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.manhattan.busyness_predictor.dto.ReviewRequest;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.model.Review;
+import com.manhattan.busyness_predictor.model.User;
 import com.manhattan.busyness_predictor.repository.LocationRepository;
 import com.manhattan.busyness_predictor.repository.ReviewRepository;
+import com.manhattan.busyness_predictor.repository.UserRepository;
 
 @Service
 public class ReviewService {
@@ -21,22 +23,26 @@ public class ReviewService {
     @Autowired
     private LocationRepository locationRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Transactional
     public Review createReview(Integer userId, Integer locationId, ReviewRequest request) {
-        // Check if location exists
-        locationRepository.findById(locationId)
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Location location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new RuntimeException("Location not found"));
         // Check if user already reviewed this location
-        if (reviewRepository.existsByUserIdAndLocationId(userId, locationId)) {
+        if (reviewRepository.existsByUserAndLocation(user, location)) {
             throw new RuntimeException("You have already reviewed this location");
         }
 
         // Create review
-        Review review = new Review(userId, locationId, request.getReviewText(), request.getReviewVal());
+        Review review = new Review(user, location, request.getReviewText(), request.getReviewVal());
         review = reviewRepository.save(review);
 
         // Update location's average rating and review count
-        updateLocationRating(locationId);
+        updateLocationRating(location);
 
         return review;
     }
@@ -47,7 +53,7 @@ public class ReviewService {
                 .orElseThrow(() -> new RuntimeException("Review not found"));
 
         // Check if user owns this review
-        if (!review.getUserId().equals(userId)) {
+        if (!review.getUser().getId().equals(userId)) {
             throw new RuntimeException("You can only update your own reviews");
         }
 
@@ -57,21 +63,25 @@ public class ReviewService {
         review = reviewRepository.save(review);
 
         // Update location's average rating
-        updateLocationRating(review.getLocationId());
+        updateLocationRating(review.getLocation());
 
         return review;
     }
 
     public List<Review> getLocationReviews(Integer locationId) {
-        return reviewRepository.findByLocationIdOrderByTimestampDesc(locationId);
+        Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new RuntimeException("Location not found"));
+        return reviewRepository.findByLocationOrderByTimestampDesc(location);
     }
 
     public List<Review> getUserReviews(Integer userId) {
-        return reviewRepository.findByUserIdOrderByTimestampDesc(userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return reviewRepository.findByUserOrderByTimestampDesc(user);
     }
 
-    private void updateLocationRating(Integer locationId) {
-        List<Review> reviews = reviewRepository.findByLocationId(locationId);
+    private void updateLocationRating(Location location) {
+        List<Review> reviews = reviewRepository.findByLocation(location);
 
         if (!reviews.isEmpty()) {
             double averageRating = reviews.stream()
@@ -79,12 +89,13 @@ public class ReviewService {
                     .average()
                     .orElse(0.0);
 
-            Location location = locationRepository.findById(locationId).orElse(null);
-            if (location != null) {
-                location.setReview((float) averageRating);
-                location.setNumReviews(reviews.size());
-                locationRepository.save(location);
-            }
+            location.setReview((float) averageRating);
+            location.setNumReviews(reviews.size());
+            locationRepository.save(location);
+        } else {
+            location.setReview(0f);
+            location.setNumReviews(0);
+            locationRepository.save(location);
         }
     }
 }

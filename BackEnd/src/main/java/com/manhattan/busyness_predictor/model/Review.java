@@ -2,11 +2,16 @@ package com.manhattan.busyness_predictor.model;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -21,11 +26,15 @@ public class Review {
     @Column(name = "timestamp")
     private LocalDateTime timestamp;
 
-    @Column(name = "user_id")
-    private Integer userId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    @JsonBackReference("user-reviews")
+    private User user;
 
-    @Column(name = "location_id")
-    private Integer locationId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id", nullable = false)
+    @JsonBackReference("location-reviews")
+    private Location location;
 
     @Column(name = "review_text")
     private String reviewText;
@@ -38,9 +47,9 @@ public class Review {
     }
 
     // Constructor
-    public Review(Integer userId, Integer locationId, String reviewText, Float reviewVal) {
-        this.userId = userId;
-        this.locationId = locationId;
+    public Review(User user, Location location, String reviewText, Float reviewVal) {
+        this.user = user;
+        this.location = location;
         this.reviewText = reviewText;
         this.reviewVal = reviewVal;
         this.timestamp = LocalDateTime.now();
@@ -63,20 +72,20 @@ public class Review {
         this.timestamp = timestamp;
     }
 
-    public Integer getUserId() {
-        return userId;
+    public User getUser() {
+        return user;
     }
 
-    public void setUserId(Integer userId) {
-        this.userId = userId;
+    public void setUser(User user) {
+        this.user = user;
     }
 
-    public Integer getLocationId() {
-        return locationId;
+    public Location getLocation() {
+        return location;
     }
 
-    public void setLocationId(Integer locationId) {
-        this.locationId = locationId;
+    public void setLocation(Location location) {
+        this.location = location;
     }
 
     public String getReviewText() {

@@ -1,50 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth } from "../hooks/useAuth";
 
-// API helpers
-const fetchPlansFromServer = async (token) => {
-  const res = await fetch('http://localhost:8080/api/plans', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) throw new Error('Failed to fetch plans');
-  return res.json();
-};
-
-const savePlanToServer = async (plan, token) => {
-  const res = await fetch('http://localhost:8080/api/plans', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(plan),
-  });
-  if (!res.ok) throw new Error('Failed to save plan');
-  return res.json();
-};
-
-const deletePlanFromServer = async (planId, token) => {
-  const res = await fetch(`http://localhost:8080/api/plans/${planId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) throw new Error('Failed to delete plan');
-};
-
-// load plan by ID from backend
-const fetchPlanById = async (id, token) => {
-  const res = await fetch(`http://localhost:8080/api/plans/${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) throw new Error('Failed to load plan by ID');
-  return res.json();
-};
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 // Create the context
 const PlanContext = createContext();
@@ -54,17 +11,32 @@ export const usePlan = () => useContext(PlanContext);
 export function PlanProvider({ children }) {
   const [plan, setPlan] = useState([]);
   const [savedPlans, setSavedPlans] = useState([]);
-  const { user } = useAuth();
+  const { token, makeAuthenticatedRequest } = useAuth();
   const [selectedVenue, setSelectedVenue] = useState(null);
   const [fromPlan, setFromPlan] = useState(false);
 
   useEffect(() => {
-    if (user?.token) {
-      fetchPlansFromServer(user.token)
-        .then(setSavedPlans)
-        .catch(console.error);
-    }
-  }, [user]);
+    const fetchPlans = async () => {
+      if (token) {
+        try {
+          const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`);
+          if (!response.ok) {
+            // This will provide a more specific error than the JSON parsing error
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+          }
+          const data = await response.json();
+          setSavedPlans(data.plans || []); // Correctly unpack the 'plans' array
+        } catch (error) {
+          console.error('Failed to fetch plans:', error);
+          // Don't clear plans on a temporary network error
+        }
+      } else {
+        // If there's no token (user logged out), clear the saved plans
+        setSavedPlans([]);
+      }
+    };
+    fetchPlans();
+  }, [token, makeAuthenticatedRequest]);
 
   const addToPlan = (venue) => {
     if (plan.length >= 3 || isInPlan(venue)) return;
@@ -81,19 +53,30 @@ export function PlanProvider({ children }) {
 
   const clearPlan = () => setPlan([]);
 
-  const savePlan = (name) => {
-    if (plan.length === 0 || !user?.token) return;
+  const savePlan = async (name) => {
+    if (plan.length === 0 || !token) return null;
 
-    const newPlan = {
+    const createPlanRequest = {
       name,
-      venues: plan,
-      createdAt: new Date().toISOString(),
+      locationIds: plan.map(venue => venue.id),
     };
 
-    return savePlanToServer(newPlan, user.token).then((saved) => {
-      setSavedPlans((prev) => [...prev, saved]);
-      return saved;
-    });
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`, {
+        method: 'POST',
+        body: JSON.stringify(createPlanRequest),
+      });
+      const saved = await response.json();
+      // The response is { message: "...", plan: {...} }
+      const newPlan = saved.plan;
+      if (newPlan) {
+        setSavedPlans((prev) => [newPlan, ...prev]); // Add new plan to the top
+      }
+      return newPlan;
+    } catch (error) {
+      console.error('Failed to save plan:', error);
+      return null;
+    }
   };
 
   const loadPlan = (saved) => {
@@ -101,16 +84,24 @@ export function PlanProvider({ children }) {
   };
 
   const loadPlanById = async (id) => {
-    if (!user?.token) return;
-    const plan = await fetchPlanById(id, user.token);
-    setPlan(plan.venues);
+    if (!token) return;
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans/${id}`);
+      const data = await response.json();
+      setPlan(data.plan.venues || []); // Correctly unpack from the 'plan' object
+    } catch (error) {
+      console.error('Failed to load plan by ID:', error);
+    }
   };
 
-  const deletePlan = (id) => {
-    if (!user?.token) return;
-    deletePlanFromServer(id, user.token).then(() => {
+  const deletePlan = async (id) => {
+    if (!token) return;
+    try {
+      await makeAuthenticatedRequest(`${API_BASE_URL}/plans/${id}`, { method: 'DELETE' });
       setSavedPlans((prev) => prev.filter((p) => p.id !== id));
-    });
+    } catch (error) {
+      console.error('Failed to delete plan:', error);
+    }
   };
 
   return (

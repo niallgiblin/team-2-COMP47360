@@ -259,6 +259,36 @@ export default function VenueCard({ venue, variant = 'default' }) {
             </Button>
           </Box>
         )}
+
+        {/* Add to Plan Button: Only shows if the venue is not already in the plan */}
+        {!isInPlan && (
+          <Box sx={{ mt: 'auto', pt: 1 }}>
+            <Tooltip title={isPlanFull ? "Your plan is full (max 3 venues)" : ""} arrow>
+              {/* The Tooltip needs a span wrapper to work when the button is disabled */}
+              <span>
+                <Button
+                  variant="contained"
+                  size="small"
+                  fullWidth
+                  onClick={() => addToPlan(venue)}
+                  disabled={isPlanFull}
+                  sx={{
+                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                    fontWeight: 'bold',
+                    color: '#121212',
+                    '&:disabled': {
+                      background: '#555',
+                      color: '#888',
+                      cursor: 'not-allowed'
+                    }
+                  }}
+                >
+                  Add to Plan
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+        )}
         </Box>
     </Card>
   );

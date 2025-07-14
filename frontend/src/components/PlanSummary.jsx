@@ -2,13 +2,13 @@ import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActi
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { usePlan } from '../context/PlanContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import VenueCard from './VenueCard';
 
 export default function PlanSummary() {
   const { plan, savePlan, loadPlan, clearPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [tempPlanName, setTempPlanName] = useState('');
@@ -18,8 +18,12 @@ export default function PlanSummary() {
 
 
   const handleSave = () => {
-    setTempPlanName('');
-    setNameDialogOpen(true);
+    if (isAuthenticated) {
+      setTempPlanName('');
+      setNameDialogOpen(true);
+    } else {
+      navigate('/login', { state: { message: "Please log in to save your plan." } });
+    }
   };
   
   const confirmSave = async () => {
