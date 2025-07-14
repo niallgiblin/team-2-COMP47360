@@ -42,6 +42,10 @@ public class Plan {
     @JsonManagedReference("plan-venues")
     private List<PlanVenue> venues;
 
+    @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("plan-shares")
+    private List<PlanShared> shares;
+
     // Constructors
     public Plan() {
     }
@@ -98,5 +102,13 @@ public class Plan {
 
     public void setVenues(List<PlanVenue> venues) {
         this.venues = venues;
+    }
+
+    public List<PlanShared> getShares() {
+        return shares;
+    }
+
+    public void setShares(List<PlanShared> shares) {
+        this.shares = shares;
     }
 }

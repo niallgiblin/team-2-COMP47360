@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
       const savedToken = localStorage.getItem("token");
       if (savedToken) {
         try {
-          const response = await fetch(`/api/users/me`, {
+          const response = await fetch(`/api/auth/me`, {
             headers: { Authorization: `Bearer ${savedToken}` },
           });
 

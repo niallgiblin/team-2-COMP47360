@@ -44,7 +44,7 @@ export default function Recommendations() {
         }
 
         // 2. Fetch authenticated data now that prerequisites are loaded
-        const res = await makeAuthenticatedRequest(`/api/location/trending`);
+        const res = await makeAuthenticatedRequest(`/api/vibe/trending`);
         if (!res.ok) throw new Error('Failed to fetch venue data');
         
         const data = await res.json();

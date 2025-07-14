@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -46,9 +47,11 @@ public class SecurityConfig {
                 // Set session management to stateless, as we are using JWTs
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Explicitly define public endpoints
+                        // Define public endpoints for authentication
                         .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
-                        .requestMatchers("/api/vibe/**", "/api/locations/**").permitAll()
+                        // Allow public search and viewing of locations and vibes
+                        .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
                         // All other API routes must be authenticated
                         .requestMatchers("/api/**").authenticated()
                         // Permit any other requests that don't match (e.g., root, static assets)

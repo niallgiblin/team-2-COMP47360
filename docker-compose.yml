@@ -22,7 +22,6 @@ services:
       start_period: 40s
     volumes:
       - db_data:/var/lib/mysql
-      - ./backend/docker/db-init:/docker-entrypoint-initdb.d:ro
       - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
     networks:
       - app-network

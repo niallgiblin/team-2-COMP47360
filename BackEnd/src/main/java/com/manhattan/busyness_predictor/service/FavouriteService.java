@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.manhattan.busyness_predictor.model.Favourite;
 import com.manhattan.busyness_predictor.model.Location;
@@ -28,6 +29,7 @@ public class FavouriteService {
         return favouriteRepository.findByUser_Id(userId);
     }
 
+    @Transactional
     public Favourite addFavourite(Integer userId, Integer venueId) {
         if (favouriteRepository.findByUser_IdAndLocation_Id(userId, venueId).isPresent()) {
             throw new RuntimeException("Already favourited.");
@@ -42,7 +44,11 @@ public class FavouriteService {
         return favouriteRepository.save(fav);
     }
 
+    @Transactional
     public void removeFavourite(Integer userId, Integer venueId) {
-        favouriteRepository.deleteByUser_IdAndLocation_Id(userId, venueId);
+        // It's safer to check for existence before deleting.
+        Favourite favourite = favouriteRepository.findByUser_IdAndLocation_Id(userId, venueId)
+                .orElseThrow(() -> new RuntimeException("Cannot remove favourite: not found."));
+        favouriteRepository.delete(favourite);
     }
 }

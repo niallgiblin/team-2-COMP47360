@@ -1,27 +1,25 @@
 package com.manhattan.busyness_predictor.dto;
 
-import com.manhattan.busyness_predictor.model.User;
-
 public class AuthResponse {
 
-    private User user;
+    private UserDto user;
     private String token;
 
     // Constructors
     public AuthResponse() {
     }
 
-    public AuthResponse(User user, String token) {
+    public AuthResponse(UserDto user, String token) {
         this.user = user;
         this.token = token;
     }
 
     // Getters and Setters
-    public User getUser() {
+    public UserDto getUser() {
         return user;
     }
 
-    public void setUser(User user) {
+    public void setUser(UserDto user) {
         this.user = user;
     }
 

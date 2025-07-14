@@ -25,7 +25,7 @@ export function PlanProvider({ children }) {
             throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
           }
           const data = await response.json();
-          setSavedPlans(data);
+          setSavedPlans(data.plans || []); // Correctly unpack the 'plans' array
         } catch (error) {
           console.error('Failed to fetch plans:', error);
           // Don't clear plans on a temporary network error
@@ -56,20 +56,23 @@ export function PlanProvider({ children }) {
   const savePlan = async (name) => {
     if (plan.length === 0 || !token) return null;
 
-    const newPlan = {
+    const createPlanRequest = {
       name,
-      venues: plan,
-      createdAt: new Date().toISOString(),
+      locationIds: plan.map(venue => venue.id),
     };
 
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`, {
         method: 'POST',
-        body: JSON.stringify(newPlan),
+        body: JSON.stringify(createPlanRequest),
       });
       const saved = await response.json();
-      setSavedPlans((prev) => [...prev, saved]);
-      return saved;
+      // The response is { message: "...", plan: {...} }
+      const newPlan = saved.plan;
+      if (newPlan) {
+        setSavedPlans((prev) => [newPlan, ...prev]); // Add new plan to the top
+      }
+      return newPlan;
     } catch (error) {
       console.error('Failed to save plan:', error);
       return null;
@@ -85,7 +88,7 @@ export function PlanProvider({ children }) {
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans/${id}`);
       const data = await response.json();
-      setPlan(data.venues);
+      setPlan(data.plan.venues || []); // Correctly unpack from the 'plan' object
     } catch (error) {
       console.error('Failed to load plan by ID:', error);
     }

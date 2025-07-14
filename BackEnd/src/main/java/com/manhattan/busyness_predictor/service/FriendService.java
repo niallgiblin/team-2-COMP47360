@@ -1,5 +1,6 @@
 package com.manhattan.busyness_predictor.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,29 +24,33 @@ public class FriendService {
     private UserRepository userRepository;
 
     @Transactional
-    public Friend addFriendByUsername(Integer userId, String username) {
+    public Friend addFriendByUsername(Integer currentUserId, String friendUsername) {
+        User currentUser = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
         // Find user to add by username
-        User friendUser = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User with username '" + username + "' not found"));
+        User friendUser = userRepository.findByUsername(friendUsername)
+                .orElseThrow(() -> new RuntimeException("User with username '" + friendUsername + "' not found"));
 
         // Check if trying to add themselves
-        if (userId.equals(friendUser.getId())) {
+        if (currentUserId.equals(friendUser.getId())) {
             throw new RuntimeException("Cannot add yourself as a friend");
         }
 
         // Check if a relationship (pending or accepted) already exists
-        if (friendRepository.findRelationshipBetweenUsers(userId, friendUser.getId()).isPresent()) {
-            throw new RuntimeException("A friendship or request already exists with " + username);
+        if (friendRepository.findRelationshipBetweenUsers(currentUser, friendUser).isPresent()) {
+            throw new RuntimeException("A friendship or request already exists with " + friendUsername);
         }
 
         // Create new friendship
-        Friend friendship = new Friend(userId, friendUser.getId());
+        Friend friendship = new Friend(currentUser, friendUser);
         return friendRepository.save(friendship);
     }
 
     @Transactional
     public void removeFriend(Integer userId, Integer friendId) {
-        Friend friendship = friendRepository.findRelationshipBetweenUsers(userId, friendId)
+        User user1 = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        User user2 = userRepository.findById(friendId).orElseThrow(() -> new RuntimeException("Friend not found"));
+        Friend friendship = friendRepository.findRelationshipBetweenUsers(user1, user2)
                 .orElseThrow(() -> new RuntimeException("You are not friends with this user"));
 
         friendRepository.delete(friendship);
@@ -63,7 +68,9 @@ public class FriendService {
 
     @Transactional
     public void acceptFriendRequest(Integer receiverId, Integer requesterId) {
-        Friend request = friendRepository.findPendingRequest(requesterId, receiverId)
+        User receiver = userRepository.findById(receiverId).orElseThrow(() -> new RuntimeException("User not found"));
+        User requester = userRepository.findById(requesterId).orElseThrow(() -> new RuntimeException("Requester not found"));
+        Friend request = friendRepository.findPendingRequest(requester, receiver)
                 .orElseThrow(() -> new RuntimeException("Friend request not found."));
 
         request.setStatus(FriendStatus.ACCEPTED);
@@ -72,70 +79,75 @@ public class FriendService {
 
     @Transactional
     public void declineFriendRequest(Integer receiverId, Integer requesterId) {
-        Friend request = friendRepository.findPendingRequest(requesterId, receiverId)
+        User receiver = userRepository.findById(receiverId).orElseThrow(() -> new RuntimeException("User not found"));
+        User requester = userRepository.findById(requesterId).orElseThrow(() -> new RuntimeException("Requester not found"));
+        Friend request = friendRepository.findPendingRequest(requester, receiver)
                 .orElseThrow(() -> new RuntimeException("Friend request not found."));
 
         friendRepository.delete(request);
     }
 
     public List<User> getFriendsByStatus(Integer userId, FriendStatus status) {
-        List<Friend> friendships = friendRepository.findByUserIdAndStatus(userId, status);
-        List<Integer> friendIds = friendships.stream()
-                .map(f -> f.getRequesterId().equals(userId) ? f.getReceiverId() : f.getRequesterId())
-                .collect(Collectors.toList());
-
-        return userRepository.findAllById(friendIds).stream()
-                .peek(user -> user.setPassword(null))
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        List<Friend> friendships = friendRepository.findByUserIdAndStatus(user, status);
+        return friendships.stream()
+                .map(f -> f.getRequester().equals(user) ? f.getReceiver() : f.getRequester())
                 .collect(Collectors.toList());
     }
 
     public List<User> getSentRequests(Integer userId) {
-        List<Friend> requests = friendRepository.findByRequesterIdAndStatus(userId, FriendStatus.PENDING);
-        List<Integer> receiverIds = requests.stream().map(Friend::getReceiverId).collect(Collectors.toList());
-
-        return userRepository.findAllById(receiverIds).stream()
-                .peek(user -> user.setPassword(null))
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        List<Friend> requests = friendRepository.findByRequesterAndStatus(user, FriendStatus.PENDING);
+        return requests.stream()
+                .map(Friend::getReceiver)
                 .collect(Collectors.toList());
     }
 
     public List<User> getReceivedRequests(Integer userId) {
-        List<Friend> requests = friendRepository.findByReceiverIdAndStatus(userId, FriendStatus.PENDING);
-        List<Integer> requesterIds = requests.stream().map(Friend::getRequesterId).collect(Collectors.toList());
-
-        return userRepository.findAllById(requesterIds).stream()
-                .peek(user -> user.setPassword(null))
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        List<Friend> requests = friendRepository.findByReceiverAndStatus(user, FriendStatus.PENDING);
+        return requests.stream()
+                .map(Friend::getRequester)
                 .collect(Collectors.toList());
     }
 
     public List<User> searchUsersByUsername(String query, Integer currentUserId) {
+        User currentUser = userRepository.findById(currentUserId).orElseThrow(() -> new RuntimeException("User not found"));
         // Find IDs of users with an existing relationship (pending or accepted)
-        List<Integer> excludedIds = friendRepository.findByUserIdAndStatus(currentUserId, FriendStatus.ACCEPTED).stream()
-                .map(f -> f.getRequesterId().equals(currentUserId) ? f.getReceiverId() : f.getRequesterId())
+        List<User> existingRelations = new ArrayList<>();
+        existingRelations.addAll(getFriendsByStatus(currentUserId, FriendStatus.ACCEPTED));
+        existingRelations.addAll(getSentRequests(currentUserId));
+        existingRelations.addAll(getReceivedRequests(currentUserId));
+
+        List<Integer> excludedIds = existingRelations.stream()
+                .map(User::getId)
                 .collect(Collectors.toList());
-        friendRepository.findByUserIdAndStatus(currentUserId, FriendStatus.PENDING).stream()
-                .map(f -> f.getRequesterId().equals(currentUserId) ? f.getReceiverId() : f.getRequesterId())
-                .forEach(excludedIds::add);
         excludedIds.add(currentUserId); // Exclude self
         
+        // This is inefficient on large user tables. A custom query in the repository would be better.
         List<User> users = userRepository.findAll().stream()
                 .filter(user -> user.getUsername().toLowerCase().contains(query.toLowerCase()))
                 .filter(user -> !excludedIds.contains(user.getId()))
                 .limit(10) // Limit results
                 .collect(Collectors.toList());
 
-        return users.stream()
-                .peek(user -> user.setPassword(null))
-                .collect(Collectors.toList());
+        return users;
     }
 
     public boolean areFriends(Integer userId1, Integer userId2) {
-        return friendRepository.findRelationshipBetweenUsers(userId1, userId2)
+        User user1 = userRepository.findById(userId1).orElse(null);
+        User user2 = userRepository.findById(userId2).orElse(null);
+        if (user1 == null || user2 == null) {
+            return false;
+        }
+        return friendRepository.findRelationshipBetweenUsers(user1, user2)
                 .map(f -> f.getStatus() == FriendStatus.ACCEPTED)
                 .orElse(false);
     }
 
     public Integer getFriendCount(Integer userId) {
-        return friendRepository.findByUserIdAndStatus(userId, FriendStatus.ACCEPTED).size();
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        return friendRepository.findByUserIdAndStatus(user, FriendStatus.ACCEPTED).size();
     }
 
     public List<User> getMutualFriends(Integer userId1, Integer userId2) {
@@ -152,9 +164,7 @@ public class FriendService {
 
         List<User> mutualFriends = userRepository.findAllById(mutualFriendIds);
 
-        return mutualFriends.stream()
-                .peek(user -> user.setPassword(null))
-                .collect(Collectors.toList());
+        return mutualFriends;
     }
 
     public List<User> getSuggestedFriends(Integer userId, int limit) {
@@ -172,8 +182,6 @@ public class FriendService {
 
         // Get user objects
         List<User> suggestedUsers = userRepository.findAllById(suggestedIds);
-        return suggestedUsers.stream()
-                .peek(user -> user.setPassword(null))
-                .collect(Collectors.toList());
+        return suggestedUsers;
     }
 }

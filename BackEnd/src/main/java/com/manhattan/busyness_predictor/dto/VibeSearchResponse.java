@@ -3,11 +3,9 @@ package com.manhattan.busyness_predictor.dto;
 import java.util.List;
 import java.util.Map;
 
-import com.manhattan.busyness_predictor.model.Location;
-
 public class VibeSearchResponse {
 
-    private List<Location> locations;
+    private List<LocationDto> locations;
     private String explanation;
     private double confidence;
     private Map<String, Double> busyness;
@@ -17,11 +15,11 @@ public class VibeSearchResponse {
     }
 
     // Getters and Setters
-    public List<Location> getLocations() {
+    public List<LocationDto> getLocations() {
         return locations;
     }
 
-    public void setLocations(List<Location> locations) {
+    public void setLocations(List<LocationDto> locations) {
         this.locations = locations;
     }
 

@@ -2,6 +2,7 @@ package com.manhattan.busyness_predictor.model;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 
@@ -13,6 +14,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 @Entity
 @Table(name = "user")
@@ -32,19 +34,19 @@ public class User {
     @Column(name = "password", nullable = false)
     private String password;
 
-    @Column(name = "FirstName")
+    @Column(name = "first_name")
     private String firstName;
 
-    @Column(name = "LastName")
+    @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "PhoneNumber")
+    @Column(name = "phone_number")
     private String phoneNumber;
 
-    @Column(name = "CreatedAt")
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "UpdatedAt")
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     // Constructors
@@ -69,6 +71,34 @@ public class User {
     @JsonManagedReference("user-plans")
     private List<Plan> plans;
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-reviews")
+    private List<Review> reviews;
+
+    @OneToMany(mappedBy = "requester", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-sent-requests")
+    private List<Friend> sentFriendRequests;
+
+    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-received-requests")
+    private List<Friend> receivedFriendRequests;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-plan-shares")
+    private List<PlanShared> planShares;
+
+    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-sent-shares")
+    private List<Shared> sentShares;
+
+    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-received-shares")
+    private List<Shared> receivedShares;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("user-history")
+    private List<History> searchHistory;
+
     // getter/setter for favourites
     public List<Favourite> getFavourites() {
         return favourites;
@@ -84,6 +114,64 @@ public class User {
 
     public void setPlans(List<Plan> plans) {
         this.plans = plans;
+    }
+
+    // getter/setter for reviews
+    public List<Review> getReviews() {
+        return reviews;
+    }
+
+    public void setReviews(List<Review> reviews) {
+        this.reviews = reviews;
+    }
+
+    // getter/setter for friends
+    public List<Friend> getSentFriendRequests() {
+        return sentFriendRequests;
+    }
+
+    public void setSentFriendRequests(List<Friend> sentFriendRequests) {
+        this.sentFriendRequests = sentFriendRequests;
+    }
+
+    public List<Friend> getReceivedFriendRequests() {
+        return receivedFriendRequests;
+    }
+
+    public void setReceivedFriendRequests(List<Friend> receivedFriendRequests) {
+        this.receivedFriendRequests = receivedFriendRequests;
+    }
+
+    public List<PlanShared> getPlanShares() {
+        return planShares;
+    }
+
+    public void setPlanShares(List<PlanShared> planShares) {
+        this.planShares = planShares;
+    }
+
+    public List<Shared> getSentShares() {
+        return sentShares;
+    }
+
+    public void setSentShares(List<Shared> sentShares) {
+        this.sentShares = sentShares;
+    }
+
+    public List<Shared> getReceivedShares() {
+        return receivedShares;
+    }
+
+    public void setReceivedShares(List<Shared> receivedShares) {
+        this.receivedShares = receivedShares;
+    }
+
+    public List<History> getSearchHistory() {
+        return searchHistory;
+    }
+
+    public void setSearchHistory(List<History> searchHistory) {
+        this.searchHistory = searchHistory;
     }
 
     // Getters and Setters
@@ -157,5 +245,13 @@ public class User {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    @Transient
+    public String getName() {
+        if (firstName != null && lastName != null) {
+            return firstName + " " + lastName;
+        }
+        return Objects.requireNonNullElse(firstName, Objects.requireNonNullElse(lastName, ""));
     }
 }

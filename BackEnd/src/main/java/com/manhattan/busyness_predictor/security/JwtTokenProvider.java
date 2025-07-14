@@ -7,44 +7,52 @@ import javax.crypto.SecretKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
-
-import com.manhattan.busyness_predictor.model.User;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 
 @Component
 public class JwtTokenProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtTokenProvider.class);
 
-    // It's crucial to have a strong, secret key stored securely, not hardcoded.
-    // This approach generates a new key on every application startup, which means
-    // all existing JWTs will be invalidated on restart. For production, consider
-    // using a static, configured secret.
-    private final SecretKey jwtSecretKey = Jwts.SIG.HS512.key().build();
+    @Value("${app.jwt.secret}")
+    private String jwtSecret;
 
     @Value("${app.jwtExpirationInMs:86400000}") // Default to 24 hours
     private int jwtExpirationInMs;
 
-    public String generateToken(User user) {
-        Integer userId = user.getId();
+    private SecretKey secretKey;
+
+    @PostConstruct
+    public void init() {
+        // Decode the base64 secret from properties and create a SecretKey instance
+        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    public String generateToken(Authentication authentication) {
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
 
         return Jwts.builder()
-                .subject(Integer.toString(userId))
+                .subject(Integer.toString(userPrincipal.getId()))
                 .issuedAt(new Date())
                 .expiration(expiryDate)
-                .signWith(jwtSecretKey) // Algorithm is inferred from the key
+                .signWith(secretKey) // Use the static key
                 .compact();
     }
 
     public Integer getUserIdFromJWT(String token) {
         Claims claims = Jwts.parser()
-                .verifyWith(jwtSecretKey)
+                .verifyWith(secretKey) // Use the static key
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
@@ -54,7 +62,7 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String authToken) {
         try {
-            Jwts.parser().verifyWith(jwtSecretKey).build().parseSignedClaims(authToken);
+            Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(authToken); // Use the static key
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             // Catching a broader exception is cleaner and covers all JWT-related issues.
