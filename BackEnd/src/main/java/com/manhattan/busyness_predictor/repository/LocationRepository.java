@@ -14,7 +14,6 @@ import com.manhattan.busyness_predictor.model.Location;
 @Repository
 public interface LocationRepository extends JpaRepository<Location, Integer>, JpaSpecificationExecutor<Location> {
 
-        // Basic type queries
         List<Location> findByIsRestaurantTrue();
 
         List<Location> findByIsBarTrue();
@@ -23,7 +22,6 @@ public interface LocationRepository extends JpaRepository<Location, Integer>, Jp
 
         List<Location> findByIsLandmarkTrue();
 
-        // Unified type query
         @Query("SELECT l FROM Location l WHERE " +
                         "(:type = 'restaurant' AND l.isRestaurant = true) OR " +
                         "(:type = 'bar' AND l.isBar = true) OR " +
@@ -31,55 +29,36 @@ public interface LocationRepository extends JpaRepository<Location, Integer>, Jp
                         "(:type = 'landmark' AND l.isLandmark = true)")
         List<Location> findByType(@Param("type") String type);
 
-        // Search by name or description
         List<Location> findByNameOrDescription(String name, String description);
 
-        // Price range queries
         List<Location> findByIsRestaurantTrueAndPriceBetween(Integer minPrice, Integer maxPrice);
 
         List<Location> findByIsBarTrueAndPriceBetween(Integer minPrice, Integer maxPrice);
 
-        // Nearby locations queries
-        @Query(value = "SELECT * FROM locations WHERE " +
-                        "(6371 * acos(cos(radians(:lat)) * cos(radians(lat)) * " +
-                        "cos(radians(lng) - radians(:lng)) + sin(radians(:lat)) * " +
-                        "sin(radians(lat)))) < :radius", nativeQuery = true)
-        List<Location> findNearbyLocations(@Param("lat") Double lat,
-                        @Param("lng") Double lng,
-                        @Param("radius") Double radius);
+        @Query(value = "SELECT * FROM location WHERE " +
+                        "(6371 * acos(cos(radians(:lat)) * cos(radians(latitude)) * " +
+                        "cos(radians(longitude) - radians(:lng)) + sin(radians(:lat)) * " +
+                        "sin(radians(latitude)))) < :radius", nativeQuery = true)
+        List<Location> findNearbyLocations(@Param("lat") Double lat, @Param("lng") Double lng, @Param("radius") Double radius);
 
-        @Query(value = "SELECT * FROM locations WHERE " +
-                        "(6371 * acos(cos(radians(:lat)) * cos(radians(lat)) * " +
-                        "cos(radians(lng) - radians(:lng)) + sin(radians(:lat)) * " +
-                        "sin(radians(lat)))) < :radius AND " +
+        @Query(value = "SELECT * FROM location WHERE " +
+                        "(6371 * acos(cos(radians(:lat)) * cos(radians(latitude)) * " +
+                        "cos(radians(longitude) - radians(:lng)) + sin(radians(:lat)) * " +
+                        "sin(radians(latitude)))) < :radius AND " +
                         "((:type = 'restaurant' AND is_restaurant = true) OR " +
                         "(:type = 'bar' AND is_bar = true) OR " +
                         "(:type = 'club' AND is_club = true) OR " +
                         "(:type = 'landmark' AND is_landmark = true))", nativeQuery = true)
-        List<Location> findNearbyLocationsByType(
-                        @Param("lat") Double lat,
-                        @Param("lng") Double lng,
-                        @Param("radius") Double radius,
-                        @Param("type") String type);
+        List<Location> findNearbyLocationsByType(@Param("lat") Double lat, @Param("lng") Double lng, @Param("radius") Double radius, @Param("type") String type);
 
-        // Review-based queries
-        @Query("SELECT l FROM Location l WHERE l.id IN " +
-                        "(SELECT r.locationId FROM Review r WHERE r.timestamp > :since " +
-                        "GROUP BY r.locationId ORDER BY COUNT(r.id) DESC)")
+        @Query("SELECT r.location FROM Review r WHERE r.timestamp > :since GROUP BY r.location ORDER BY COUNT(r) DESC")
         List<Location> findMostReviewedSince(@Param("since") LocalDateTime since);
 
-        @Query("SELECT l FROM Location l WHERE " +
-                        "(SELECT AVG(r.reviewVal) FROM Review r WHERE r.locationId = l.id) >= :minRating")
+        @Query("SELECT l FROM Location l WHERE (SELECT AVG(r.reviewVal) FROM Review r WHERE r.location = l) >= :minRating")
         List<Location> findByReview(@Param("minRating") Float minRating);
 
-        // Text search queries
         @Query("SELECT l FROM Location l WHERE " +
-                "LOWER(l.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                "LOWER(l.address) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                "LOWER(l.description) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                "LOWER(l.information) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                "LOWER(l.summary) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                "LOWER(l.tags) LIKE LOWER(CONCAT('%', :query, '%'))")
+                        "LOWER(l.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                        "LOWER(l.address) LIKE LOWER(CONCAT('%', :query, '%'))")
         List<Location> searchByText(@Param("query") String query);
-
 }

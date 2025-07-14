@@ -3,13 +3,16 @@ package com.manhattan.busyness_predictor.controller;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,11 +22,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.manhattan.busyness_predictor.dto.LocationDto;
+import com.manhattan.busyness_predictor.dto.ReviewDto;
 import com.manhattan.busyness_predictor.dto.ReviewRequest;
 import com.manhattan.busyness_predictor.dto.ShareRequest;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.model.Review;
-import com.manhattan.busyness_predictor.service.FavouriteService;
+import com.manhattan.busyness_predictor.security.UserPrincipal;
 import com.manhattan.busyness_predictor.service.HistoryService;
 import com.manhattan.busyness_predictor.service.LocationService;
 import com.manhattan.busyness_predictor.service.ReviewService;
@@ -32,13 +37,11 @@ import com.manhattan.busyness_predictor.service.SharedService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/location")
+@RequestMapping("/api/locations")
 public class LocationController {
 
     @Autowired
     private LocationService locationService;
-    @Autowired
-    private FavouriteService favouriteService;
     @Autowired
     private ReviewService reviewService;
     @Autowired
@@ -48,7 +51,7 @@ public class LocationController {
 
     // Load Map - Fetch all/subset locations
     @GetMapping
-    public ResponseEntity<List<Location>> getAllLocations(
+    public ResponseEntity<List<LocationDto>> getAllLocations(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
@@ -67,7 +70,8 @@ public class LocationController {
             locations = locationService.getAllLocations();
         }
 
-        return ResponseEntity.ok(locations);
+        List<LocationDto> locationDtos = locations.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
+        return ResponseEntity.ok(locationDtos);
     }
 
     @GetMapping("/")
@@ -78,118 +82,78 @@ public class LocationController {
     // Click on location - fetch location information & busyness prediction
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getLocationDetails(@PathVariable Integer id) {
-        try {
-            Location location = locationService.getLocationById(id);
-
-            // TODO: Add busyness data when API is ready
-            Map<String, Object> response = new HashMap<>();
-            response.put("location", location);
-            response.put("busyness", "Coming soon"); // Placeholder
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        LocationDto locationDto = LocationDto.fromLocation(locationService.getLocationById(id));
+        // TODO: Add busyness data when API is ready
+        Map<String, Object> response = new HashMap<>();
+        response.put("location", locationDto);
+        response.put("busyness", "Coming soon"); // Placeholder
+        return ResponseEntity.ok(response);
     }
 
     // Find nearby locations by type
     @GetMapping("/nearby")
-    public ResponseEntity<List<Location>> getNearbyLocations(
+    public ResponseEntity<List<LocationDto>> getNearbyLocations(
             @RequestParam Double lat,
             @RequestParam Double lng,
             @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "5") Double radius) {
 
         List<Location> locations = locationService.getNearbyLocationsByType(lat, lng, radius, type);
-        return ResponseEntity.ok(locations);
+        List<LocationDto> locationDtos = locations.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
+        return ResponseEntity.ok(locationDtos);
     }
 
     // What's trending right now
     @GetMapping("/trending")
-    public ResponseEntity<List<Location>> getTrendingLocations() {
+    public ResponseEntity<List<LocationDto>> getTrendingLocations() {
         // For now, return most reviewed locations
         List<Location> trending = locationService.getTrendingLocations();
-        return ResponseEntity.ok(trending);
+        List<LocationDto> locationDtos = trending.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
+        return ResponseEntity.ok(locationDtos);
     }
 
     // Leave a review - Simple post request to update Locations DB
     @PostMapping("/{id}/review")
-    public ResponseEntity<Map<String, Object>> leaveReview(
+    public ResponseEntity<ReviewDto> leaveReview(
             @PathVariable Integer id,
-            @RequestParam Integer userId,
-            @Valid @RequestBody ReviewRequest reviewRequest) {
-
-        try {
-            Review review = reviewService.createReview(userId, id, reviewRequest);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Review created successfully");
-            response.put("review", review);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+            @Valid @RequestBody ReviewRequest reviewRequest,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        Review review = reviewService.createReview(currentUser.getId(), id, reviewRequest);
+        ReviewDto reviewDto = new ReviewDto(review);
+        return ResponseEntity.status(HttpStatus.CREATED).body(reviewDto);
     }
 
     // Update a review
-    @PutMapping("/review/{id}")
-    public ResponseEntity<Map<String, Object>> updateReview(
+    @PutMapping("/review/{reviewId}")
+    public ResponseEntity<ReviewDto> updateReview(
             @PathVariable Integer reviewId,
-            @RequestParam Integer userId,
-            @Valid @RequestBody ReviewRequest reviewRequest) {
-
-        try {
-            Review review = reviewService.updateReview(reviewId, userId, reviewRequest);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Review updated successfully");
-            response.put("review", review);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+            @Valid @RequestBody ReviewRequest reviewRequest,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        Review review = reviewService.updateReview(reviewId, currentUser.getId(), reviewRequest);
+        ReviewDto reviewDto = new ReviewDto(review);
+        return ResponseEntity.ok(reviewDto);
     }
 
     // Share with a friend - Request that updates a table "shared"
     @PostMapping("/{id}/share")
-    public ResponseEntity<Map<String, String>> shareLocation(
+    public ResponseEntity<Void> shareLocation(
             @PathVariable Integer id,
-            @RequestParam Integer senderId,
-            @Valid @RequestBody ShareRequest shareRequest) {
-
-        try {
-            sharedService.shareLocation(senderId, shareRequest.getReceiverId(), id);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Location shared successfully");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+            @Valid @RequestBody ShareRequest shareRequest,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        sharedService.shareLocation(currentUser.getId(), shareRequest.getReceiverId(), id);
+        return ResponseEntity.ok().build();
     }
 
     // Get user's search history
     @GetMapping("/history")
-    public ResponseEntity<?> getSearchHistory(@RequestParam Integer userId) {
-        try {
-            List<Location> history = historyService.getSearchHistory(userId);
-            return ResponseEntity.ok(history);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Failed to retrieve search history.");
-            error.put("message", e.getMessage());
-            return ResponseEntity.internalServerError().body(error);
-        }
+    public ResponseEntity<List<LocationDto>> getSearchHistory(@AuthenticationPrincipal UserPrincipal currentUser) {
+        List<LocationDto> history = historyService.getSearchHistory(currentUser.getId()).stream()
+                .map(LocationDto::fromLocation).collect(Collectors.toList());
+        return ResponseEntity.ok(history);
     }
 
     @GetMapping("/search")
-    public ResponseEntity<Page<Location>> searchLocations(
+    public ResponseEntity<Page<LocationDto>> searchLocations(
             @RequestParam(required = false) String input,
             @RequestParam(required = false) Boolean isRestaurant,
             @RequestParam(required = false) Boolean isLandmark,
@@ -218,6 +182,7 @@ public class LocationController {
                 information, summary, tags,
                 pageable);
 
-        return ResponseEntity.ok(results);
+        Page<LocationDto> dtoPage = results.map(LocationDto::fromLocation);
+        return ResponseEntity.ok(dtoPage);
     }
 }

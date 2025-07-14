@@ -19,8 +19,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import com.manhattan.busyness_predictor.dto.LocationDto;
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.model.Location;
@@ -108,7 +110,7 @@ public class VibeService {
             ResponseEntity<String> healthResponse = restTemplate.getForEntity(llmServiceUrl + "/health", String.class);
             logger.info("ML service health check returned status: {}", healthResponse.getStatusCode());
             return healthResponse.getStatusCode().is2xxSuccessful();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             logger.warn("ML service health check failed: {}", e.getMessage());
             return false;
         }
@@ -146,7 +148,7 @@ public class VibeService {
                 logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}",
                         response.getStatusCode(), response.getBody());
             }
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
         }
         return Collections.emptyList();
@@ -159,9 +161,9 @@ public class VibeService {
             return Collections.emptyList();
         }
         Object resultsObj = mlResponse.get("results");
-        if (!(resultsObj instanceof List<?>)) {
+        if (resultsObj == null || !(resultsObj instanceof List<?>)) {
             logger.warn("ML response 'results' is not a list. Type: {}. Returning empty list.",
-                    resultsObj.getClass().getName());
+                    resultsObj == null ? "null" : resultsObj.getClass().getName());
             return Collections.emptyList();
         }
 
@@ -169,8 +171,7 @@ public class VibeService {
         List<Location> locations = new ArrayList<>();
 
         for (Object rawLocation : rawLocations) {
-            if (rawLocation instanceof Map<?, ?>) {
-                Map<?, ?> locMap = (Map<?, ?>) rawLocation;
+            if (rawLocation instanceof Map<?, ?> locMap) {
                 Location location = mapToLocation(locMap);
                 if (location != null) {
                     locations.add(location);
@@ -223,8 +224,8 @@ public class VibeService {
     private Integer parseInteger(Object obj) {
         if (obj == null)
             return null;
-        if (obj instanceof Number)
-            return ((Number) obj).intValue();
+        if (obj instanceof Number num)
+            return num.intValue();
         try {
             return Integer.parseInt(obj.toString());
         } catch (NumberFormatException e) {
@@ -235,8 +236,8 @@ public class VibeService {
     private Double parseDouble(Object obj) {
         if (obj == null)
             return null;
-        if (obj instanceof Number)
-            return ((Number) obj).doubleValue();
+        if (obj instanceof Number num)
+            return num.doubleValue();
         try {
             return Double.parseDouble(obj.toString());
         } catch (NumberFormatException e) {
@@ -303,7 +304,7 @@ public class VibeService {
                 logger.warn("Busyness service call failed or returned unsuccessful. Status: {}",
                         response.getStatusCode());
             }
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             logger.error("Error calling busyness service: {}", e.getMessage(), e);
         }
         return Collections.emptyMap();
@@ -313,20 +314,21 @@ public class VibeService {
     private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
             Map<String, Double> busynessData) {
         VibeSearchResponse response = new VibeSearchResponse();
-        response.setLocations(locations);
+        List<LocationDto> locationDtos = locations.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
+        response.setLocations(locationDtos);
         response.setExplanation(explanation);
         response.setConfidence(confidence);
         response.setBusyness(busynessData);
         return response;
     }
 
-    public List<Location> findSimilarLocations(Integer locationId, Integer limit) {
+    public List<LocationDto> findSimilarLocations(Integer locationId, Integer limit) {
         Location baseLocation = getLocationById(locationId);
 
         if (isMLServiceAvailable()) {
             List<Location> mlSimilar = fetchMLSimilarLocations(baseLocation, limit);
             if (!mlSimilar.isEmpty()) {
-                return mlSimilar;
+                return mlSimilar.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
             }
         }
 
@@ -367,7 +369,7 @@ public class VibeService {
     /**
      * Fallback similarity: find locations by matching category/type.
      */
-    private List<Location> findSimilarByCategory(Location baseLocation, Integer limit) {
+    private List<LocationDto> findSimilarByCategory(Location baseLocation, Integer limit) {
         List<Location> candidates;
         if (baseLocation.getIsRestaurant() != null && baseLocation.getIsRestaurant()) {
             candidates = locationRepository.findByIsRestaurantTrue();
@@ -383,8 +385,8 @@ public class VibeService {
 
         return candidates.stream()
                 .filter(loc -> !loc.getId().equals(baseLocation.getId()))
-                .limit(limit != null ? limit : 10)
-                .collect(Collectors.toList());
+                .limit(limit)
+                .map(LocationDto::fromLocation).collect(Collectors.toList());
     }
 
     /**

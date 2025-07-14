@@ -1,5 +1,7 @@
 package com.manhattan.busyness_predictor.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -19,6 +21,7 @@ public class PlanVenue {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "plan_id", nullable = false)
+    @JsonBackReference("plan-venues")
     private Plan plan;
 
     @ManyToOne(fetch = FetchType.LAZY)

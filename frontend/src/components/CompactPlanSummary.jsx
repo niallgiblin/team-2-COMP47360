@@ -1,6 +1,6 @@
 import { Box, Typography, IconButton } from '@mui/material';
 import { usePlan } from '../context/PlanContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from "../hooks/useAuth";
 import VenueCard from './VenueCard';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';

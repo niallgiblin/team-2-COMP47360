@@ -1,13 +1,17 @@
 package com.manhattan.busyness_predictor.service;
 
-import com.manhattan.busyness_predictor.model.Favourite;
-import com.manhattan.busyness_predictor.model.User;
-import com.manhattan.busyness_predictor.repository.FavouriteRepository;
-import com.manhattan.busyness_predictor.repository.UserRepository;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import com.manhattan.busyness_predictor.model.Favourite;
+import com.manhattan.busyness_predictor.model.Location;
+import com.manhattan.busyness_predictor.model.User;
+import com.manhattan.busyness_predictor.repository.FavouriteRepository;
+import com.manhattan.busyness_predictor.repository.LocationRepository;
+import com.manhattan.busyness_predictor.repository.UserRepository;
 
 @Service
 public class FavouriteService {
@@ -18,22 +22,33 @@ public class FavouriteService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private LocationRepository locationRepository;
+
     public List<Favourite> getFavouritesByUser(Integer userId) {
-        return favouriteRepository.findByUserId(userId);
+        return favouriteRepository.findByUser_Id(userId);
     }
 
+    @Transactional
     public Favourite addFavourite(Integer userId, Integer venueId) {
-        if (favouriteRepository.findByUserIdAndVenueId(userId, venueId).isPresent()) {
+        if (favouriteRepository.findByUser_IdAndLocation_Id(userId, venueId).isPresent()) {
             throw new RuntimeException("Already favourited.");
         }
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Location location = locationRepository.findById(venueId)
+                .orElseThrow(() -> new RuntimeException("Location not found"));
         Favourite fav = new Favourite();
         fav.setUser(user);
-        fav.setVenueId(venueId);
+        fav.setLocation(location);
         return favouriteRepository.save(fav);
     }
 
+    @Transactional
     public void removeFavourite(Integer userId, Integer venueId) {
-        favouriteRepository.deleteByUserIdAndVenueId(userId, venueId);
+        // It's safer to check for existence before deleting.
+        Favourite favourite = favouriteRepository.findByUser_IdAndLocation_Id(userId, venueId)
+                .orElseThrow(() -> new RuntimeException("Cannot remove favourite: not found."));
+        favouriteRepository.delete(favourite);
     }
 }

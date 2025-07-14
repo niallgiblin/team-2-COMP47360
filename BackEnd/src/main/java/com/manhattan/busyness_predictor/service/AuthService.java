@@ -3,6 +3,8 @@ package com.manhattan.busyness_predictor.service;
 import java.time.LocalDateTime;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,8 +13,11 @@ import com.manhattan.busyness_predictor.dto.AuthResponse;
 import com.manhattan.busyness_predictor.dto.LoginRequest;
 import com.manhattan.busyness_predictor.dto.SignUpRequest;
 import com.manhattan.busyness_predictor.dto.UpdateProfileRequest;
+import com.manhattan.busyness_predictor.dto.UserDto;
 import com.manhattan.busyness_predictor.model.User;
 import com.manhattan.busyness_predictor.repository.UserRepository;
+import com.manhattan.busyness_predictor.security.JwtTokenProvider;
+import com.manhattan.busyness_predictor.security.UserPrincipal;
 
 @Service
 public class AuthService {
@@ -22,6 +27,9 @@ public class AuthService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     public AuthResponse signUp(SignUpRequest request) {
         // Check if username already exists
@@ -50,10 +58,7 @@ public class AuthService {
         // Generate token
         String token = generateToken(user);
 
-        // Clear password before returning
-        user.setPassword(null);
-
-        return new AuthResponse(user, token);
+        return new AuthResponse(UserDto.fromUser(user), token);
     }
 
     public AuthResponse logIn(LoginRequest request) {
@@ -71,14 +76,11 @@ public class AuthService {
         // Generate token
         String token = generateToken(user);
 
-        // Clear password before returning
-        user.setPassword(null);
-
-        return new AuthResponse(user, token);
+        return new AuthResponse(UserDto.fromUser(user), token);
     }
 
     @Transactional
-    public User updateProfile(Integer userId, UpdateProfileRequest request) {
+    public UserDto updateProfile(Integer userId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -129,24 +131,26 @@ public class AuthService {
         user.setUpdatedAt(LocalDateTime.now());
         user = userRepository.save(user);
 
-        // Clear password before returning
-        user.setPassword(null);
-
-        return user;
+        return UserDto.fromUser(user);
     }
 
-    public User getUserById(Integer userId) {
+    public UserDto getUserById(Integer userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        // Clear password before returning
-        user.setPassword(null);
-        
-        return user;
+        return UserDto.fromUser(user);
     }
 
     private String generateToken(User user) {
-        // Simplified token generation - in production, use JWT
-        return "token_" + user.getId() + "_" + System.currentTimeMillis();
+        // Use the real JWT provider to generate a secure token
+        UserPrincipal userPrincipal = UserPrincipal.create(user);
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                userPrincipal,
+                null,
+                userPrincipal.getAuthorities()
+        );
+
+        return jwtTokenProvider.generateToken(authentication);
     }
 }
