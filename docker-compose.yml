@@ -44,6 +44,7 @@ services:
     environment:
       BUSYNESS_SERVICE_URL: http://busyness-service:5000
       LLM_SERVICE_URL: http://llm-service:5000
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
     networks:
       - app-network
     healthcheck:
