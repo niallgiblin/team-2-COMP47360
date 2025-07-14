@@ -1,5 +1,6 @@
 import { Box, Typography, Slider, Button } from '@mui/material';
 import { useState } from 'react';
+import { DateTime } from "luxon";
 
 export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange, mode }) {
 
@@ -21,8 +22,14 @@ export default function ForecastSlider({ timestamps = [], selectedTimestamp, onC
       {/* Prediction slider */}
       {mode === 'forecast' && (
         <Box>
-          <Typography sx={{ color: '#fff', mb: 1 }}>
-            Forecast for: {new Date(selectedTimestamp).toLocaleString()}
+          {/* Always show the time on the slider in NYC time */}
+          <Typography 
+            sx={{ 
+              color: '#fff', 
+              mb: 1 
+            }}
+          >
+            Forecast for: {DateTime.fromISO(selectedTimestamp).setZone("America/New_York").toLocaleString(DateTime.DATETIME_MED)}
           </Typography>
 
           <Slider

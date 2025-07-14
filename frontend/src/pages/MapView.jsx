@@ -1,5 +1,5 @@
 // react and routing components
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { Tabs, Tab } from '@mui/material';
 
@@ -76,6 +76,12 @@ export default function MapView() {
 
   const mapSectionRef = useRef(null);
 
+  // Memoize timestamps once
+  const forecastTimestamps = useMemo(() => generateNext12Hours(), []);
+
+  // Use memoized timestamps to initialize
+  const [selectedTimestamp, setSelectedTimestamp] = useState(forecastTimestamps[0]);
+
   // Core app states
   const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
   const [zoneCenter, setZoneCenter] = useState(null);
@@ -100,9 +106,6 @@ export default function MapView() {
   // State for map mode (live vs. forecast)
   const [mode, setMode] = useState("live");
   const [predictionData, setPredictionData] = useState([]);
-  const [selectedTimestamp, setSelectedTimestamp] = useState(
-    generateNext12Hours()[0]
-  );
 
   // State for route directions
   const [travelMode, setTravelMode] = useState("WALK");
@@ -156,6 +159,8 @@ export default function MapView() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      
+      // use plan directly if user came from plan route
       if (location.state?.fromPlan === true && plan.length > 0) {
         setVenues(plan);
         setLoading(false);
@@ -164,8 +169,13 @@ export default function MapView() {
       try {
         const res = await fetch("http://localhost:8080/vibe/map-data");
         if (!res.ok) throw new Error("Server error on map-data fetch");
+        
         const data = await res.json();
+        
+        // load venues
         setVenues(data.locations || []);
+        
+        // format live busyness data
         const busynessObject = data.busyness || {};
         const busynessArray = Object.entries(busynessObject).map(
           ([locationId, busynessValue]) => ({
@@ -174,7 +184,18 @@ export default function MapView() {
           })
         );
         setBusynessData(busynessArray);
+      
+      
+        // Handle prediction (forecast) data if available
+        if (Array.isArray(data.predictions) && data.predictions.length > 0) {
+          setPredictionData(data.predictions);
+          const first = data.predictions[0]?.predictions?.[0]?.timestamp;
+          if (first) setSelectedTimestamp(first);
+        } else {
+          console.warn("No real prediction data returned from backend.");
+        }
       } catch (err) {
+        // Fallback to mock data
         console.warn("Falling back to mock data due to fetch error:", err);
         setVenues(mockVenues);
         if (!selectedVenueFromState) setSelectedVenue(mockVenues[0]);
@@ -214,49 +235,38 @@ export default function MapView() {
     }
   }, [zoneData, venues, fromPlan, selectedVenue]);
 
-  // 5. Generate dummy forecast data for the slider
+  // 5. Use real forecast data if available; otherwise, fallback to dummy
   useEffect(() => {
-    // Wait until the zone data is loaded before generating predictions
-    if (!zoneData) {
-      return;
-    }
+    if (!zoneData || predictionData.length > 0) return;
 
     const generateDummyPredictions = () => {
-      // Filter features to get only Manhattan zones, matching the live data.
+      // Filter features to get only Manhattan zones
       const manhattanZoneIds = zoneData.features
         .filter((feature) => feature.properties.borough === "Manhattan")
         .map((feature) => feature.properties.LocationID);
 
-      // If the filter fails (e.g., no 'borough' property), fallback to all zones to prevent a blank map.
-      const zonesToUse =
-        manhattanZoneIds.length > 0
-          ? manhattanZoneIds
-          : zoneData.features.map((f) => f.properties.LocationID);
+      const zonesToUse = manhattanZoneIds.length > 0
+        ? manhattanZoneIds
+        : zoneData.features.map((f) => f.properties.LocationID);
 
-      const timestamps = [
-        "2025-07-04T18:00:00Z",
-        "2025-07-04T19:00:00Z",
-        "2025-07-04T20:00:00Z",
-        "2025-07-04T21:00:00Z",
-        "2025-07-04T22:00:00Z",
-      ];
-
-      // Generate predictions for every Manhattan zone
       return zonesToUse.map((zoneId) => ({
         LocationID: zoneId,
-        predictions: timestamps.map((ts) => ({
+        predictions: forecastTimestamps.map((ts) => ({
           timestamp: ts,
           busyness: Math.random(),
         })),
       }));
     };
 
+    // Fallback only when no real prediction data was loaded
+    console.warn("No real forecast data found. Using dummy predictions.");
     const dummyData = generateDummyPredictions();
     setPredictionData(dummyData);
     if (dummyData.length > 0 && dummyData[0].predictions.length > 0) {
       setSelectedTimestamp(dummyData[0].predictions[0].timestamp);
     }
-  }, [zoneData]); // Add zoneData as a dependency
+  }, [zoneData, forecastTimestamps, predictionData]);
+
 
   // Scroll to map when directions are shown
   useEffect(() => {
@@ -759,14 +769,13 @@ export default function MapView() {
               sx={{
                 width: "100%",
                 maxWidth: "700px",
-                mt: 2,
-                px: 1,
+                mt: -1,
+                mb: -5,
               }}
             >
+              {/* Ensure the slider always reflects current time in NYC */}
               <ForecastSlider
-                timestamps={predictionData[0]?.predictions?.map(
-                  (p) => p.timestamp
-                )}
+                timestamps={forecastTimestamps}
                 selectedTimestamp={selectedTimestamp}
                 onChange={setSelectedTimestamp}
                 mode={mode}
