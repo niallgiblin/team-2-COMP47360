@@ -6,11 +6,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import com.manhattan.busyness_predictor.model.Shared;
+import com.manhattan.busyness_predictor.model.User;
 
 @Repository
 public interface SharedRepository extends JpaRepository<Shared, Integer> {
 
-    List<Shared> findByReceiverIdOrderBySharedAtDesc(Integer receiverId);
+    List<Shared> findByReceiverOrderBySharedAtDesc(User receiver);
 
-    List<Shared> findBySenderIdOrderBySharedAtDesc(Integer senderId);
+    List<Shared> findBySenderOrderBySharedAtDesc(User sender);
 }

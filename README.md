@@ -60,9 +60,14 @@ The application requires API keys to function correctly. You'll need to create a
     ```
     VITE_GOOGLE_API_KEY=AIzaSy...
     HF_TOKEN=hf_...
+    APP_JWT_SECRET=your-super-secret-jwt-key-here
     ```
     -   `VITE_GOOGLE_API_KEY`: Required for Google Maps. Get a key from the Google Cloud Console. You will need to enable the "Maps JavaScript API" and the "Routes API".
     -   `HF_TOKEN`: Required for the AI Chatbot. Get a free "read" access token from your Hugging Face account settings.
+    -   `APP_JWT_SECRET`: A secret key for signing authentication tokens. For production, this should be a long, random, base64-encoded string. You can generate a secure one with the following command:
+        ```bash
+        openssl rand -base64 32
+        ```
 
 ### 3. Build and Run the Application
 

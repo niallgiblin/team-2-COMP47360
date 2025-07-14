@@ -3,7 +3,7 @@ import PageWrapper from '../components/PageWrapper';
 import { Typography, Box } from '@mui/material';
 import TrendingVenueCard from '../components/TrendingVenueCard';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from "../hooks/useAuth";
 
 // Turf imports
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
@@ -14,7 +14,6 @@ export default function Recommendations() {
   const [loading, setLoading] = useState(true);
   const [isMock, setIsMock] = useState(false);
   const [busynessMap, setBusynessMap] = useState([]);
-  const [zoneData, setZoneData] = useState(null);
 
   const navigate = useNavigate();
   const { makeAuthenticatedRequest } = useAuth();
@@ -23,37 +22,35 @@ export default function Recommendations() {
     navigate('/map', { state: { selectedVenue: venue } });
   };
 
-  // 1. Fetch Manhattan GeoJSON
   useEffect(() => {
-    fetch('/manhattanZones.geojson')
-      .then((res) => res.json())
-      .then(setZoneData)
-      .catch(err => console.error('Failed to load zone data:', err));
-  }, []);
+    const fetchAllData = async () => {
+      setLoading(true);
+      try {
+        // 1. Fetch static and non-authenticated data first
+        const [zoneResponse, busynessResponse] = await Promise.all([
+          fetch('/manhattanZones.geojson'),
+          fetch(`/api/vibe/map-data`)
+        ]);
 
-  // 2. Fetch busyness map data
-  useEffect(() => {
-    fetch('http://localhost:8080/vibe/map-data')
-      .then((res) => res.json())
-      .then((data) => {
-        setBusynessMap(data.busyness || {});
-      })
-      .catch((err) => {
-        console.error("Failed to fetch busyness map-data:", err);
-        setBusynessMap({});
-      });
-  }, []);
+        if (!zoneResponse.ok) throw new Error('Failed to load zone data');
+        const zoneData = await zoneResponse.json();
 
-  // 3. Fetch venue data and enrich with zone ID
-  useEffect(() => {
-    makeAuthenticatedRequest('http://localhost:8080/api/location/trending')
-      .then((res) => {
+        if (busynessResponse.ok) {
+          const busynessData = await busynessResponse.json();
+          setBusynessMap(busynessData.busyness || {});
+        } else {
+          console.error("Failed to fetch busyness map-data");
+          setBusynessMap({});
+        }
+
+        // 2. Fetch authenticated data now that prerequisites are loaded
+        const res = await makeAuthenticatedRequest(`/api/vibe/trending`);
         if (!res.ok) throw new Error('Failed to fetch venue data');
-        return res.json();
-      })
-      .then((data) => {
+        
+        const data = await res.json();
         const venues = data.locations || data;
 
+        // 3. Enrich the venue data with zone information
         const transformed = venues.map((venue) => {
           const enriched = {
             ...venue,
@@ -73,37 +70,35 @@ export default function Recommendations() {
               enriched.zoneId = matchingZone.properties.LocationID;
             }
           }
-
           return enriched;
         });
+
         console.log("First enriched venue in Recommendations:", transformed[0]);
         setVenues(transformed);
-        setLoading(false);
-      })
-      
-      .catch(async (err) => {
-        console.warn('Falling back to mock data due to error:', err);
 
+      } catch (err) {
+        console.warn('Falling back to mock data due to error:', err);
         try {
           const res = await fetch('/mock/venues.json');
           const mockData = await res.json();
-
           const transformed = mockData.map((v) => ({
             ...v,
             latitude: v.lat,
             longitude: v.lng,
             address: v.address || 'No address provided',
           }));
-
           setVenues(transformed);
           setIsMock(true);
         } catch (mockErr) {
           console.error('Error loading mock data:', mockErr);
         }
-
+      } finally {
         setLoading(false);
-      });
-  }, [zoneData]); //wait for zoneData
+      }
+    };
+
+    fetchAllData();
+  }, [makeAuthenticatedRequest]); // Only depends on the auth function now
 
   if (loading) {
     return (

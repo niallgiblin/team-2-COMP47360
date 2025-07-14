@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import { usePlan } from '../context/PlanContext';
 import { categoryImages } from '../utils/tagMapping';
 import {
@@ -29,6 +30,7 @@ export default function TrendingVenueCard({
                                           }) {
     const { setSelectedVenue, setFromPlan } = usePlan();
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth();
     const { likedVenues, toggleLike } = useLikes();
 
     const isLiked = likedVenues.some((v) => v.id === venue.id);
@@ -63,6 +65,14 @@ export default function TrendingVenueCard({
 
     const category = getCategoryFromFlags(venue);
     const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
+
+    const handleAddToPlan = () => {
+        if (!isAuthenticated) {
+            navigate('/login', { state: { message: "Please log in to add items to your plan." } });
+        } else {
+            addToPlan(venue);
+        }
+    };
 
     const handleWebsiteClick = () => {
         if (venue.uri) {
@@ -314,7 +324,7 @@ export default function TrendingVenueCard({
                     </Box>
 
                     <Button
-                        onClick={() => (isInPlan ? removeFromPlan(venue.id) : addToPlan(venue))}
+                        onClick={() => (isInPlan ? removeFromPlan(venue.id) : handleAddToPlan())}
                         disabled={!isInPlan && isPlanFull}
                         variant="outlined"
                         size="small"

@@ -11,13 +11,15 @@ function FavouriteVenues() {
     const [zoneData, setZoneData] = useState(null);
     const [enrichedVenues, setEnrichedVenues] = useState([]);
 
+    // Fetch busyness data for the busyness chip
     useEffect(() => {
-        fetch("http://localhost:8080/vibe/map-data")
+        fetch("http://localhost:8080/api/vibe/map-data")
             .then((res) => res.json())
             .then((data) => setBusynessMap(data.busyness || {}))
             .catch((err) => console.error("Failed to fetch busyness data:", err));
     }, []);
 
+    // Fetch zone data for geo-lookups
     useEffect(() => {
         fetch("/manhattanZones.geojson")
             .then((res) => res.json())
@@ -25,6 +27,7 @@ function FavouriteVenues() {
             .catch((err) => console.error("Failed to load zone data:", err));
     }, []);
 
+    // Enrich liked venues with zoneId once zoneData is available
     useEffect(() => {
         if (zoneData && likedVenues.length > 0) {
             const venuesWithZoneId = likedVenues.map(venue => {
@@ -41,13 +44,15 @@ function FavouriteVenues() {
 
     return (
         <Box sx={{ width: '100%' }}>
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+            {/* Title outside the border */}
+            <Typography variant="h5" gutterBottom sx={{ color: '#fff', mb: 2 }}>
                 Your Favorite Venues
             </Typography>
 
+            {/* Bordered container */}
             <Box
                 sx={{
-                    border: '1px solid #900B6A',
+                    border: '1px solid #ff00cc',
                     borderRadius: '16px',
                     padding: 3,
                     backgroundColor: '#000',
@@ -59,18 +64,14 @@ function FavouriteVenues() {
                         You haven’t liked any venues yet.
                     </Typography>
                 ) : (
-                    <Grid
-                        container
-                        spacing={2}
-                        justifyContent="center"
-                    >
+                    <Grid container spacing={2}>
                         {enrichedVenues.map((venue) => (
                             <Grid item xs={12} sm={6} md={4} key={venue.id}>
-                                <TrendingVenueCard
-                                    venue={venue}
-                                    busynessMap={busynessMap}
-                                    showLikeButton={true}
-                                    unlikeOnlyFromFavorites={true}
+                                <TrendingVenueCard 
+                                    venue={venue} 
+                                    busynessMap={busynessMap} 
+                                    showLikeButton={true} 
+                                    unlikeOnlyFromFavorites={true} 
                                 />
                             </Grid>
                         ))}

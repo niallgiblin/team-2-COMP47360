@@ -2,11 +2,16 @@ package com.manhattan.busyness_predictor.model;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -18,14 +23,20 @@ public class Shared {
     @Column(name = "id")
     private Integer id;
 
-    @Column(name = "sender")
-    private Integer senderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_id", nullable = false)
+    @JsonBackReference("user-sent-shares")
+    private User sender;
 
-    @Column(name = "receiver")
-    private Integer receiverId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "receiver_id", nullable = false)
+    @JsonBackReference("user-received-shares")
+    private User receiver;
 
-    @Column(name = "location_id")
-    private Integer locationId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id", nullable = false)
+    @JsonBackReference("location-shares")
+    private Location location;
 
     @Column(name = "shared_at")
     private LocalDateTime sharedAt;
@@ -34,10 +45,10 @@ public class Shared {
     public Shared() {
     }
 
-    public Shared(Integer senderId, Integer receiverId, Integer locationId) {
-        this.senderId = senderId;
-        this.receiverId = receiverId;
-        this.locationId = locationId;
+    public Shared(User sender, User receiver, Location location) {
+        this.sender = sender;
+        this.receiver = receiver;
+        this.location = location;
         this.sharedAt = LocalDateTime.now();
     }
 
@@ -50,28 +61,28 @@ public class Shared {
         this.id = id;
     }
 
-    public Integer getSenderId() {
-        return senderId;
+    public User getSender() {
+        return sender;
     }
 
-    public void setSenderId(Integer senderId) {
-        this.senderId = senderId;
+    public void setSender(User sender) {
+        this.sender = sender;
     }
 
-    public Integer getReceiverId() {
-        return receiverId;
+    public User getReceiver() {
+        return receiver;
     }
 
-    public void setReceiverId(Integer receiverId) {
-        this.receiverId = receiverId;
+    public void setReceiver(User receiver) {
+        this.receiver = receiver;
     }
 
-    public Integer getLocationId() {
-        return locationId;
+    public Location getLocation() {
+        return location;
     }
 
-    public void setLocationId(Integer locationId) {
-        this.locationId = locationId;
+    public void setLocation(Location location) {
+        this.location = location;
     }
 
     public LocalDateTime getSharedAt() {

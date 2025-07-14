@@ -1,10 +1,16 @@
 package com.manhattan.busyness_predictor.model;
 
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
@@ -70,6 +76,18 @@ public class Location {
 
     @Transient // This field is not persisted in the database
     private Double similarity;
+
+    @OneToMany(mappedBy = "location", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("location-reviews")
+    private List<Review> reviews;
+
+    @OneToMany(mappedBy = "location", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("location-shares")
+    private List<Shared> shares;
+
+    @OneToMany(mappedBy = "location", cascade = CascadeType.ALL, orphanRemoval = true)
+    // No JsonManagedReference here to avoid circular serialization if not needed
+    private List<History> historyEntries;
 
     // Constructors
     public Location() {
@@ -248,5 +266,38 @@ public class Location {
 
     public void setSimilarity(Double similarity) {
         this.similarity = similarity;
+    }
+
+    @Transient
+    public String getType() {
+        if (Boolean.TRUE.equals(this.isRestaurant)) return "Restaurant";
+        if (Boolean.TRUE.equals(this.isBar)) return "Bar";
+        if (Boolean.TRUE.equals(this.isClub)) return "Nightlife";
+        if (Boolean.TRUE.equals(this.isLandmark)) return "Landmark";
+        return "Store"; // Default type
+    }
+
+    public List<Review> getReviews() {
+        return reviews;
+    }
+
+    public void setReviews(List<Review> reviews) {
+        this.reviews = reviews;
+    }
+
+    public List<Shared> getShares() {
+        return shares;
+    }
+
+    public void setShares(List<Shared> shares) {
+        this.shares = shares;
+    }
+
+    public List<History> getHistoryEntries() {
+        return historyEntries;
+    }
+
+    public void setHistoryEntries(List<History> historyEntries) {
+        this.historyEntries = historyEntries;
     }
 }
