@@ -2,7 +2,7 @@
 import { Box, Typography } from "@mui/material";
 import VenueCard from "./VenueCard";
 
-export default function PlanDisplay({ planName, venues }) {
+export default function PlanDisplay({ planName, venues, busynessMap }) {
   // Handle case where venues might be undefined or empty
   if (!venues || venues.length === 0) {
     return (
@@ -59,7 +59,7 @@ export default function PlanDisplay({ planName, venues }) {
         }}
       >
         {venues.map((venue) => (
-          <VenueCard key={venue.id} venue={venue} variant="compact" />
+          <VenueCard key={venue.id} venue={venue} variant="compact" busynessMap={busynessMap} tags={venue.tags} />
         ))}
       </Box>
     </Box>

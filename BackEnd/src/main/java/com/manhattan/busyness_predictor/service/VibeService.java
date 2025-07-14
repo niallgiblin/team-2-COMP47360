@@ -1,10 +1,12 @@
 package com.manhattan.busyness_predictor.service;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -57,49 +59,48 @@ public class VibeService {
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
         String vibeDescription = request.getVibeDescription();
         Integer maxResults = request.getMaxResults() != null ? request.getMaxResults() : 10;
-        String explanation;
-        double confidence;
+        final double ML_CONFIDENCE_THRESHOLD = 0.4; // Similarity score must be above this to be considered high-confidence.
 
-        // Determine search strategy: queries with 2 or fewer words are treated as keyword searches.
-        // More than 2 words are treated as a "vibe" for the ML model.
-        boolean isVibeSearch = vibeDescription.trim().split("\\s+").length > 2;
-
-        List<Location> primaryResults;
-        List<Location> secondaryResults;
-
-        // Now that data seeding is fixed, we can use the best search method for the query type.
+        // 1. Fetch from ML service
+        List<Location> mlLocations = new ArrayList<>();
         if (isMLServiceAvailable()) {
-            if (isVibeSearch) {
-                logger.info("Performing ML-first search for vibe: '{}'", vibeDescription);
-                primaryResults = getLocationsByIdsInOrder(fetchMLRecommendationIds(vibeDescription, maxResults));
-                secondaryResults = keywordFallback(vibeDescription, maxResults);
-                explanation = "ML-powered recommendations based on your vibe description";
-                confidence = 0.9;
-            } else {
-                logger.info("Performing keyword-first search for query: '{}'", vibeDescription);
-                primaryResults = keywordFallback(vibeDescription, maxResults);
-                secondaryResults = getLocationsByIdsInOrder(fetchMLRecommendationIds(vibeDescription, maxResults));
-                explanation = "Search results based on your keywords";
-                confidence = 0.7;
-            }
-        } else {
-            // Fallback to keyword search if ML service is down
-            primaryResults = keywordFallback(vibeDescription, maxResults);
-            secondaryResults = Collections.emptyList();
-            explanation = "Keyword fallback recommendations";
-            confidence = 0.6;
+            mlLocations = fetchMLRecommendations(vibeDescription, maxResults);
         }
 
-        // Combine and de-duplicate results, prioritizing the primary search method
-        Map<Integer, Location> combinedResults = new LinkedHashMap<>();
-        primaryResults.forEach(loc -> combinedResults.put(loc.getId(), loc));
-        secondaryResults.forEach(loc -> combinedResults.putIfAbsent(loc.getId(), loc));
+        // 2. Fetch from keyword search
+        List<Location> keywordLocations = keywordFallback(vibeDescription);
 
-        List<Location> finalLocations = new ArrayList<>(combinedResults.values()).stream().limit(maxResults).collect(Collectors.toList());
+        // 3. Combine and de-duplicate results, prioritizing keyword matches
+        Map<Integer, Location> combinedLocations = new LinkedHashMap<>();
 
-        // Fetch busyness data regardless of the source of locations
+        // Add keyword results first, as they are more literal matches.
+        keywordLocations.forEach(loc -> combinedLocations.putIfAbsent(loc.getId(), loc));
+
+        // Then, fill the rest with ML results, skipping duplicates.
+        mlLocations.forEach(loc -> {
+            if (combinedLocations.size() < maxResults) {
+                combinedLocations.putIfAbsent(loc.getId(), loc);
+            }
+        });
+
+        // 4. Limit the final combined list
+        List<Location> finalLocations = new ArrayList<>(combinedLocations.values());
+
+        // 5. Set explanation and confidence for the response
+        String explanation;
+        double confidence;
+        if (!mlLocations.isEmpty() && mlLocations.get(0).getSimilarity() >= ML_CONFIDENCE_THRESHOLD) {
+            explanation = "Found results based on your vibe, supplemented with keyword matches.";
+            confidence = mlLocations.get(0).getSimilarity();
+        } else if (!finalLocations.isEmpty()) {
+            explanation = "Couldn't find a strong vibe match. Here are results based on your keywords.";
+            confidence = 0.5;
+        } else {
+            explanation = "No matching venues found for your query.";
+            confidence = 0.0;
+        }
+
         Map<String, Double> busynessData = fetchBusynessData();
-
         return buildResponse(finalLocations, explanation, confidence, busynessData);
     }
 
@@ -115,15 +116,37 @@ public class VibeService {
         return buildResponse(trendingLocations, explanation, confidence, busynessData);
     }
 
+    @SuppressWarnings("unchecked")
     public VibeSearchResponse getMapData() {
         logger.info("Fetching all locations and busyness data for map.");
         List<Location> allLocations = locationService.getAllLocations();
-        Map<String, Double> busynessData = fetchBusynessData();
+
+        // Fetch the full report including live and forecast data
+        Map<String, Object> busynessReport = fetchBusynessReport();
+
+        // Extract live busyness and forecast predictions separately
+        Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("predictions",
+                Collections.emptyMap());
+
+        // The python service returns predictions as a Map, not a List. We must convert it.
+        Object rawPredictions = busynessReport.get("predictions");
+        List<Object> predictions = new ArrayList<>();
+        if (rawPredictions instanceof Map) {
+            Map<String, Object> predictionsMap = (Map<String, Object>) rawPredictions;
+            predictions = predictionsMap.entrySet().stream()
+                    .map(entry -> Map.of("LocationID", entry.getKey(), "predictions", entry.getValue()))
+                    .collect(Collectors.toList());
+        }
 
         String explanation = "Complete location data for map view.";
         double confidence = 1.0;
 
-        return buildResponse(allLocations, explanation, confidence, busynessData);
+        return buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
+    }
+
+    public Map<String, Double> getLiveBusyness() {
+        logger.info("Fetching live busyness data.");
+        return fetchBusynessData();
     }
 
     // Check ML service health endpoint
@@ -140,7 +163,7 @@ public class VibeService {
     }
 
     // Calls the ML service with vibe query
-    private List<Integer> fetchMLRecommendationIds(String vibeDescription, Integer maxResults) {
+    private List<Location> fetchMLRecommendations(String vibeDescription, Integer maxResults) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -164,9 +187,9 @@ public class VibeService {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 logger.info("ML service responded with status {} and body: {}", response.getStatusCode(),
                         response.getBody());
-                List<Integer> locationIds = parseLocationIdsFromMLResponse(response.getBody());
-                logger.info("Parsed {} location IDs from ML service response.", locationIds.size());
-                return locationIds;
+                List<Location> mlLocations = parseLocationsFromMLResponse(response.getBody());
+                logger.info("Parsed {} locations from ML service response.", mlLocations.size());
+                return mlLocations;
             } else {
                 logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}",
                         response.getStatusCode(), response.getBody());
@@ -178,7 +201,7 @@ public class VibeService {
     }
 
     // Parses the ML service response map into Location objects
-    private List<Integer> parseLocationIdsFromMLResponse(Map<String, Object> mlResponse) {
+    private List<Location> parseLocationsFromMLResponse(Map<String, Object> mlResponse) {
         if (mlResponse == null || !mlResponse.containsKey("results")) {
             logger.warn("ML response is null or does not contain 'results' key. Returning empty list.");
             return Collections.emptyList();
@@ -191,17 +214,57 @@ public class VibeService {
         }
 
         List<?> rawLocations = (List<?>) resultsObj;
-        List<Integer> locationIds = new ArrayList<>();
+        List<Location> locations = new ArrayList<>();
 
         for (Object rawLocation : rawLocations) {
             if (rawLocation instanceof Map<?, ?> locMap) {
-                Integer id = parseInteger(locMap.get("id"));
-                if (id != null) {
-                    locationIds.add(id);
+                Location location = mapToLocation(locMap);
+                if (location != null) {
+                    locations.add(location);
                 }
             }
         }
-        return locationIds;
+        return locations;
+    }
+
+    private Float parseRating(Object ratingObj) {
+        if (ratingObj == null)
+            return 0f;
+
+        String ratingStr = ratingObj.toString();
+        Pattern pattern = Pattern.compile("(\\d+(\\.\\d+)?)");
+        Matcher matcher = pattern.matcher(ratingStr);
+
+        if (matcher.find()) {
+            try {
+                return Float.parseFloat(matcher.group(1));
+            } catch (NumberFormatException e) {
+                /* Fallthrough */ }
+        }
+        return 0f;
+    }
+
+    // Converts a Map representing a location to a Location entity
+    private Location mapToLocation(Map<?, ?> locMap) {
+        try {
+            Location location = new Location();
+            location.setId(parseInteger(locMap.get("id")));
+            location.setName(parseString(locMap.get("name")));
+            location.setAddress(parseString(locMap.get("address")));
+            location.setDescription(parseString(locMap.get("description")));
+            location.setPrice(parseInteger(locMap.get("price")));
+            location.setLat(parseDouble(locMap.get("lat")));
+            location.setLng(parseDouble(locMap.get("lng")));
+            location.setUri(parseString(locMap.get("uri")));
+            location.setReview(parseRating(locMap.get("review")));
+            location.setNumReviews(parseInteger(locMap.get("numReviews")));
+            location.setZone(parseString(locMap.get("zone")));
+            location.setSimilarity(parseDouble(locMap.get("similarity")));
+            return location;
+        } catch (Exception e) {
+            logger.error("Failed to parse location from ML response map: {}", locMap, e);
+            return null; // Return null if parsing fails
+        }
     }
 
     private Integer parseInteger(Object obj) {
@@ -228,6 +291,10 @@ public class VibeService {
         }
     }
 
+    private String parseString(Object obj) {
+        return obj != null ? obj.toString() : null;
+    }
+    
     public List<Location> getLocationsByIds(List<Integer> locationIds) {
         if (locationIds == null || locationIds.isEmpty()) {
             return Collections.emptyList();
@@ -235,20 +302,11 @@ public class VibeService {
         return locationRepository.findAllById(locationIds);
     }
 
-    private List<Location> getLocationsByIdsInOrder(List<Integer> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<Location> unorderedLocations = locationRepository.findAllById(ids);
-        // Re-order to match the original ID list order, which represents relevance
-        return ids.stream()
-                .flatMap(id -> unorderedLocations.stream().filter(loc -> loc.getId().equals(id)))
-                .collect(Collectors.toList());
-    }
-
     // Simple keyword fallback search
-    private List<Location> keywordFallback(String vibeDescription, Integer limit) {
-        String[] keywords = vibeDescription.toLowerCase().trim().split("\\s+");
+    private List<Location> keywordFallback(String vibeDescription) {
+        String vibeDesc = vibeDescription.toLowerCase();
+        // A simple improvement: treat keywords as mandatory.
+        String[] keywords = vibeDesc.split("\\s+");
         if (keywords.length == 0) {
             return Collections.emptyList();
         }
@@ -257,66 +315,76 @@ public class VibeService {
 
         return allLocations.stream()
                 .filter(loc -> {
-                    // Build a comprehensive text block to search against, handling nulls
-                    String searchableText = String.join(" ",
-                            loc.getName() != null ? loc.getName().toLowerCase() : "",
-                            loc.getDescription() != null ? loc.getDescription().toLowerCase() : "",
-                            loc.getSummary() != null ? loc.getSummary().toLowerCase() : "",
-                            loc.getTags() != null ? loc.getTags().toLowerCase() : "",
-                            loc.getAddress() != null ? loc.getAddress().toLowerCase() : ""
-                    );
-
-                    // Check if all keywords are present in the text block
-                    return java.util.Arrays.stream(keywords).allMatch(searchableText::contains);
+                    String combined = (loc.getName() + " " + loc.getDescription() + " " + loc.getAddress())
+                            .toLowerCase();
+                    // All keywords must be present
+                    for (String keyword : keywords) {
+                        if (!combined.contains(keyword)) {
+                            return false;
+                        }
+                    }
+                    return true;
                 })
-                .limit(limit) // Enforce limit for fallback as well
+                .limit(10) // Enforce limit for fallback as well
                 .collect(Collectors.toList());
     }
 
     // Calls the busyness service to get predictions for all zones
     @SuppressWarnings("unchecked")
     private Map<String, Double> fetchBusynessData() {
+        Map<String, Object> busynessReport = fetchBusynessReport();
+        Object liveBusynessObj = busynessReport.get("live_busyness");
+
+        if (liveBusynessObj instanceof Map) {
+            // Ensure values are correctly typed to avoid class cast exceptions
+            return ((Map<?, ?>) liveBusynessObj).entrySet().stream()
+                    .filter(entry -> entry.getKey() instanceof String && entry.getValue() instanceof Number)
+                    .collect(Collectors.toMap(
+                            entry -> (String) entry.getKey(),
+                            entry -> ((Number) entry.getValue()).doubleValue()));
+        }
+        return Collections.emptyMap();
+    }
+
+    // Fetches the complete busyness report (live + forecast) from the Python service
+    private Map<String, Object> fetchBusynessReport() {
         try {
             logger.info("Calling busyness service at {}", busynessServiceUrl + "/busyness");
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     busynessServiceUrl + "/busyness",
                     HttpMethod.GET,
                     null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {
-                    });
+                    new ParameterizedTypeReference<>() {});
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null
                     && Boolean.TRUE.equals(response.getBody().get("success"))) {
                 logger.info("Busyness service responded successfully.");
-                Object predictionsObj = response.getBody().get("predictions");
-                if (predictionsObj instanceof Map) {
-                    // The python service now returns a simple Map<String, Double>.
-                    // We need to ensure the values are correctly typed.
-                    return ((Map<?, ?>) predictionsObj).entrySet().stream()
-                            .filter(entry -> entry.getKey() instanceof String && entry.getValue() instanceof Number)
-                            .collect(Collectors.toMap(
-                                    entry -> (String) entry.getKey(),
-                                    entry -> ((Number) entry.getValue()).doubleValue()));
-                }
+                return response.getBody();
             } else {
-                logger.warn("Busyness service call failed or returned unsuccessful. Status: {}",
-                        response.getStatusCode());
+                logger.warn("Busyness service call failed or returned unsuccessful. Status: {}", response.getStatusCode());
             }
         } catch (RestClientException e) {
             logger.error("Error calling busyness service: {}", e.getMessage(), e);
         }
         return Collections.emptyMap();
     }
-
+    
     // Helper to build VibeSearchResponse DTO
     private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
             Map<String, Double> busynessData) {
+        return buildResponse(locations, explanation, confidence, busynessData, Collections.emptyList());
+    }
+
+    // Overloaded helper to include predictions for the map view
+    private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
+            Map<String, Double> busynessData, List<Object> predictions) {
         VibeSearchResponse response = new VibeSearchResponse();
         List<LocationDto> locationDtos = locations.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
         response.setLocations(locationDtos);
         response.setExplanation(explanation);
         response.setConfidence(confidence);
         response.setBusyness(busynessData);
+        response.setPredictions(predictions);
         return response;
     }
 
@@ -324,25 +392,19 @@ public class VibeService {
         Location baseLocation = getLocationById(locationId);
 
         if (isMLServiceAvailable()) {
-            List<Integer> similarIds = fetchMLSimilarLocationIds(baseLocation, limit);
-            if (!similarIds.isEmpty()) {
-                List<Location> similarLocations = getLocationsByIds(similarIds);
-                // Re-order to match ML service relevance
-                return similarIds.stream()
-                    .flatMap(id -> similarLocations.stream().filter(loc -> loc.getId().equals(id)))
-                    .map(LocationDto::fromLocation)
-                    .collect(Collectors.toList());
+            List<Location> mlSimilar = fetchMLSimilarLocations(baseLocation, limit);
+            if (!mlSimilar.isEmpty()) {
+                return mlSimilar.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
             }
         }
-        
-        // Fallback if ML service is down or returns no results
+
         return findSimilarByCategory(baseLocation, limit);
     }
 
     /**
      * Calls ML service to get similar locations based on a given location.
      */
-    private List<Integer> fetchMLSimilarLocationIds(Location baseLocation, Integer limit) {
+    private List<Location> fetchMLSimilarLocations(Location baseLocation, Integer limit) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -362,7 +424,7 @@ public class VibeService {
                     });
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return parseLocationIdsFromMLResponse(response.getBody());
+                return parseLocationsFromMLResponse(response.getBody());
             }
         } catch (Exception e) {
             // Log if needed

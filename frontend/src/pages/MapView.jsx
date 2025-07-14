@@ -27,6 +27,7 @@ import { DateTime } from "luxon";
 // Data and context
 import mockVenues from "../data/mockVenues";
 import { usePlan } from "../context/PlanContext";
+import { useLike } from "../context/LikeContext";
 
 // Utilities for directions and geo-calculations
 import polyline from "@mapbox/polyline";
@@ -70,8 +71,8 @@ export default function MapView() {
   const selectedVenueFromState = location.state?.selectedVenue || null;
   const fromPlan = location.state?.fromPlan || false;
   
-
-  const { plan } = usePlan();
+  const { plan, addVenueToPlan } = usePlan();
+  const { likedVenues, handleLike } = useLike();
   const { setFromPlan } = usePlan();
 
   const mapSectionRef = useRef(null);
@@ -169,7 +170,7 @@ export default function MapView() {
         const busynessObject = data.busyness || {};
         const busynessArray = Object.entries(busynessObject).map(
           ([locationId, busynessValue]) => ({
-            LocationID: locationId,
+            LocationID: String(locationId).trim(), // normalize to string, trim whitespace
             busyness: busynessValue,
           })
         );
@@ -856,7 +857,17 @@ export default function MapView() {
               fromPlan ? (
                 <CompactPlanSummary />
               ) : (
-                selectedVenue && <VenueCard venue={selectedVenue} variant="compact" />
+                selectedVenue && (
+                  <VenueCard
+                    venue={selectedVenue}
+                    variant="compact"
+                    onAddToPlan={() => addVenueToPlan(selectedVenue)}
+                    onLike={() => handleLike(selectedVenue)}
+                    isLiked={likedVenues.some(
+                      (v) => v.id === selectedVenue.id
+                    )}
+                  />
+                )
               )
             )}
 

@@ -4,13 +4,16 @@ import StarHalfIcon from '@mui/icons-material/StarHalf';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import LaunchIcon from '@mui/icons-material/Launch';
+import WhatshotIcon from '@mui/icons-material/Whatshot';
 import { getCategory, categoryImages } from '../utils/tagMapping';
 
 import { usePlan } from '../context/PlanContext';
 
-// Functional component that displays information about a venue
-export default function VenueCard({ venue, variant = 'default' }) {
-  const { plan, addToPlan, removeFromPlan } = usePlan();  
+
+// Functional component that displays information about a venue and handles actions
+export default function VenueCard({ venue, variant = 'default', busynessMap }) {
+  const { plan, addToPlan, removeFromPlan } = usePlan();
+
   if (!venue) return null; // return nothing if the venue is not provided
   const isInPlan = plan.some(v => v.id === venue.id);
   const isPlanFull = plan.length >= 3;
@@ -25,7 +28,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
 
   // Rating
   const parsedRating = typeof venue.review === 'string'
-    ? parseFloat(venue.rating.replace('Rating: ', ''))
+    ? parseFloat(venue.review.replace('Rating: ', ''))
     : venue.review;
 
   
@@ -41,12 +44,28 @@ export default function VenueCard({ venue, variant = 'default' }) {
   const category = getCategory(venue.description || '');
   const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
+  // Busyness chip logic
+  let busynessLabel = null;
+  if (busynessMap && venue.zoneId) {
+    const value = busynessMap[String(venue.zoneId)];
+    if (typeof value === 'number') {
+      const percent = value * 100;
+      if (percent >= 75) busynessLabel = 'Very Busy';
+      else if (percent >= 50) busynessLabel = 'Busy';
+      else if (percent >= 25) busynessLabel = 'Moderate';
+      else busynessLabel = 'Quiet';
+    } else {
+      busynessLabel = 'No Data';
+    }
+  }
+
   const handleWebsiteClick = () => {
     if (venue.uri) {
       window.open(venue.uri, '_blank');
     }
   };
 
+  
   return (
     <Card
     sx={{
@@ -129,8 +148,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
       
       {/* Display the price level and rating */}
         <Box sx={{ mt: variant === 'compact' ? 0 : 'auto' }}>
-        
-        {/* Rating and price */}
+        {/* Rating, busyness, and price */}
         <Box
             sx={{
               display: 'flex',
@@ -185,9 +203,23 @@ export default function VenueCard({ venue, variant = 'default' }) {
                 {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
               </Typography>
             </Box>
-
-
-
+           {/* Busyness chip */}
+           {busynessLabel && (
+             <Chip
+               icon={<WhatshotIcon sx={{ color: '#fff' }} />}
+               label={busynessLabel}
+               size="small"
+               sx={{
+                 background: busynessLabel === 'No Data'
+                   ? 'linear-gradient(to right, #888, #bbb)'
+                   : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                 color: '#fff',
+                 fontWeight: 600,
+                 height: 24,
+                 ml: 1,
+               }}
+             />
+           )}
             {/* Price */}
             <Box 
                 sx={{ 
@@ -270,7 +302,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
                   variant="contained"
                   size="small"
                   fullWidth
-                  onClick={() => addToPlan(venue)}
+                onClick={() => { if (addToPlan) addToPlan(venue); }}
                   disabled={isPlanFull}
                   sx={{
                     background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
@@ -286,9 +318,11 @@ export default function VenueCard({ venue, variant = 'default' }) {
                   Add to Plan
                 </Button>
               </span>
-            </Tooltip>
+            </Tooltip>            
           </Box>
         )}
+
+        {/* Like Button: Always visible */}
         </Box>
     </Card>
   );

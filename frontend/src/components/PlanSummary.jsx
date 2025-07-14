@@ -5,7 +5,7 @@ import { usePlan } from '../context/PlanContext';
 import { useAuth } from '../hooks/useAuth';
 import VenueCard from './VenueCard';
 
-export default function PlanSummary() {
+export default function PlanSummary({ busynessMap }) {
   const { plan, savePlan, loadPlan, clearPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
@@ -181,7 +181,7 @@ export default function PlanSummary() {
           </Typography>
         </Box>
       ) : (
-        plan.map((venue) => <VenueCard key={venue.id} venue={venue} />)
+        plan.map((venue) => <VenueCard key={venue.id} venue={venue} busynessMap={busynessMap} tags={venue.tags} />)
       )}
     </Box>
 

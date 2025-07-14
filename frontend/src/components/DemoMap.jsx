@@ -60,18 +60,15 @@ export default function DemoMap({
   };
 
   const getZoneStyle = (feature) => {
-    const locationId = feature.properties.LocationID;
-    const match =
-      mode === "forecast"
-        ? predictionData
-            .find((z) => String(z.LocationID) === String(locationId))
-            ?.predictions?.find((p) => p.timestamp === selectedTimestamp)
-        : busynessData.find(
-            (z) => String(z.LocationID) === String(locationId)
-          );
-
+    const locationId = String(feature.properties.LocationID).trim();
+    const match = busynessData.find(
+      (z) => String(z.LocationID).trim() === locationId
+    );
+    // Debug logging if no match
+    if (!match) {
+      console.log("No busyness match for zone", locationId, "Available:", busynessData.map(z => z.LocationID));
+    }
     const fillColor = match ? getColorForBusyness((match.busyness || 0) * 100) : "#CCCCCC";
-
     return {
       fillColor,
       weight: 2,
