@@ -95,8 +95,13 @@ export default function FindMyVibe() {
       const locations = data.locations || [];
 
       // Enrich the venue data to ensure consistency, just like on the Recommendations page
+      const zoneNameToId = {};
+      (allVenues || []).forEach(v => {
+        if (v.zone && v.zoneId) {
+          zoneNameToId[v.zone.trim().toLowerCase()] = String(v.zoneId);
+        }
+      });
       const transformed = locations.map((venue) => {
-        // Try to find the canonical venue in allVenues by id, placeId, or coordinates
         let canonical = null;
         if (allVenues.length > 0) {
           canonical = allVenues.find(v =>
@@ -114,18 +119,46 @@ export default function FindMyVibe() {
           address: venue.address || (canonical && canonical.address) || 'No address provided',
           zone: venue.zone || venue.Zone || (canonical && canonical.zone) || 'Unknown',
         };
-
-        // Add zoneId for busyness mapping
+        // Assign zoneId using Turf.js (polygon lookup)
+        let zoneIdFromPolygon = null;
         if (zoneData && enriched.latitude && enriched.longitude) {
-          const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
-          const matchingZone = zoneData.features.find((feature) =>
-            booleanPointInPolygon(venuePoint, feature.geometry)
-          );
-          if (matchingZone) {
-            enriched.zoneId = String(matchingZone.properties.LocationID); // always string
+          try {
+            const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
+            const matchingZone = zoneData.features.find((feature) =>
+              booleanPointInPolygon(venuePoint, feature.geometry)
+            );
+            if (matchingZone) {
+              zoneIdFromPolygon = String(matchingZone.properties.LocationID);
+              enriched.zoneId = zoneIdFromPolygon;
+            }
+          } catch (err) {
+            console.warn(`[VIBE DEBUG] Polygon lookup failed for venue '${enriched.name}':`, err);
           }
         }
-
+        // Fallback: Assign zoneId using zoneNameToId mapping if not set
+        let zoneIdFromMapping = null;
+        if (!enriched.zoneId && enriched.zone) {
+          const zoneKey = enriched.zone.trim().toLowerCase();
+          if (zoneNameToId[zoneKey]) {
+            zoneIdFromMapping = zoneNameToId[zoneKey];
+            enriched.zoneId = zoneIdFromMapping;
+          }
+        }
+        // Fallback: Try to match zone name to any LocationID in allVenues
+        if (!enriched.zoneId && enriched.zone) {
+          const possible = (allVenues || []).find(v => v.zone && v.zone.trim().toLowerCase() === enriched.zone.trim().toLowerCase() && v.zoneId);
+          if (possible) {
+            enriched.zoneId = String(possible.zoneId);
+          }
+        }
+        // Log detailed info for debugging
+        const busynessValue = enriched.zoneId ? busynessMap[enriched.zoneId] : undefined;
+        console.log(
+          `[VIBE DEBUG] Venue: '${enriched.name}' | Zone: '${enriched.zone}' | zoneId (polygon): ${zoneIdFromPolygon} | zoneId (mapping): ${zoneIdFromMapping} | Final zoneId: ${enriched.zoneId} | Busyness: ${busynessValue}`
+        );
+        if (!enriched.zoneId) {
+          console.warn(`[VIBE DEBUG] No zoneId could be assigned for venue '${enriched.name}' (zone: '${enriched.zone}')`);
+        }
         // Add tags if missing
         if (!enriched.tags || enriched.tags.length === 0) {
           let tags = [];
@@ -134,7 +167,6 @@ export default function FindMyVibe() {
           } else if (canonical && Array.isArray(canonical.tags)) {
             tags = canonical.tags;
           } else {
-            // Try to extract tags from description/type
             if (venue.description) {
               tags = venue.description.split(',').map(t => t.trim()).filter(Boolean);
             } else if (venue.type) {
@@ -145,18 +177,15 @@ export default function FindMyVibe() {
         }
         return enriched;
       });
-      console.log("First enriched venue in FindMyVibe:", transformed[0]);
       setAllResults(transformed);
-
-      // Also update the busyness map with the latest data from the search response
-      if (data.busyness) {
-        // Ensure all keys are strings
-        const normalizedBusyness = {};
-        Object.entries(data.busyness).forEach(([k, v]) => {
-          normalizedBusyness[String(k)] = v;
-        });
-        setBusynessMap(normalizedBusyness);
-      }
+      // Remove: updating busynessMap from search response
+      // if (data.busyness) {
+      //   const normalizedBusyness = {};
+      //   Object.entries(data.busyness).forEach(([k, v]) => {
+      //     normalizedBusyness[String(k)] = v;
+      //   });
+      //   setBusynessMap(normalizedBusyness);
+      // }
     } catch (err) {
       console.error("Error fetching search results:", err);
       setAllResults([]);
