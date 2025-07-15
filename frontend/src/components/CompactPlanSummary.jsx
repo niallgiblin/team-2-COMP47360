@@ -1,6 +1,6 @@
 import { Box, Typography, IconButton } from '@mui/material';
 import { usePlan } from '../context/PlanContext';
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from '../hooks/useAuth';
 import VenueCard from './VenueCard';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -8,7 +8,7 @@ import { useRef } from 'react';
 
 export default function CompactPlanSummary() {
   const { plan } = usePlan();
-  const { user } = useAuth();
+  const { user } = useAuth();  
 
   const scrollRef = useRef(null);
 
@@ -99,7 +99,7 @@ export default function CompactPlanSummary() {
         }}
       >
         {plan.map((venue) => (
-          <VenueCard key={venue.id} venue={venue} variant="compact" />
+          <VenueCard key={venue.id} venue={venue} variant="compact" /> // No handlers needed here anymore as they are global now
         ))}
       </Box>
     </Box>

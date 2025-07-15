@@ -5,6 +5,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,12 +59,22 @@ public class DataInitializer implements CommandLineRunner {
         try (InputStream is = new ClassPathResource("data/locations.csv").getInputStream();
              BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
 
+            // Read header to dynamically find column indices
+            String headerLine = reader.readLine();
+            if (headerLine == null) {
+                logger.error("CSV file is empty.");
+                return;
+            }
+            String[] headers = headerLine.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
+            Map<String, Integer> headerMap = new HashMap<>();
+            for (int i = 0; i < headers.length; i++) {
+                headerMap.put(headers[i].trim(), i);
+            }
+
+            List<Location> locationsToSave = new ArrayList<>();
             String line;
-            reader.readLine(); // Skip header row
 
             while ((line = reader.readLine()) != null) { 
-                // Regex to split by comma, but ignore commas inside quotes
-                // For more complex CSVs, consider using a library like OpenCSV.
                 String[] fields = line.split(
                         ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",
                         -1
@@ -74,23 +88,29 @@ public class DataInitializer implements CommandLineRunner {
                     continue;
                 }
 
+                // --- DATA VALIDATION: Skip rows with no zone ---
+                String zone = parseString(fields[headerMap.get("zone")]);
+                if (zone == null || zone.isEmpty()) {
+                    logger.warn("Skipping location with missing zone: {}", fields[headerMap.get("name")]);
+                    continue;
+                }
+
                 try {
                     Location location = new Location();
-                    // ID is auto-generated, so we skip fields[0]
-                    location.setLat(parseDouble(fields[1]));
-                    location.setLng(parseDouble(fields[2]));
-                    location.setName(parseString(fields[3]));
-                    location.setAddress(parseString(fields[4]));
-                    location.setUri(parseString(fields[5]));
-                    location.setReview(parseRating(fields[6])); // Corrected method for Float
-                    location.setNumReviews(parseInt(fields[7]));
+                    // --- KEY FIX: Use the ID from the CSV file ---
+                    location.setId(parseInt(fields[headerMap.get("id")]));
+                    location.setLat(parseDouble(fields[headerMap.get("lat")]));
+                    location.setLng(parseDouble(fields[headerMap.get("long")]));
+                    location.setName(parseString(fields[headerMap.get("name")]));
+                    location.setAddress(parseString(fields[headerMap.get("addr")]));
+                    location.setUri(parseString(fields[headerMap.get("uri")]));
+                    location.setReview(parseRating(fields[headerMap.get("reviews")]));
+                    location.setNumReviews(parseInt(fields[headerMap.get("num_reviews")]));
 
-                    String locType = parseString(fields[8]);
+                    String locType = parseString(fields[headerMap.get("loc_type")]);
                     if (locType != null) {
                         String lowerLocType = locType.toLowerCase();
-                        location.setIsRestaurant(
-                                lowerLocType.contains("restaurant")
-                        );
+                        location.setIsRestaurant(lowerLocType.contains("restaurant"));
                         location.setIsBar(lowerLocType.contains("bar"));
                         location.setIsClub(lowerLocType.contains("club"));
                         location.setIsLandmark(
@@ -99,11 +119,14 @@ public class DataInitializer implements CommandLineRunner {
                         );
                     }
 
-                    location.setDescription(parseString(fields[13])); // Using summary column
-                    location.setPrice(parsePrice(fields[10]));
-                    location.setZone(parseString(fields[11]));
+                    location.setPrice(parsePrice(fields[headerMap.get("price")]));
+                    location.setZone(zone);
+                    location.setInformation(parseString(fields[headerMap.get("Info")]));
+                    location.setSummary(parseString(fields[headerMap.get("summary")]));
+                    location.setDescription(parseString(fields[headerMap.get("description")]));
+                    location.setTags(parseString(fields[headerMap.get("tags")]));
 
-                    locationRepository.save(location);
+                    locationsToSave.add(location);
                 } catch (Exception e) {
                     logger.error(
                             "Failed to parse or save line: '{}'. Error: {}",
@@ -111,9 +134,10 @@ public class DataInitializer implements CommandLineRunner {
                     );
                 }
             }
+            locationRepository.saveAll(locationsToSave);
             logger.info(
                     "Successfully imported {} locations from CSV.",
-                    locationRepository.count()
+                    locationsToSave.size()
             );
         } catch (Exception e) {
             logger.error("Failed to read or process 'data/locations.csv'", e);

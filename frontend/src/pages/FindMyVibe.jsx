@@ -7,15 +7,16 @@ import {
   MenuItem,
   FormControl,
   Select,
-  InputLabel,
-  Pagination,
+  InputLabel
 } from "@mui/material";
 import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
 import PlanSummary from "../components/PlanSummary";
+// Turf imports for data enrichment
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
+
 
 export default function FindMyVibe() {
   // State hooks for user input and results
@@ -27,39 +28,35 @@ export default function FindMyVibe() {
   const [hasSearched, setHasSearched] = useState(false); // track if a search has been triggered, so the plan summary is displayed
   const [isLoading, setIsLoading] = useState(false);
 
-  // State for all results from API and the currently displayed page
   const [allResults, setAllResults] = useState([]);
-  const [paginatedResults, setPaginatedResults] = useState([]);
-
-  // Pagination state
-  const [page, setPage] = useState(1); // Use 1-based indexing for user-facing page number
-  const [pageSize, setPageSize] = useState(10);
-  const [totalElements, setTotalElements] = useState(0);
+  const [busynessMap, setBusynessMap] = useState({});
+  const [allVenues, setAllVenues] = useState([]);
 
   // state for zone data
   const [zoneData, setZoneData] = useState(null); // GeoJSON data for zone lookups
-  // Busyness state
-  const [busynessMap, setBusynessMap] = useState({});
 
-  useEffect(() => {
-    fetch("/manhattanZones.geojson")
-      .then((res) => res.json())
-      .then((data) => setZoneData(data))
-      .catch((err) => {
-        console.error("Failed to load zone data:", err);
-      });
-  }, []);
+ useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [zoneRes, mapDataRes] = await Promise.all([
+          fetch("/manhattanZones.geojson"),
+          fetch(`/api/vibe/map-data`),
+        ]);
 
-  useEffect(() => {
-    fetch(`/api/vibe/map-data`)
-      .then((res) => res.json())
-      .then((data) => {
-        setBusynessMap(data.busyness || {});
-      })
-      .catch((err) => {
-        console.error("Failed to fetch map-data:", err);
-      });
-  }, []);
+        if (zoneRes.ok) setZoneData(await zoneRes.json());
+        else console.error("Failed to load zone data:", zoneRes.statusText);
+
+        if (mapDataRes.ok) {
+          const mapData = await mapDataRes.json();
+          setBusynessMap(mapData.busyness || {});
+          setAllVenues(mapData.locations || []);
+        } else console.error("Failed to fetch map-data:", mapDataRes.statusText);
+      } catch (error) {
+        console.error("Error fetching initial data for FindMyVibe:", error);
+      }
+    };
+    fetchInitialData();
+ }, []);
 
   // Handle navigation to map page
   const handleGetDirections = (venue) => {
@@ -79,9 +76,12 @@ export default function FindMyVibe() {
     setHasSearched(true);
 
     try {
+      // Combine all inputs to create a more specific and intuitive search query.
+      const vibeDescription = [input, vibe, venueType, cuisine].filter(Boolean).join(' ').trim();
+
       const requestBody = {
-        vibeDescription: input || `${vibe} ${venueType} ${cuisine}`.trim(),
-        maxResults: 50, // Fetch a larger set for client-side pagination
+        vibeDescription: vibeDescription,
+        maxResults: 5, 
       };
 
       const res = await fetch(`/api/vibe/search`, {
@@ -92,96 +92,84 @@ export default function FindMyVibe() {
 
       if (!res.ok) throw new Error("Search failed");
       const data = await res.json();
-
       const locations = data.locations || [];
 
-      const normalizedResults = locations.map((v) => {
-        const priceMap = {
-          "price level very cheap": 1,
-          "price level cheap": 2,
-          "price level moderate": 3,
-          "price level expensive": 4,
-          "price level very expensive": 5,
-        };
-        let parsedPrice = 0;
-        const rawPrice = v.price;
-        if (typeof rawPrice === 'number') {
-          parsedPrice = rawPrice;
-        } else if (typeof rawPrice === 'string') {
-          parsedPrice = priceMap[rawPrice.trim().toLowerCase()] || 0;
+      // Enrich the venue data to ensure consistency, just like on the Recommendations page
+      const transformed = locations.map((venue) => {
+        // Try to find the canonical venue in allVenues by id, placeId, or coordinates
+        let canonical = null;
+        if (allVenues.length > 0) {
+          canonical = allVenues.find(v =>
+            v.id === venue.id ||
+            v.id === venue.placeId ||
+            (v.latitude === (venue.latitude || venue.lat) && v.longitude === (venue.longitude || venue.lng))
+          );
         }
-
-        //IMPORTANT!! REMOVE MOCK DATA FROM TAGS DEBUGGING
         const enriched = {
-          ...v,
-          id: v.id || `${v.name}-${v.lat}-${v.lng}`,
-          latitude: v.lat,
-          longitude: v.lng,
-          address: v.addr || v.address || "No address provided",
-          zone: v.zone || "Unknown",
-          price: parsedPrice,
-          description: v.description || "",
-          summary: v.summary || v.description || "",
-          imageUrl: v.imageUrl || v.image_url || v.image || null,
-          tags: typeof v.tags === 'string' ? v.tags.split(',').map(t => t.trim()) : v.tags || ['art', 'historic', 'date night'],
+          ...canonical,
+          ...venue,
+          id: (canonical && canonical.id) || venue.id || venue.placeId, // Prefer canonical id
+          latitude: venue.latitude || venue.lat || (canonical && canonical.latitude),
+          longitude: venue.longitude || venue.lng || (canonical && canonical.longitude),
+          address: venue.address || (canonical && canonical.address) || 'No address provided',
+          zone: venue.zone || venue.Zone || (canonical && canonical.zone) || 'Unknown',
         };
 
-        const text = `${v.tags || ""} ${v.loc_type || ""} ${v.description || ""} ${v.summary || ""}`.toLowerCase();
-        enriched.isRestaurant = text.includes("restaurant");
-        enriched.isBar = text.includes("bar");
-        enriched.isClub = text.includes("club");
-        enriched.isLandmark = text.includes("landmark");
-
+        // Add zoneId for busyness mapping
         if (zoneData && enriched.latitude && enriched.longitude) {
           const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
           const matchingZone = zoneData.features.find((feature) =>
             booleanPointInPolygon(venuePoint, feature.geometry)
           );
           if (matchingZone) {
-            enriched.zoneId = matchingZone.properties.LocationID;
+            enriched.zoneId = String(matchingZone.properties.LocationID); // always string
           }
+        }
+
+        // Add tags if missing
+        if (!enriched.tags || enriched.tags.length === 0) {
+          let tags = [];
+          if (venue.tags && Array.isArray(venue.tags)) {
+            tags = venue.tags;
+          } else if (canonical && Array.isArray(canonical.tags)) {
+            tags = canonical.tags;
+          } else {
+            // Try to extract tags from description/type
+            if (venue.description) {
+              tags = venue.description.split(',').map(t => t.trim()).filter(Boolean);
+            } else if (venue.type) {
+              tags = venue.type.split(',').map(t => t.trim()).filter(Boolean);
+            }
+          }
+          enriched.tags = tags;
         }
         return enriched;
       });
+      console.log("First enriched venue in FindMyVibe:", transformed[0]);
+      setAllResults(transformed);
 
-      setAllResults(normalizedResults);
-      setPage(1); // Reset to the first page on a new search
+      // Also update the busyness map with the latest data from the search response
+      if (data.busyness) {
+        // Ensure all keys are strings
+        const normalizedBusyness = {};
+        Object.entries(data.busyness).forEach(([k, v]) => {
+          normalizedBusyness[String(k)] = v;
+        });
+        setBusynessMap(normalizedBusyness);
+      }
     } catch (err) {
       console.error("Error fetching search results:", err);
       setAllResults([]);
     } finally {
       setIsLoading(false);
     }
-  }, [input, vibe, venueType, cuisine, zoneData]);
-
-  // Effect for client-side pagination
-  // This runs when the full result set changes, or when page/pageSize is updated.
-  useEffect(() => {
-    const total = allResults.length;
-    setTotalElements(total);
-
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    setPaginatedResults(allResults.slice(startIndex, endIndex));
-  }, [allResults, page, pageSize]);
+  }, [input, vibe, venueType, cuisine, zoneData, allVenues]);
 
   // Form submission handler
   const handleFormSubmit = (e) => {
     e.preventDefault();
     performSearch();
   };
-
-  // Pagination handlers
-  const handlePageChange = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handlePageSizeChange = (e) => {
-    setPageSize(parseInt(e.target.value, 10));
-    setPage(1); // Reset to first page when page size changes
-  };
-
-  const totalPages = Math.ceil(totalElements / pageSize);
 
   return (
     <PageWrapper fullWidth>
@@ -312,62 +300,25 @@ export default function FindMyVibe() {
 
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'flex-start', gap: 3 }}>
           {hasSearched && allResults.length > 0 && (
-            <Box sx={{ width: { xs: '100%', md: 320 }, position: { md: 'sticky' }, top: { md: 80 }, alignSelf: 'flex-start' }}>
+            <Box sx={{ width: { xs: '100%', md: 320 }, position: { md: 'sticky' }, top: { md: 80 }, alignSelf: 'flex-start', zIndex: 0 }}>
               <PlanSummary />
             </Box>
           )}
 
-          <Box sx={{ flex: 1 }}>
-            {paginatedResults.map((venue, index) => (
+          <Box sx={{ flex: 1, zIndex: 1 }}>
+            {allResults.map((venue, index) => (
               <TrendingVenueCard
                 key={venue.id || index}
                 venue={venue}
                 busynessMap={busynessMap}
                 rank={index + 1}
                 onGetDirections={handleGetDirections}
-                onClick={() => navigate("/map-view", { state: { selectedVenue: venue } })}
+                tags={venue.tags}
+                hidePlanButtons={false}
               />
             ))}
-            {totalPages > 1 && (
-              <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", mt: 4, gap: 2, flexWrap: 'wrap' }}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={handlePageChange}
-                  color="primary"
-                  sx={{
-                    "& .MuiPaginationItem-root": { color: "white" },
-                    "& .Mui-selected": {
-                      background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                      color: "black",
-                    },
-                  }}
-                />
-                <FormControl size="small" sx={{ minWidth: 120, backgroundColor: 'white', borderRadius: 1 }}>
-                  <InputLabel id="page-size-label">Per Page</InputLabel>
-                  <Select
-                    labelId="page-size-label"
-                    value={pageSize}
-                    label="Per Page"
-                    onChange={handlePageSizeChange}
-                  >
-                    <MenuItem value={10}>10</MenuItem>
-                    <MenuItem value={20}>20</MenuItem>
-                    <MenuItem value={50}>50</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
           </Box>
         </Box>
-
-        {/* Results Count */}
-        {allResults.length > 0 && !isLoading && (
-          <Typography variant="body2" align="center" sx={{ color: "#aaa", mt: 2 }}>
-            Showing {(page - 1) * pageSize + 1}-
-            {Math.min(page * pageSize, totalElements)} of {totalElements} venues
-          </Typography>
-        )}
       </Box>
     </PageWrapper>
   );

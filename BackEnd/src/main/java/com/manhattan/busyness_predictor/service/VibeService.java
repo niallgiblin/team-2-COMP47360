@@ -1,9 +1,12 @@
 package com.manhattan.busyness_predictor.service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -54,30 +57,51 @@ public class VibeService {
 
     // Main entry for vibe search
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
-        List<Location> locations = new ArrayList<>();
-        String explanation = "Keyword fallback recommendations";
-        double confidence = 0.6;
+        String vibeDescription = request.getVibeDescription();
         Integer maxResults = request.getMaxResults() != null ? request.getMaxResults() : 10;
+        final double ML_CONFIDENCE_THRESHOLD = 0.4; // Similarity score must be above this to be considered high-confidence.
 
+        // 1. Fetch from ML service
+        List<Location> mlLocations = new ArrayList<>();
         if (isMLServiceAvailable()) {
-            List<Location> mlLocations = fetchMLRecommendations(request.getVibeDescription(), maxResults);
-            if (!mlLocations.isEmpty()) {
-                locations = mlLocations;
-                explanation = "ML-powered recommendations based on your vibe description";
-                confidence = 0.9;
+            mlLocations = fetchMLRecommendations(vibeDescription, maxResults);
+        }
+
+        // 2. Fetch from keyword search
+        List<Location> keywordLocations = keywordFallback(vibeDescription);
+
+        // 3. Combine and de-duplicate results, prioritizing keyword matches
+        Map<Integer, Location> combinedLocations = new LinkedHashMap<>();
+
+        // Add keyword results first, as they are more literal matches.
+        keywordLocations.forEach(loc -> combinedLocations.putIfAbsent(loc.getId(), loc));
+
+        // Then, fill the rest with ML results, skipping duplicates.
+        mlLocations.forEach(loc -> {
+            if (combinedLocations.size() < maxResults) {
+                combinedLocations.putIfAbsent(loc.getId(), loc);
             }
+        });
+
+        // 4. Limit the final combined list
+        List<Location> finalLocations = new ArrayList<>(combinedLocations.values());
+
+        // 5. Set explanation and confidence for the response
+        String explanation;
+        double confidence;
+        if (!mlLocations.isEmpty() && mlLocations.get(0).getSimilarity() >= ML_CONFIDENCE_THRESHOLD) {
+            explanation = "Found results based on your vibe, supplemented with keyword matches.";
+            confidence = mlLocations.get(0).getSimilarity();
+        } else if (!finalLocations.isEmpty()) {
+            explanation = "Couldn't find a strong vibe match. Here are results based on your keywords.";
+            confidence = 0.5;
+        } else {
+            explanation = "No matching venues found for your query.";
+            confidence = 0.0;
         }
 
-        if (locations.isEmpty()) {
-            logger.warn("ML service did not return results for vibe: '{}'. Using keyword fallback.",
-                    request.getVibeDescription());
-            locations = keywordFallback(request.getVibeDescription());
-        }
-
-        // Fetch busyness data regardless of the source of locations
         Map<String, Double> busynessData = fetchBusynessData();
-
-        return buildResponse(locations, explanation, confidence, busynessData);
+        return buildResponse(finalLocations, explanation, confidence, busynessData);
     }
 
     public VibeSearchResponse getTrendingWithBusyness() {
@@ -92,15 +116,37 @@ public class VibeService {
         return buildResponse(trendingLocations, explanation, confidence, busynessData);
     }
 
+    @SuppressWarnings("unchecked")
     public VibeSearchResponse getMapData() {
         logger.info("Fetching all locations and busyness data for map.");
         List<Location> allLocations = locationService.getAllLocations();
-        Map<String, Double> busynessData = fetchBusynessData();
+
+        // Fetch the full report including live and forecast data
+        Map<String, Object> busynessReport = fetchBusynessReport();
+
+        // Extract live busyness and forecast predictions separately
+        Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("predictions",
+                Collections.emptyMap());
+
+        // The python service returns predictions as a Map, not a List. We must convert it.
+        Object rawPredictions = busynessReport.get("predictions");
+        List<Object> predictions = new ArrayList<>();
+        if (rawPredictions instanceof Map) {
+            Map<String, Object> predictionsMap = (Map<String, Object>) rawPredictions;
+            predictions = predictionsMap.entrySet().stream()
+                    .map(entry -> Map.of("LocationID", entry.getKey(), "predictions", entry.getValue()))
+                    .collect(Collectors.toList());
+        }
 
         String explanation = "Complete location data for map view.";
         double confidence = 1.0;
 
-        return buildResponse(allLocations, explanation, confidence, busynessData);
+        return buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
+    }
+
+    public Map<String, Double> getLiveBusyness() {
+        logger.info("Fetching live busyness data.");
+        return fetchBusynessData();
     }
 
     // Check ML service health endpoint
@@ -259,17 +305,25 @@ public class VibeService {
     // Simple keyword fallback search
     private List<Location> keywordFallback(String vibeDescription) {
         String vibeDesc = vibeDescription.toLowerCase();
+        // A simple improvement: treat keywords as mandatory.
+        String[] keywords = vibeDesc.split("\\s+");
+        if (keywords.length == 0) {
+            return Collections.emptyList();
+        }
+
         List<Location> allLocations = locationRepository.findAll();
 
         return allLocations.stream()
                 .filter(loc -> {
                     String combined = (loc.getName() + " " + loc.getDescription() + " " + loc.getAddress())
                             .toLowerCase();
-                    for (String keyword : vibeDesc.split("\\s+")) {
-                        if (combined.contains(keyword))
-                            return true;
+                    // All keywords must be present
+                    for (String keyword : keywords) {
+                        if (!combined.contains(keyword)) {
+                            return false;
+                        }
                     }
-                    return false;
+                    return true;
                 })
                 .limit(10) // Enforce limit for fallback as well
                 .collect(Collectors.toList());
@@ -278,47 +332,59 @@ public class VibeService {
     // Calls the busyness service to get predictions for all zones
     @SuppressWarnings("unchecked")
     private Map<String, Double> fetchBusynessData() {
+        Map<String, Object> busynessReport = fetchBusynessReport();
+        Object liveBusynessObj = busynessReport.get("live_busyness");
+
+        if (liveBusynessObj instanceof Map) {
+            // Ensure values are correctly typed to avoid class cast exceptions
+            return ((Map<?, ?>) liveBusynessObj).entrySet().stream()
+                    .filter(entry -> entry.getKey() instanceof String && entry.getValue() instanceof Number)
+                    .collect(Collectors.toMap(
+                            entry -> (String) entry.getKey(),
+                            entry -> ((Number) entry.getValue()).doubleValue()));
+        }
+        return Collections.emptyMap();
+    }
+
+    // Fetches the complete busyness report (live + forecast) from the Python service
+    private Map<String, Object> fetchBusynessReport() {
         try {
             logger.info("Calling busyness service at {}", busynessServiceUrl + "/busyness");
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     busynessServiceUrl + "/busyness",
                     HttpMethod.GET,
                     null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {
-                    });
+                    new ParameterizedTypeReference<>() {});
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null
                     && Boolean.TRUE.equals(response.getBody().get("success"))) {
                 logger.info("Busyness service responded successfully.");
-                Object predictionsObj = response.getBody().get("predictions");
-                if (predictionsObj instanceof Map) {
-                    // The python service now returns a simple Map<String, Double>.
-                    // We need to ensure the values are correctly typed.
-                    return ((Map<?, ?>) predictionsObj).entrySet().stream()
-                            .filter(entry -> entry.getKey() instanceof String && entry.getValue() instanceof Number)
-                            .collect(Collectors.toMap(
-                                    entry -> (String) entry.getKey(),
-                                    entry -> ((Number) entry.getValue()).doubleValue()));
-                }
+                return response.getBody();
             } else {
-                logger.warn("Busyness service call failed or returned unsuccessful. Status: {}",
-                        response.getStatusCode());
+                logger.warn("Busyness service call failed or returned unsuccessful. Status: {}", response.getStatusCode());
             }
         } catch (RestClientException e) {
             logger.error("Error calling busyness service: {}", e.getMessage(), e);
         }
         return Collections.emptyMap();
     }
-
+    
     // Helper to build VibeSearchResponse DTO
     private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
             Map<String, Double> busynessData) {
+        return buildResponse(locations, explanation, confidence, busynessData, Collections.emptyList());
+    }
+
+    // Overloaded helper to include predictions for the map view
+    private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
+            Map<String, Double> busynessData, List<Object> predictions) {
         VibeSearchResponse response = new VibeSearchResponse();
         List<LocationDto> locationDtos = locations.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
         response.setLocations(locationDtos);
         response.setExplanation(explanation);
         response.setConfidence(confidence);
         response.setBusyness(busynessData);
+        response.setPredictions(predictions);
         return response;
     }
 
