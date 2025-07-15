@@ -299,11 +299,10 @@ export default function FindMyVibe() {
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'flex-start', gap: 3 }}>
-          {hasSearched && allResults.length > 0 && (
-            <Box sx={{ width: { xs: '100%', md: 320 }, position: { md: 'sticky' }, top: { md: 80 }, alignSelf: 'flex-start', zIndex: 0 }}>
-              <PlanSummary />
-            </Box>
-          )}
+          {/* Always render the sidebar, even if empty, to reserve space and prevent overlap */}
+          <Box sx={{ width: { xs: '100%', md: 320 }, position: { md: 'sticky' }, top: { md: 80 }, alignSelf: 'flex-start', zIndex: 0, minHeight: 200 }}>
+            <PlanSummary busynessMap={busynessMap} />
+          </Box>
 
           <Box sx={{ flex: 1, zIndex: 1 }}>
             {allResults.map((venue, index) => (
