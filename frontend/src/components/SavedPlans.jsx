@@ -57,7 +57,7 @@ export default function SavedPlans() {
             <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
               <Button
                 onClick={() => {
-                  loadPlan(plan); // Load saved plan into context
+                  loadPlan(plan.venues); // Load saved plan venues into context
                   navigate("/map", { state: { fromPlan: true } });
                 }}
                 variant="contained"

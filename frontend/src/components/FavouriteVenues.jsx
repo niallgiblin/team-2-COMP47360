@@ -71,6 +71,11 @@ function FavouriteVenues() {
         setEnrichedVenues(merged);
     }, [likedVenues, zoneData, allVenues]);
 
+    // Defensive: filter out invalid venues
+    const filteredVenues = enrichedVenues.filter(
+      v => v && typeof v === 'object' && v.id && v.name
+    );
+
     return (
         <Box sx={{ width: '100%' }}>
             {/* Title outside the border */}
@@ -88,13 +93,13 @@ function FavouriteVenues() {
                     color: '#fff',
                 }}
             >
-                {enrichedVenues.length === 0 ? (
+                {filteredVenues.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">
                         You haven’t liked any venues yet.
                     </Typography>
                 ) : (
                     <Grid container spacing={2}>
-                        {enrichedVenues.map((venue) => (
+                        {filteredVenues.map((venue) => (
                             <Grid item xs={12} sm={6} md={4} key={venue.id}>
                                 <TrendingVenueCard 
                                     venue={venue} 

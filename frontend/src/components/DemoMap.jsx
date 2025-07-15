@@ -185,20 +185,23 @@ function FlyToVenue({ venue, showDirections }) {
   function FlyToPlan({ venues, fromPlan }) {
     const map = useMap();
 
+    // Defensive: ensure venues is always an array
+    const safeVenues = Array.isArray(venues) ? venues : [];
+
     useEffect(() => {
       // only proceed if we are in "fromPlan" mode, there are one or more venues and all venues have valid coords
       if (
         !fromPlan ||
-        !venues ||
-        venues.length === 0 ||
-        !venues.every((v) => typeof v.lat === "number" && typeof v.lng === "number")
+        !safeVenues ||
+        safeVenues.length === 0 ||
+        !safeVenues.every((v) => typeof v.lat === "number" && typeof v.lng === "number")
       ) {
         return; // exit early if conditions are not met
       }
 
-      const bounds = L.latLngBounds(venues.map((v) => [v.lat, v.lng]));      // convert coords to leaflet LatLng tuples
+      const bounds = L.latLngBounds(safeVenues.map((v) => [v.lat, v.lng]));      // convert coords to leaflet LatLng tuples
       map.fitBounds(bounds, { padding: [40, 40] });                         // instruct the map to zoom and pan so all venues are visible, add padding around markers for clarity
-    }, [venues, fromPlan, map]);                                            // re-run effect if venues or fromPlan changes
+    }, [safeVenues, fromPlan, map]);                                            // re-run effect if venues or fromPlan changes
 
     return null;
   }
@@ -282,6 +285,15 @@ function FlyToVenue({ venue, showDirections }) {
       ? [selectedVenue]
       : []; // don't render any markers by default
 
+    // Defensive: ensure displayedVenues is always an array
+    const safeDisplayedVenues = Array.isArray(displayedVenues) ? displayedVenues : [];
+    if (!Array.isArray(displayedVenues)) {
+      console.warn('[DemoMap] displayedVenues is not an array:', displayedVenues);
+    }
+    console.log('[DemoMap] safeDisplayedVenues:', safeDisplayedVenues);
+    const validVenues = safeDisplayedVenues.filter(
+      v => v && typeof v.lat === 'number' && typeof v.lng === 'number'
+    );
 
   return (
     <Box sx={{ width: "100%", height: "100%" }}>
@@ -327,7 +339,7 @@ function FlyToVenue({ venue, showDirections }) {
             fromPlanProp,
             selectedVenue,
             activeZoneVenues: activeZoneVenues.length,
-            displayedVenues: displayedVenues.length,
+            displayedVenues: Array.isArray(displayedVenues) ? displayedVenues.length : 'not array',
             fallback: fromPlanProp
               ? plan
               : activeZoneVenues.length > 0
@@ -339,8 +351,7 @@ function FlyToVenue({ venue, showDirections }) {
           return null;
         })()}
         
-        {displayedVenues
-          .filter((v) => v?.lat && v?.lng)
+        {validVenues
           .map((venue) => {
             const type =
               venue.isRestaurant

@@ -164,6 +164,8 @@ export default function MapView() {
       // use plan directly if user came from plan route
       if (location.state?.fromPlan === true && plan.length > 0) {
         setVenues(plan);
+        console.log('MapView plan:', plan);
+        console.log('MapView venues:', plan);
         setLoading(false);
         return;
       }
