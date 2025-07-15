@@ -12,11 +12,15 @@ export default function CompactPlanSummary() {
 
   const scrollRef = useRef(null);
 
+  // Defensive: ensure plan is always an array
+  const planArray = Array.isArray(plan) ? plan : (plan?.venues || []);
+  console.log('CompactPlanSummary planArray:', planArray);
+
   const planTitle = user?.firstName
     ? `Plan for ${user.firstName}`
     : 'Your Plan';
 
-  if (plan.length === 0) return null;
+  if (!planArray || planArray.length === 0) return null;
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -98,7 +102,7 @@ export default function CompactPlanSummary() {
           scrollBehavior: 'smooth',
         }}
       >
-        {plan.map((venue) => (
+        {planArray.map((venue) => (
           <VenueCard key={venue.id} venue={venue} variant="compact" /> // No handlers needed here anymore as they are global now
         ))}
       </Box>

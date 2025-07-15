@@ -79,8 +79,14 @@ export function PlanProvider({ children }) {
     }
   };
 
-  const loadPlan = (saved) => {
-    setPlan(saved.venues);
+  const loadPlan = (input) => {
+    if (Array.isArray(input)) {
+      setPlan(input); // set directly to array
+    } else if (input && Array.isArray(input.venues)) {
+      setPlan(input.venues); // extract venues array
+    } else {
+      setPlan([]);
+    }
   };
 
   const loadPlanById = async (id) => {
@@ -104,6 +110,46 @@ export function PlanProvider({ children }) {
     }
   };
 
+  // Fetch and refresh saved plans
+  const refreshSavedPlans = async () => {
+    if (token) {
+      try {
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`);
+        if (!response.ok) throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        const data = await response.json();
+        setSavedPlans(data.plans || []);
+      } catch (error) {
+        console.error('Failed to fetch plans:', error);
+      }
+    } else {
+      setSavedPlans([]);
+    }
+  };
+
+  // Save a plan from a list of venues
+  const savePlanFromVenues = async (name, venues) => {
+    if (!venues || venues.length === 0 || !token) return null;
+    const createPlanRequest = {
+      name,
+      locationIds: venues.map(v => v.id),
+    };
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`, {
+        method: 'POST',
+        body: JSON.stringify(createPlanRequest),
+      });
+      const saved = await response.json();
+      const newPlan = saved.plan;
+      if (newPlan) {
+        await refreshSavedPlans();
+      }
+      return newPlan;
+    } catch (error) {
+      console.error('Failed to save plan:', error);
+      return null;
+    }
+  };
+
   return (
     <PlanContext.Provider
       value={{
@@ -114,6 +160,7 @@ export function PlanProvider({ children }) {
         clearPlan,
         savedPlans,
         savePlan,
+        savePlanFromVenues,
         loadPlan,
         loadPlanById,
         deletePlan,
@@ -121,6 +168,7 @@ export function PlanProvider({ children }) {
         setSelectedVenue,
         fromPlan,
         setFromPlan,
+        refreshSavedPlans,
       }}
     >
       {children}
