@@ -39,7 +39,7 @@ export function PlanProvider({ children }) {
   }, [token, makeAuthenticatedRequest]);
 
   const addToPlan = (venue) => {
-    if (plan.length >= 3 || isInPlan(venue)) return;
+    if (plan.length >= 5 || isInPlan(venue)) return;
     setPlan([...plan, venue]);
   };
 

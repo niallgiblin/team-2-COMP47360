@@ -23,6 +23,12 @@ def _safe_to_int(value, default=0):
     except (ValueError, TypeError):
         return default
 
+# Global constant for price mapping
+PRICE_MAP = {
+    'very cheap': 1, 'cheap': 2, 'moderate': 3, 'mid': 3,
+    'expensive': 4, 'very expensive': 5, 'luxury': 5
+}
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -109,16 +115,34 @@ def load_data():
         data_path = os.getenv('DATA_PATH', '/app/data/locations.csv')
         embeddings_path = os.getenv('EMBEDDINGS_PATH', '/app/data/location_embeddings.npy')
 
-        logger.info(f"Loading data from {data_path}")
-        df = pd.read_csv(data_path)
-        # Clean data: drop rows with missing essential info
-        logger.info(f"Data loaded and cleaned. Shape: {df.shape}")
+        logger.info(f"Loading raw data from {data_path}")
+        df_raw = pd.read_csv(data_path)
+        logger.info(f"Original data loaded. Shape: {df_raw.shape}")
 
-        logger.info(f"Loading embeddings from {embeddings_path}")
-        embeddings_np = np.load(embeddings_path)
-        location_embeddings = torch.tensor(embeddings_np)
-        logger.info(f"Embeddings loaded successfully. Shape: {location_embeddings.shape}")
+        logger.info(f"Loading raw embeddings from {embeddings_path}")
+        embeddings_raw = np.load(embeddings_path)
+        logger.info(f"Original embeddings loaded. Shape: {embeddings_raw.shape}")
 
+        # --- Data Validation and Filtering ---
+        # Filter out any locations that do not have a valid zone.
+        # This ensures we only work with Manhattan locations and prevents errors.
+        initial_rows = len(df_raw)
+        valid_indices = df_raw['zone'].notna() & (df_raw['zone'].str.strip() != '')
+        
+        num_removed = initial_rows - valid_indices.sum()
+        if num_removed > 0:
+            logger.warning(f"FILTERED: Removed {num_removed} locations with missing or empty zones.")
+
+        # Apply the filter to both the DataFrame and the embeddings to keep them in sync
+        df_filtered = df_raw[valid_indices].copy()
+        embeddings_filtered = embeddings_raw[valid_indices]
+        
+        # Reset the DataFrame index to be sequential from 0, which is crucial for lookups
+        df_filtered.reset_index(drop=True, inplace=True)
+        
+        df = df_filtered
+        location_embeddings = torch.tensor(embeddings_filtered)
+        logger.info(f"Data and embeddings successfully filtered. Final shape: {df.shape}")
         return True
     except Exception as e:
         logger.error(f"Failed to load data: {str(e)}", exc_info=True)
@@ -150,6 +174,30 @@ def initialize_service():
                 
             if not load_data():
                 initialization_error = "Failed to load data"
+                return False
+
+            # --- Start of refactored validation block ---
+            # Validate that all data components are loaded and consistent
+            if df is None:
+                initialization_error = "Dataframe (df) is None after loading."
+                logger.error(initialization_error)
+                return False
+            
+            if location_embeddings is None:
+                initialization_error = "Embeddings tensor is None after loading."
+                logger.error(initialization_error)
+                return False
+
+            if 'id' not in df.columns:
+                error_msg = "CRITICAL: The 'locations.csv' file is missing the required 'id' column header."
+                initialization_error = error_msg
+                logger.error(error_msg)
+                return False
+
+            if len(df) != len(location_embeddings):
+                error_msg = f"Data mismatch: locations.csv has {len(df)} rows, but embeddings file has {len(location_embeddings)} entries."
+                initialization_error = error_msg
+                logger.error(error_msg)
                 return False
             
             initialized = True
@@ -192,41 +240,40 @@ def health():
             "error": str(e)
         }), 500
 
+def _create_location_dto(loc_series, similarity_score=None):
+    """Creates a location data transfer object from a pandas Series."""
+    price_str = str(loc_series.get('price', 'moderate')).lower().strip()
+    price_int = PRICE_MAP.get(price_str, 3)
+    name = str(loc_series['name']) if pd.notna(loc_series['name']) else "Unnamed Location"
+
+    dto = {
+        'id': _safe_to_int(loc_series['id']),
+        'name': name,
+        'address': str(loc_series['addr']),
+        'type': str(loc_series['loc_type']),
+        'description': str(loc_series.get('description', '')),
+        'price': price_int,
+        'lat': float(loc_series['lat']),
+        'lng': float(loc_series['long']),
+        'uri': str(loc_series.get('uri', '')),
+        'review': str(loc_series.get('reviews', '')),
+        'numReviews': _safe_to_int(loc_series.get('num_reviews')),
+        'zone': str(loc_series.get('zone') or '')
+    }
+    if similarity_score is not None:
+        dto['similarity'] = float(similarity_score)
+    
+    return dto
+
 @app.route('/locations/all', methods=['GET'])
 def get_all_locations():
     """Returns all locations from the dataframe"""
     if not initialized or df is None:
         return jsonify({'success': False, 'error': 'Service not initialized or data not loaded'}), 503
-
+    
     try:
-        # Re-use the response building logic from the search endpoint
-        results = []
-        for idx, loc in df.iterrows():
-            price_map = {
-                'very cheap': 1, 'cheap': 2, 'moderate': 3, 'mid': 3,
-                'expensive': 4, 'very expensive': 5, 'luxury': 5
-            }
-            price_str = str(loc.get('price', 'moderate')).lower().strip()
-            price_int = price_map.get(price_str, 3)
-            name = str(loc['name']) if pd.notna(loc['name']) else "Unnamed Location"
-
-            results.append({
-                'id': _safe_to_int(idx),
-                'name': name,
-                'address': str(loc['addr']),
-                'type': str(loc['loc_type']),
-                'description': str(loc.get('description', '')),
-                'price': price_int,
-                'lat': float(loc['lat']),
-                'lng': float(loc['long']),
-                'uri': str(loc.get('uri', '')),
-                'review': str(loc.get('reviews', '')),
-                'numReviews': _safe_to_int(loc.get('num_reviews')),
-                'zone': str(loc.get('zone', ''))
-            })
-        
+        results = [_create_location_dto(loc) for _, loc in df.iterrows()]
         return jsonify({'success': True, 'results': results})
-
     except Exception as e:
         logger.error(f"Error in /locations/all: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': 'Internal server error', 'message': str(e)}), 500
@@ -332,45 +379,17 @@ def vibe_search():
         results = []
         for idx, score in top_results:
             loc = df.iloc[idx]
+            results.append(_create_location_dto(loc, score))
 
-            # Map price string to a 1-5 integer scale
-            price_map = {
-                'very cheap': 1,
-                'cheap': 2,
-                'moderate': 3,
-                'mid': 3,
-                'expensive': 4,
-                'very expensive': 5,
-                'luxury': 5
-            }
-            price_str = str(loc.get('price', 'moderate')).lower().strip()
-            price_int = price_map.get(price_str, 3) # Default to 3 (moderate)
-
-            # Ensure name is a valid string, not 'nan'
-            name = str(loc['name']) if pd.notna(loc['name']) else "Unnamed Location"
-
-            results.append({
-                'id': _safe_to_int(idx),
-                'name': name,
-                'address': str(loc['addr']),
-                'type': str(loc['loc_type']),
-                'description': str(loc['description']),
-                'similarity': float(score),
-                'price': price_int,
-                'lat': float(loc['lat']),
-                'lng': float(loc['long']),
-                'uri': str(loc.get('uri', '')),
-                'review': str(loc.get('reviews', '')),
-                'numReviews': _safe_to_int(loc.get('num_reviews')),
-                'zone': str(loc.get('zone', ''))
-            })
+        # Determine confidence score from the top result's similarity score
+        confidence_score = float(top_results[0][1]) if top_results else 0.0
 
         response = {
             'success': True,
             'query': vibe_desc,
             'results': results,
             'explanation': f"Found {len(results)} locations matching your vibe and filters.",
-            'confidence': None
+            'confidence': confidence_score
         }
 
         # --- Cache Update ---
