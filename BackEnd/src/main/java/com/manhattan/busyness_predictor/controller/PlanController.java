@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.manhattan.busyness_predictor.dto.CreatePlanRequest;
 import com.manhattan.busyness_predictor.dto.PlanResponse;
+import com.manhattan.busyness_predictor.dto.SharePlanRequest;
+import com.manhattan.busyness_predictor.dto.SharedPlanResponse;
 import com.manhattan.busyness_predictor.security.UserPrincipal;
 import com.manhattan.busyness_predictor.service.PlanService;
 
@@ -101,5 +103,31 @@ public class PlanController {
         Map<String, Object> responseBody = new HashMap<>();
         responseBody.put("message", "Plan deleted successfully");
         return ResponseEntity.ok(responseBody);
+    }
+
+    /**
+     * Shares a plan with selected friends.
+     */
+    @PostMapping("/share")
+    public ResponseEntity<Map<String, Object>> sharePlan(
+            @RequestBody SharePlanRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        planService.sharePlan(request.getPlanId(), currentUser.getId(), request.getUserIds());
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Plan shared successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Gets all plans shared with the current user, including who shared them.
+     */
+    @GetMapping("/shared-with-me")
+    public ResponseEntity<Map<String, Object>> getPlansSharedWithMe(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        List<SharedPlanResponse> sharedPlans = planService.getPlansSharedWithUser(currentUser.getId());
+        Map<String, Object> response = new HashMap<>();
+        response.put("sharedPlans", sharedPlans);
+        response.put("count", sharedPlans.size());
+        return ResponseEntity.ok(response);
     }
 }
