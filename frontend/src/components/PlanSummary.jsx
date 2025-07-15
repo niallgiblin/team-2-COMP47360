@@ -81,7 +81,7 @@ export default function PlanSummary({ busynessMap }) {
             textAlign: { xs: 'center', md: 'left' },
           }}
         >
-          {plan.length} of 3 spots added
+          {plan.length} of 5 spots added
         </Typography>
       </Box>
 
@@ -177,7 +177,7 @@ export default function PlanSummary({ busynessMap }) {
               textAlign: 'center',
             }}
           >
-            You can add up to 3 venues to your plan by clicking “Add to Plan”.
+            You can add up to 5 venues to your plan by clicking “Add to Plan”.
           </Typography>
         </Box>
       ) : (

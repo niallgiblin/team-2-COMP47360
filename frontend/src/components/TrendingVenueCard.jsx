@@ -58,7 +58,7 @@ export default function TrendingVenueCard({
 
   const { plan, addToPlan, removeFromPlan } = usePlan();
   const isInPlan = plan.some((v) => v.id === venue.id);
-  const isPlanFull = plan.length >= 3;
+  const isPlanFull = plan.length >= 5;
 
   const getCategoryFromFlags = (venue) => {
     if (venue.isRestaurant) return "restaurant";
