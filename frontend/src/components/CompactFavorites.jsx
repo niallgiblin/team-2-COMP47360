@@ -1,13 +1,39 @@
 import { Box, Typography, IconButton } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "@mui/icons-material";
-import { useLikes } from "../context/LikeContext";
+import { useLike } from "../context/LikeContext";
 import VenueCard from "./VenueCard";
-import { useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Favorite as FavoriteIcon } from "@mui/icons-material";
 
 export default function CompactFavorites() {
-    const { likedVenues, toggleLike } = useLikes();
+    const { likedVenues, handleLike } = useLike();
     const scrollRef = useRef(null);
+    const [busynessMap, setBusynessMap] = useState({});
+    const [enrichedVenues, setEnrichedVenues] = useState([]);
+    const [allVenues, setAllVenues] = useState([]);
+
+    useEffect(() => {
+        fetch("/api/vibe/map-data")
+            .then((res) => res.json())
+            .then((data) => {
+                setBusynessMap(data.busyness || {});
+                setAllVenues(data.locations || []);
+            })
+            .catch((err) => console.error("Failed to fetch busyness data:", err));
+    }, []);
+
+    // Enrich likedVenues with full data from allVenues
+    useEffect(() => {
+        if (allVenues.length === 0) {
+            setEnrichedVenues(likedVenues);
+            return;
+        }
+        const merged = likedVenues.map(liked => {
+            const full = allVenues.find(v => v.id === liked.id);
+            return { ...full, ...liked };
+        });
+        setEnrichedVenues(merged);
+    }, [likedVenues, allVenues]);
 
     const handleScroll = (direction) => {
         const container = scrollRef.current;
@@ -19,7 +45,7 @@ export default function CompactFavorites() {
         });
     };
 
-    if (!likedVenues || likedVenues.length === 0) {
+    if (!enrichedVenues || enrichedVenues.length === 0) {
         return (
             <Typography
                 sx={{
@@ -94,7 +120,7 @@ export default function CompactFavorites() {
                         px: 2,
                     }}
                 >
-                    {likedVenues.map((venue) => (
+                    {enrichedVenues.map((venue) => (
                         <Box
                             key={venue.id}
                             sx={{
@@ -110,7 +136,7 @@ export default function CompactFavorites() {
                         >
                             {/* Updated Like Button */}
                             <IconButton
-                                onClick={() => toggleLike(venue)}
+                                onClick={() => handleLike(venue)}
                                 sx={{
                                     position: "absolute",
                                     top: 8,
@@ -132,7 +158,7 @@ export default function CompactFavorites() {
                             </IconButton>
 
                             {/* Venue content */}
-                            <VenueCard venue={venue} variant="compact" />
+                            <VenueCard venue={venue} variant="compact" busynessMap={busynessMap} tags={venue.tags} />
                         </Box>
                     ))}
                 </Box>

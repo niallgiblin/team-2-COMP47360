@@ -1,351 +1,424 @@
 import {
-    Card,
-    CardMedia,
-    Typography,
-    Box,
-    Button,
-    Chip,
-    IconButton,
-} from '@mui/material';
+  Card,
+  CardMedia,
+  Typography,
+  Box,
+  Button,
+  Chip,
+  IconButton,
+} from "@mui/material";
 
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { usePlan } from '../context/PlanContext';
-import { categoryImages } from '../utils/tagMapping';
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { usePlan } from "../context/PlanContext";
+import { categoryImages } from "../utils/tagMapping";
 import {
-    Favorite as FavoriteIcon,
-    FavoriteBorder as FavoriteBorderIcon,
-    Whatshot as WhatshotIcon,
-    AttachMoney as AttachMoneyIcon,
-    Launch as LaunchIcon,
-} from '@mui/icons-material';
+  Favorite as FavoriteIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+  Whatshot as WhatshotIcon,
+  AttachMoney as AttachMoneyIcon,
+  Launch as LaunchIcon,
+  Star as StarIcon,
+  StarHalf as StarHalfIcon,
+  StarBorder as StarBorderIcon,
+} from "@mui/icons-material";
 
-import { useLikes } from '../context/LikeContext';
+import { useLike } from "../context/LikeContext";
 
 export default function TrendingVenueCard({
-                                              venue,
-                                              busynessMap = {},
-                                              showLikeButton = true,
-                                              unlikeOnlyFromFavorites = false,
-                                          }) {
-    const { setSelectedVenue, setFromPlan } = usePlan();
-    const navigate = useNavigate();
-    const { isAuthenticated } = useAuth();
-    const { likedVenues, toggleLike } = useLikes();
+  venue,
+  busynessMap = {},
+  showLikeButton = true,
+  unlikeOnlyFromFavorites = false,
+  tags,
+  hidePlanButtons = false,
+}) {
+  const { setSelectedVenue, setFromPlan } = usePlan();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const { likedVenues, handleLike } = useLike();
 
-    const isLiked = likedVenues.some((v) => v.id === venue.id);
+  const isLiked = likedVenues.some((v) => v.id === venue.id);
 
-    const priceLevels = {
-        'price level very cheap': 1,
-        'price level cheap': 2,
-        'price level moderate': 3,
-        'price level expensive': 4,
-        'price level very expensive': 5,
-    };
+  const priceLevels = {
+    "price level very cheap": 1,
+    "price level cheap": 2,
+    "price level moderate": 3,
+    "price level expensive": 4,
+    "price level very expensive": 5,
+  };
 
-    let level = 0;
-    if (typeof venue.price === 'number') {
-        level = venue.price;
-    } else if (typeof venue.price === 'string') {
-        const normalizedPrice = venue.price.trim().toLowerCase();
-        level = priceLevels[normalizedPrice] || 0;
+  let level = 0;
+  if (typeof venue.price === "number") {
+    level = venue.price;
+  } else if (typeof venue.price === "string") {
+    const normalizedPrice = venue.price.trim().toLowerCase();
+    level = priceLevels[normalizedPrice] || 0;
+  }
+
+  const { plan, addToPlan, removeFromPlan } = usePlan();
+  const isInPlan = plan.some((v) => v.id === venue.id);
+  const isPlanFull = plan.length >= 5;
+
+  const getCategoryFromFlags = (venue) => {
+    if (venue.isRestaurant) return "restaurant";
+    if (venue.isBar) return "bar";
+    if (venue.isClub) return "club";
+    if (venue.isLandmark) return "landmark";
+    return "other";
+  };
+
+  const category = getCategoryFromFlags(venue);
+  const imageUrl =
+    venue.imageUrl || categoryImages[category] || categoryImages.default;
+
+  // Fixed: Add proper event handling for Add to Plan button
+  const handleAddToPlan = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    if (!isAuthenticated) {
+      navigate("/login", {
+        state: { message: "Please log in to add items to your plan." },
+      });
+    } else {
+      addToPlan(venue);
     }
+  };
 
-    const { plan, addToPlan, removeFromPlan } = usePlan();
-    const isInPlan = plan.some((v) => v.id === venue.id);
-    const isPlanFull = plan.length >= 3;
+  // Fixed: Add proper event handling for Remove from Plan
+  const handleRemoveFromPlan = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    removeFromPlan(venue.id);
+  };
 
-    const getCategoryFromFlags = (venue) => {
-        if (venue.isRestaurant) return 'restaurant';
-        if (venue.isBar) return 'bar';
-        if (venue.isClub) return 'club';
-        if (venue.isLandmark) return 'landmark';
-        return 'other';
-    };
+  // Fixed: Add proper event handling for Like button
+  const handleLikeClick = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    if (unlikeOnlyFromFavorites && isLiked) {
+      handleLike(venue);
+    } else if (!unlikeOnlyFromFavorites) {
+      handleLike(venue);
+    }
+  };
 
-    const category = getCategoryFromFlags(venue);
-    const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
+  const handleWebsiteClick = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    if (venue.uri) {
+      window.open(venue.uri, "_blank");
+    }
+  };
 
-    const handleAddToPlan = () => {
-        if (!isAuthenticated) {
-            navigate('/login', { state: { message: "Please log in to add items to your plan." } });
-        } else {
-            addToPlan(venue);
-        }
-    };
+  // Fixed: Add proper event handling for map navigation
+  const handleMapNavigation = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    setSelectedVenue(venue);
+    setFromPlan(false);
+    navigate("/map");
+  };
 
-    const handleWebsiteClick = () => {
-        if (venue.uri) {
-            window.open(venue.uri, '_blank');
-        }
-    };
+  const getBusynessLabel = () => {
+    if (!venue.zone || venue.zone === "nan") return null;
+    const zoneKey = String(venue.zoneId);
+    const value = busynessMap[zoneKey];
+    if (typeof value !== "number") return "No Data";
+    const percent = value * 100;
+    if (percent >= 75) return "Very Busy";
+    if (percent >= 50) return "Busy";
+    if (percent >= 25) return "Moderate";
+    return "Quiet";
+  };
 
-    const getBusynessLabel = () => {
-        if (!venue.zone || venue.zone === 'nan') return null;
-        const zoneKey = String(venue.zoneId);
-        const value = busynessMap[zoneKey];
+  // Render tags as chips if present
+  const tagList = tags || venue.tags || [];
 
-        if (typeof value !== 'number') return null;
-
-        const percent = value * 100;
-        if (percent >= 75) return 'Very Busy';
-        if (percent >= 50) return 'Busy';
-        if (percent >= 25) return 'Moderate';
-        return 'Quiet';
-    };
-
-    return (
-        <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', mt: 4 }}>
-            {showLikeButton && (
-                <IconButton
-                    onClick={() => {
-                        if (unlikeOnlyFromFavorites && isLiked) {
-                            toggleLike(venue);
-                        } else if (!unlikeOnlyFromFavorites) {
-                            toggleLike(venue);
-                        }
-                    }}
-                    sx={{
-                        position: 'absolute',
-                        top: -12,
-                        right: 12,
-                        zIndex: 2,
-                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                        color: '#fff',
-                        width: 32,
-                        height: 32,
-                        padding: 0,
-                        borderRadius: '50%',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                        '&:hover': {
-                            background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
-                        },
-                    }}
-                >
-                    {isLiked ? (
-                        <FavoriteIcon sx={{ fontSize: 18 }} />
-                    ) : (
-                        <FavoriteBorderIcon sx={{ fontSize: 18 }} />
-                    )}
-                </IconButton>
-            )}
-
-            <Card
-                sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: 2,
-                    p: 2,
-                    mb: 3,
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: 3,
-                    color: '#fff',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                    width: '100%',
-                    maxWidth: 600,
-                    minHeight: 120,
-                    position: 'relative',
-                }}
-            >
-                <Box sx={{ display: 'flex', gap: 2, flex: 1, minWidth: 0 }}>
-                    <CardMedia
-                        component="img"
-                        image={imageUrl}
-                        alt={venue.name}
-                        sx={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 2,
-                            objectFit: 'cover',
-                            flexShrink: 0,
-                        }}
-                    />
-
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'baseline',
-                                gap: 1,
-                                flexWrap: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                                {venue.name}
-                            </Typography>
-
-                            <Typography
-                                variant="subtitle1"
-                                sx={{
-                                    fontWeight: 'bold',
-                                    color: '#ccc',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: '80%',
-                                }}
-                            >
-                                · {category.charAt(0).toUpperCase() + category.slice(1)} ·{' '}
-                                {venue.zone && venue.zone !== 'nan' ? venue.zone : 'Manhattan'}
-                            </Typography>
-                        </Box>
-
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: '#aaa',
-                                mb: 1,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                            }}
-                        >
-                            {venue.summary || venue.description || ''}
-                        </Typography>
-
-        <Box 
-            sx={{ 
-                display: 'flex', 
-                gap: 1, 
-                flexWrap: 'wrap' 
-            }}
+  return (
+    <Box
+      sx={{
+        position: "relative",
+        display: "flex",
+        justifyContent: "center",
+        mt: 4,
+      }}
+    >
+      {showLikeButton && (
+        <IconButton
+          onClick={handleLikeClick} // Fixed: Use proper event handler
+          sx={{
+            position: "absolute",
+            top: -12,
+            right: 12,
+            zIndex: 10, // Fixed: Increased z-index to ensure it's above other elements
+            background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+            color: "#fff",
+            width: 32,
+            height: 32,
+            padding: 0,
+            borderRadius: "50%",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+            "&:hover": {
+              background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
+              transform: "scale(1.05)", // Added: Subtle hover effect
+            },
+            "&:active": {
+              transform: "scale(0.95)", // Added: Click feedback
+            },
+            transition: "all 0.2s ease", // Added: Smooth transitions
+          }}
         >
-          <Button
-            variant="text"
-            size="small"
-            onClick={() => {
-              setSelectedVenue(venue);
-              setFromPlan(false);
-              navigate('/map');
-            }}
-            sx={{
-              color: '#3ABEFF',
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 0,
-            }}
-          >
-            View on Map
-          </Button>
+          {isLiked ? (
+            <FavoriteIcon sx={{ fontSize: 18 }} />
+          ) : (
+            <FavoriteBorderIcon sx={{ fontSize: 18 }} />
+          )}
+        </IconButton>
+      )}
 
-          {venue.uri && (
-            <Button
-              variant="text"
-              size="small"
-              onClick={handleWebsiteClick}
-              startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+      <Card
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 2,
+          p: 2,
+          mb: 3,
+          backgroundColor: "#1a1a1a",
+          borderRadius: 3,
+          color: "#fff",
+          boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+          width: "100%",
+          maxWidth: 600,
+          minHeight: 120,
+          position: "relative",
+        }}
+      >
+        <Box sx={{ display: "flex", gap: 2, flex: 1, minWidth: 0 }}>
+          <CardMedia
+            component="img"
+            image={imageUrl}
+            alt={venue.name}
+            sx={{
+              width: 80,
+              height: 80,
+              borderRadius: 2,
+              objectFit: "cover",
+              flexShrink: 0,
+            }}
+          />
+
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Box
               sx={{
-                color: '#FF4ECD',
-                textTransform: 'none',
-                fontWeight: 600,
-                px: 0,
+                display: "flex",
+                alignItems: "baseline",
+                gap: 1,
+                flexWrap: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
               }}
             >
-              Website
-            </Button>
-          )}
-        </Box>
-        {Array.isArray(venue.tags) && venue.tags.length > 0 && (
-            <Box 
-                sx={{ 
-                    display: 'flex', 
-                    flexWrap: 'wrap', 
-                    gap: 1,
-                    mt: 1 
-                    }}
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: "bold", color: "#fff" }}
+              >
+                {venue.name}
+              </Typography>
+
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: "bold",
+                  color: "#ccc",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "80%",
+                }}
+              >
+                · {category.charAt(0).toUpperCase() + category.slice(1)} ·{" "}
+                {venue.zone && venue.zone !== "nan" ? venue.zone : "Manhattan"}
+              </Typography>
+            </Box>
+
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#aaa",
+                mb: 1,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {venue.summary || venue.description || ""}
+            </Typography>
+
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                flexWrap: "wrap",
+              }}
+            >
+              <Button
+                variant="text"
+                size="small"
+                onClick={handleMapNavigation} // Fixed: Use proper event handler
+                sx={{
+                  color: "#3ABEFF",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  px: 0,
+                  "&:hover": {
+                    backgroundColor: "rgba(58, 190, 255, 0.1)", // Added: Hover effect
+                  },
+                }}
+              >
+                View on Map
+              </Button>
+
+              {venue.uri && (
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={handleWebsiteClick} // Fixed: Use proper event handler
+                  startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+                  sx={{
+                    color: "#FF4ECD",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    px: 0,
+                    "&:hover": {
+                      backgroundColor: "rgba(255, 78, 205, 0.1)", // Added: Hover effect
+                    },
+                  }}
                 >
-                {venue.tags.map((tag) => (
-                <Chip
+                  Website
+                </Button>
+              )}
+            </Box>
+
+            {/* Tags */}
+            {tagList.length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                {tagList.map((tag) => (
+                  <Chip
                     key={tag}
                     label={tag}
                     variant="outlined"
                     size="small"
                     sx={{
-                        backgroundColor: '#1a1a1a', 
-                        color: '#3ABEFF',                            // bright cyan text
-                        borderColor: '#3ABEFF',
-                        borderWidth: '1px',
-                        borderRadius: '10px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.3px',
-                        paddingX: '8px',
-                        height: '24px',
-                        textTransform: 'capitalize',
-                        '& .MuiChip-label': {
-                        padding: 0,
-                        },
+                      backgroundColor: '#394150',
+                      color: '#fff',
+                      borderColor: '#ffffff',
+                      borderWidth: '0.2px',
+                      borderStyle: 'solid',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      letterSpacing: '0.3px',
+                      paddingX: '6px',
+                      height: '24px',
                     }}
-                />
+                  />
                 ))}
-            </Box>
+              </Box>
             )}
-
-      </Box>
-    </Box>
-
-                <Box
-                    sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-end',
-                        gap: 1,
-                        mt: 0.5,
-                        pt: 2,
-                        minWidth: 120,
-                    }}
-                >
-                    {getBusynessLabel() && (
-                        <Chip
-                            icon={<WhatshotIcon sx={{ color: '#fff' }} />}
-                            label={getBusynessLabel()}
-                            size="small"
-                            sx={{
-                                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                                color: '#fff',
-                                fontWeight: 600,
-                                height: 24,
-                            }}
-                        />
-                    )}
-                    <Box sx={{ display: 'flex', gap: '0.5px' }}>
-                        {[1, 2, 3, 4, 5].map((i) => (
-                            <AttachMoneyIcon
-                                key={i}
-                                sx={{ fontSize: 16, color: i <= level ? '#FFD700' : '#555555' }}
-                            />
-                        ))}
-                    </Box>
-
-                    <Button
-                        onClick={() => (isInPlan ? removeFromPlan(venue.id) : handleAddToPlan())}
-                        disabled={!isInPlan && isPlanFull}
-                        variant="outlined"
-                        size="small"
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 'bold',
-                            borderRadius: 2,
-                            borderColor: '#FF4ECD',
-                            color: '#FF4ECD',
-                            minWidth: 140,
-                            minHeight: 32,
-                            '&:hover': {
-                                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                                color: '#000',
-                            },
-                        }}
-                    >
-                        {isInPlan ? 'Remove from Plan' : 'Add to Plan'}
-                    </Button>
-                </Box>
-            </Card>
+          </Box>
         </Box>
-    );
+
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 1,
+            mt: 0.5,
+            pt: 2,
+            minWidth: 120,
+          }}
+        >
+          {/* Busyness chip, rating, and price */}
+          {getBusynessLabel() && (
+            <Chip
+              icon={<WhatshotIcon sx={{ color: "#fff" }} />}
+              label={getBusynessLabel()}
+              size="small"
+              sx={{
+                background: getBusynessLabel() === 'No Data'
+                  ? 'linear-gradient(to right, #888, #bbb)'
+                  : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                color: "#fff",
+                fontWeight: 600,
+                height: 24,
+              }}
+            />
+          )}
+          {/* Rating */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 1 }}>
+            {(() => {
+              let parsedRating = typeof venue.review === 'string'
+                ? parseFloat(venue.review.replace('Rating: ', ''))
+                : venue.review;
+              return [1, 2, 3, 4, 5].map((i) => {
+                if (parsedRating >= i) {
+                  return <StarIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                } else if (parsedRating >= i - 0.5) {
+                  return <StarHalfIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                } else {
+                  return <StarBorderIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+                }
+              });
+            })()}
+            <Typography variant="body2" sx={{ color: '#fff', ml: 1 }}>
+              {venue.review ? (typeof venue.review === 'string' ? parseFloat(venue.review.replace('Rating: ', '')).toFixed(1) : venue.review.toFixed(1)) : 'N/A'}
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: "0.5px" }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <AttachMoneyIcon
+                key={i}
+                sx={{ fontSize: 16, color: i <= level ? "#FFD700" : "#555555" }}
+              />
+            ))}
+          </Box>
+
+          {!hidePlanButtons && (
+            <Button
+              onClick={isInPlan ? handleRemoveFromPlan : handleAddToPlan}
+              disabled={!isInPlan && isPlanFull}
+              variant="outlined"
+              size="small"
+              sx={{
+                textTransform: "none",
+                fontWeight: "bold",
+                borderRadius: 2,
+                borderColor: "#FF4ECD",
+                color: "#FF4ECD",
+                minWidth: 140,
+                minHeight: 32,
+                zIndex: 5,
+                "&:hover": {
+                  background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+                  color: "#000",
+                  borderColor: "transparent",
+                },
+                "&:disabled": {
+                  borderColor: "#555",
+                  color: "#555",
+                },
+                "&:active": {
+                  transform: "scale(0.98)",
+                },
+                transition: "all 0.2s ease",
+              }}
+            >
+              {isInPlan ? "Remove from Plan" : "Add to Plan"}
+            </Button>
+          )}
+        </Box>
+      </Card>
+    </Box>
+  );
 }

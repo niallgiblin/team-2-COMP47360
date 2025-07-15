@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Grid } from '@mui/material';
-import TrendingVenueCard from './TrendingVenueCard';
-import { useLikes } from '../context/LikeContext';
+import TrendingVenueCard from './TrendingVenueCard'; 
+import { useLike } from '../context/LikeContext'; 
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
 function FavouriteVenues() {
-    const { likedVenues } = useLikes();
+    const { likedVenues } = useLike();
     const [busynessMap, setBusynessMap] = useState({});
     const [zoneData, setZoneData] = useState(null);
     const [enrichedVenues, setEnrichedVenues] = useState([]);
+    const [allVenues, setAllVenues] = useState([]);
 
     // Fetch busyness data for the busyness chip
     useEffect(() => {
         fetch("http://localhost:8080/api/vibe/map-data")
             .then((res) => res.json())
-            .then((data) => setBusynessMap(data.busyness || {}))
+            .then((data) => {
+                setBusynessMap(data.busyness || {});
+                setAllVenues(data.locations || []);
+            })
             .catch((err) => console.error("Failed to fetch busyness data:", err));
     }, []);
 
@@ -27,20 +31,45 @@ function FavouriteVenues() {
             .catch((err) => console.error("Failed to load zone data:", err));
     }, []);
 
-    // Enrich liked venues with zoneId once zoneData is available
+    // Enrich liked venues with zoneId and full data once zoneData and allVenues are available
     useEffect(() => {
-        if (zoneData && likedVenues.length > 0) {
-            const venuesWithZoneId = likedVenues.map(venue => {
-                if (venue.zoneId || !venue.latitude || !venue.longitude) return venue;
-                const venuePoint = turfPoint([venue.longitude, venue.latitude]);
-                const matchingZone = zoneData.features.find(feature => booleanPointInPolygon(venuePoint, feature.geometry));
-                return { ...venue, zoneId: matchingZone ? matchingZone.properties.LocationID : undefined };
-            });
-            setEnrichedVenues(venuesWithZoneId);
-        } else {
+        if (!zoneData || likedVenues.length === 0) {
             setEnrichedVenues(likedVenues);
+            return;
         }
-    }, [likedVenues, zoneData]);
+        // Merge with allVenues for full data
+        const merged = likedVenues.map(liked => {
+            // Try to find a match by id, then placeId, then lat/lng
+            let full = allVenues.find(v => v.id === liked.id || v.placeId === liked.id || v.id === liked.placeId || v.placeId === liked.placeId);
+            if (!full && liked.latitude && liked.longitude) {
+                full = allVenues.find(v => v.latitude === liked.latitude && v.longitude === liked.longitude);
+            }
+            let enriched = { ...full, ...liked };
+            // Always ensure a canonical id
+            enriched.id = enriched.id || enriched.placeId || (full && (full.id || full.placeId)) || (liked && (liked.id || liked.placeId));
+            if (!enriched.zoneId && enriched.latitude && enriched.longitude) {
+                const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
+                const matchingZone = zoneData.features.find(feature => booleanPointInPolygon(venuePoint, feature.geometry));
+                enriched.zoneId = matchingZone ? matchingZone.properties.LocationID : undefined;
+            }
+            // Add tags if missing
+            if (!enriched.tags || enriched.tags.length === 0) {
+                let tags = [];
+                if (enriched.tags && Array.isArray(enriched.tags)) {
+                    tags = enriched.tags;
+                } else {
+                    if (enriched.description) {
+                        tags = enriched.description.split(',').map(t => t.trim()).filter(Boolean);
+                    } else if (enriched.type) {
+                        tags = enriched.type.split(',').map(t => t.trim()).filter(Boolean);
+                    }
+                }
+                enriched.tags = tags;
+            }
+            return enriched;
+        });
+        setEnrichedVenues(merged);
+    }, [likedVenues, zoneData, allVenues]);
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -72,6 +101,8 @@ function FavouriteVenues() {
                                     busynessMap={busynessMap} 
                                     showLikeButton={true} 
                                     unlikeOnlyFromFavorites={true} 
+                                    tags={venue.tags}
+                                    hidePlanButtons={true}
                                 />
                             </Grid>
                         ))}

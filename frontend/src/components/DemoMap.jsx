@@ -61,23 +61,22 @@ export default function DemoMap({
   };
 
   const getZoneStyle = (feature) => {
-    const locationId = feature.properties.LocationID;
-    const match = mode === "forecast"
-      ? predictionData
-          .find((z) => String(z.LocationID) === String(locationId))
-          ?.predictions?.find((p) => {
-            const pTime = DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true });
-            const sTime = DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true });
-            if (String(locationId) === "140") {
-              console.log("Comparing:", { locationId, pTime, sTime });
-            }
-            return pTime === sTime;
-          })
-      : busynessData.find((z) => String(z.LocationID) === String(locationId));
+  const locationId = feature.properties.LocationID;
+  const match = mode === "forecast"
+    ? predictionData
+        .find((z) => String(z.LocationID) === String(locationId))
+        ?.predictions?.find((p) => {
+          const pTime = DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true });
+          const sTime = DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true });
+          if (String(locationId) === "140") {
+            console.log("Comparing:", { locationId, pTime, sTime });
+          }
+          return pTime === sTime;
+        })
+    : busynessData.find((z) => String(z.LocationID) === String(locationId));
 
 
     const fillColor = match ? getColorForBusyness((match.busyness || 0) * 100) : "#CCCCCC";
-
     return {
       fillColor,
       weight: 2,

@@ -7,8 +7,6 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -19,7 +17,6 @@ import jakarta.persistence.Transient;
 public class Location {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Integer id;
 
@@ -56,7 +53,7 @@ public class Location {
     @Column(name = "is_bar")
     private Boolean isBar;
 
-    @Column(name = "description")
+    @Column(name = "description", length = 1024)
     private String description;
 
     @Column(name = "price")
@@ -65,7 +62,7 @@ public class Location {
     @Column(name = "zone")
     private String zone;
 
-    @Column(name = "information")
+    @Column(name = "information", length = 1024)
     private String information;
 
     @Column(name = "summary", length = 1000)
