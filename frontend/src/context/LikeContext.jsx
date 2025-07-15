@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 
 const LikeContext = createContext();
 
-export const useLikes = () => useContext(LikeContext);
+export const useLike = () => useContext(LikeContext);
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
@@ -18,48 +18,62 @@ export const LikeProvider = ({ children }) => {
                 try {
                     const response = await makeAuthenticatedRequest(`${API_BASE_URL}/favourites`);
                     const data = await response.json();
-                    setLikedVenues(data || []); // Assuming backend returns an array of venues
+                    // Store only the location objects (LocationDto), not the FavouriteDto wrapper
+                    setLikedVenues((data || []).map(fav => fav.location));
                 } catch (error) {
-                    console.error("Failed to fetch liked venues:", error);
+                    if (error.message !== "Not authenticated. Please log in.") {
+                        console.error("Failed to fetch liked venues:", error);
+                    }
                 }
             } else {
-                setLikedVenues([]); // Clear likes on logout
+                setLikedVenues([]);
             }
         };
         fetchLikes();
     }, [isAuthenticated, makeAuthenticatedRequest]);
 
     // Toggle a like and send the update to the backend
-    const toggleLike = useCallback(async (venue) => {
+    const handleLike = useCallback(async (venue) => {
         if (!isAuthenticated) return;
 
-        const isLiked = likedVenues.some(v => v.id === venue.id);
+        // Always use canonical backend id (integer)
+        const canonicalId = venue.id;
+        if (!canonicalId || typeof canonicalId !== 'number') {
+            console.error('Venue missing valid integer id:', venue);
+            return;
+        }
+        const isLiked = likedVenues.some(v => v.id === canonicalId);
         const endpoint = isLiked
-            ? `${API_BASE_URL}/favourites/${venue.id}` // Endpoint for DELETE
+            ? `${API_BASE_URL}/favourites/${canonicalId}` // Endpoint for DELETE
             : `${API_BASE_URL}/favourites`;           // Endpoint for POST
         const method = isLiked ? 'DELETE' : 'POST';
 
+        const previousLikedVenues = [...likedVenues];
+
         try {
-            // Optimistically update the UI for a faster user experience
             if (isLiked) {
-                setLikedVenues(prev => prev.filter(v => v.id !== venue.id));
+                setLikedVenues(prev => prev.filter(v => v.id !== canonicalId));
             } else {
-                setLikedVenues(prev => [...prev, venue]);
+                setLikedVenues(prev => {
+                    const existing = prev.find(v => v.id === canonicalId);
+                    return [...prev, { ...existing, ...venue, id: canonicalId, isLiked: true }];
+                });
             }
-            // Make the API call
-            await makeAuthenticatedRequest(endpoint, {
+            const response = await makeAuthenticatedRequest(endpoint, {
                 method,
-                // Only send a body for the POST request
-                body: method === 'POST' ? JSON.stringify({ venueId: venue.id }) : null,
+                body: method === 'POST' ? JSON.stringify({ venueId: canonicalId }) : null,
             });
+            if (!response.ok) {
+                throw new Error(`Failed to ${isLiked ? 'unlike' : 'like'} venue: ${response.statusText}`);
+            }
         } catch (error) {
             console.error(`Failed to ${isLiked ? 'unlike' : 'like'} venue:`, error);
-            // TODO: Optionally revert the optimistic update here on failure
+            setLikedVenues(previousLikedVenues);
         }
     }, [isAuthenticated, likedVenues, makeAuthenticatedRequest]);
 
     return (
-        <LikeContext.Provider value={{ likedVenues, toggleLike }}>
+        <LikeContext.Provider value={{ likedVenues, handleLike }}>
             {children}
         </LikeContext.Provider>
     );
