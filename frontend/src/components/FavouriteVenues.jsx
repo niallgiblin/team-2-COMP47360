@@ -39,8 +39,14 @@ function FavouriteVenues() {
         }
         // Merge with allVenues for full data
         const merged = likedVenues.map(liked => {
-            const full = allVenues.find(v => v.id === liked.id);
+            // Try to find a match by id, then placeId, then lat/lng
+            let full = allVenues.find(v => v.id === liked.id || v.placeId === liked.id || v.id === liked.placeId || v.placeId === liked.placeId);
+            if (!full && liked.latitude && liked.longitude) {
+                full = allVenues.find(v => v.latitude === liked.latitude && v.longitude === liked.longitude);
+            }
             let enriched = { ...full, ...liked };
+            // Always ensure a canonical id
+            enriched.id = enriched.id || enriched.placeId || (full && (full.id || full.placeId)) || (liked && (liked.id || liked.placeId));
             if (!enriched.zoneId && enriched.latitude && enriched.longitude) {
                 const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
                 const matchingZone = zoneData.features.find(feature => booleanPointInPolygon(venuePoint, feature.geometry));

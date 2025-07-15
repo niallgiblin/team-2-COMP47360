@@ -18,15 +18,15 @@ export const LikeProvider = ({ children }) => {
                 try {
                     const response = await makeAuthenticatedRequest(`${API_BASE_URL}/favourites`);
                     const data = await response.json();
-                    setLikedVenues(data || []); // Assuming backend returns an array of venues
+                    // Store only the location objects (LocationDto), not the FavouriteDto wrapper
+                    setLikedVenues((data || []).map(fav => fav.location));
                 } catch (error) {
-                    // Only log errors that are not the expected "Not authenticated" message
                     if (error.message !== "Not authenticated. Please log in.") {
                         console.error("Failed to fetch liked venues:", error);
                     }
                 }
             } else {
-                setLikedVenues([]); // Clear likes on logout
+                setLikedVenues([]);
             }
         };
         fetchLikes();
@@ -36,35 +36,38 @@ export const LikeProvider = ({ children }) => {
     const handleLike = useCallback(async (venue) => {
         if (!isAuthenticated) return;
 
-        const isLiked = likedVenues.some(v => v.id === venue.id);
+        // Always use canonical backend id (integer)
+        const canonicalId = venue.id;
+        if (!canonicalId || typeof canonicalId !== 'number') {
+            console.error('Venue missing valid integer id:', venue);
+            return;
+        }
+        const isLiked = likedVenues.some(v => v.id === canonicalId);
         const endpoint = isLiked
-            ? `${API_BASE_URL}/favourites/${venue.id}` // Endpoint for DELETE
+            ? `${API_BASE_URL}/favourites/${canonicalId}` // Endpoint for DELETE
             : `${API_BASE_URL}/favourites`;           // Endpoint for POST
         const method = isLiked ? 'DELETE' : 'POST';
 
-        // Store the previous state in case we need to revert
         const previousLikedVenues = [...likedVenues];
 
         try {
-            // Optimistically update the UI for a faster user experience
             if (isLiked) {
-                setLikedVenues(prev => prev.filter(v => v.id !== venue.id));
+                setLikedVenues(prev => prev.filter(v => v.id !== canonicalId));
             } else {
                 setLikedVenues(prev => {
-                    // If this venue already exists in prev (with more fields), merge them
-                    const existing = prev.find(v => v.id === venue.id);
-                    return [...prev, { ...existing, ...venue, isLiked: true }];
+                    const existing = prev.find(v => v.id === canonicalId);
+                    return [...prev, { ...existing, ...venue, id: canonicalId, isLiked: true }];
                 });
             }
-            // Make the API call
-            await makeAuthenticatedRequest(endpoint, {
+            const response = await makeAuthenticatedRequest(endpoint, {
                 method,
-                // Only send a body for the POST request
-                body: method === 'POST' ? JSON.stringify({ venueId: venue.id }) : null,
+                body: method === 'POST' ? JSON.stringify({ venueId: canonicalId }) : null,
             });
+            if (!response.ok) {
+                throw new Error(`Failed to ${isLiked ? 'unlike' : 'like'} venue: ${response.statusText}`);
+            }
         } catch (error) {
             console.error(`Failed to ${isLiked ? 'unlike' : 'like'} venue:`, error);
-            // Revert the optimistic update on failure
             setLikedVenues(previousLikedVenues);
         }
     }, [isAuthenticated, likedVenues, makeAuthenticatedRequest]);
