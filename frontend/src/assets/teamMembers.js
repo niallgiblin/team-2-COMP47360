@@ -1,5 +1,5 @@
 import graceImg from './grace.jpg';
-// import sharonImg from './sharon.jpg';
+import sharonImg from './sharon.jpg';
 import niallImg from './niall.jpg';
 import ruiqiImg from './ruiqi.png';
 import gregoryImg from './gregory.jpg';
@@ -13,7 +13,7 @@ const teamMembers = [
     },
     {
         name: 'Sharon',
-        image: '/assets/sharon.jpg',
+        image: sharonImg,
         bio: 'Sharon has lived in cities all over the world and loves discovering hidden gems in each one — from a cozy tea shop in Budapest, to a rooftop nightclub in Kuala Lumpur. An app like The Urban Gala is perfect for navigating a bustling city and planning the ultimate night out.',
     },
     {
