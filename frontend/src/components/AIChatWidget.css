@@ -4,6 +4,9 @@
     bottom: 16px;
     right: 16px;
     z-index: 1000;
+    width: auto; /* only takes up space for button when closed, and window when open, not the whole page */
+    height: auto;
+    pointer-events: none; /* prevents blocking clicks, except in the widget itself*/
   }
   
   
@@ -262,6 +265,7 @@
     bottom: 24px;
     right: 24px;
     z-index: 1000;
+    pointer-events: auto; /* restore interactivity for widget*/
   }
   
   .chat-toggle-button:hover {

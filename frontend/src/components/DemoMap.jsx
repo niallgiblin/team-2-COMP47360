@@ -16,6 +16,7 @@ import L from "leaflet";
 import { getVenueIcon } from "../utils/mapIcons";
 
 import { usePlan } from "../context/PlanContext";
+import { DateTime } from "luxon";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -60,14 +61,21 @@ export default function DemoMap({
   };
 
   const getZoneStyle = (feature) => {
-    const locationId = String(feature.properties.LocationID).trim();
-    const match = busynessData.find(
-      (z) => String(z.LocationID).trim() === locationId
-    );
-    // Debug logging if no match
-    if (!match) {
-      console.log("No busyness match for zone", locationId, "Available:", busynessData.map(z => z.LocationID));
-    }
+  const locationId = feature.properties.LocationID;
+  const match = mode === "forecast"
+    ? predictionData
+        .find((z) => String(z.LocationID) === String(locationId))
+        ?.predictions?.find((p) => {
+          const pTime = DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true });
+          const sTime = DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true });
+          if (String(locationId) === "140") {
+            console.log("Comparing:", { locationId, pTime, sTime });
+          }
+          return pTime === sTime;
+        })
+    : busynessData.find((z) => String(z.LocationID) === String(locationId));
+
+
     const fillColor = match ? getColorForBusyness((match.busyness || 0) * 100) : "#CCCCCC";
     return {
       fillColor,
@@ -118,9 +126,12 @@ export default function DemoMap({
     const level =
       mode === "forecast"
         ? (() => {
-            const match = predictionData
-              .find((z) => String(z.LocationID) === String(feature.properties.LocationID))
-              ?.predictions?.find((p) => p.timestamp === selectedTimestamp);
+          const match = predictionData
+            .find((z) => String(z.LocationID) === String(feature.properties.LocationID))
+            ?.predictions?.find((p) =>
+              DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true }) ===
+              DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true })
+            );
             return match ? `${(match.busyness * 100).toFixed(0)}% busy` : "No forecast data";
           })()
         : (() => {
