@@ -11,7 +11,7 @@ import { usePlan } from '../context/PlanContext';
 
 
 // Functional component that displays information about a venue and handles actions
-export default function VenueCard({ venue, variant = 'default', busynessMap }) {
+export default function VenueCard({ venue, variant = 'default' }) {
   const { plan, addToPlan, removeFromPlan } = usePlan();
 
   if (!venue) return null; // return nothing if the venue is not provided
@@ -44,20 +44,20 @@ export default function VenueCard({ venue, variant = 'default', busynessMap }) {
   const category = getCategory(venue.description || '');
   const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
-  // Busyness chip logic
-  let busynessLabel = null;
-  if (busynessMap && venue.zoneId) {
-    const value = busynessMap[String(venue.zoneId)];
-    if (typeof value === 'number') {
-      const percent = value * 100;
-      if (percent >= 75) busynessLabel = 'Very Busy';
-      else if (percent >= 50) busynessLabel = 'Busy';
-      else if (percent >= 25) busynessLabel = 'Moderate';
-      else busynessLabel = 'Quiet';
-    } else {
-      busynessLabel = 'No Data';
-    }
-  }
+  // Remove busyness chip logic
+  // let busynessLabel = null;
+  // if (busynessMap && venue.zoneId) {
+  //   const value = busynessMap[String(venue.zoneId)];
+  //   if (typeof value === 'number') {
+  //     const percent = value * 100;
+  //     if (percent >= 75) busynessLabel = 'Very Busy';
+  //     else if (percent >= 50) busynessLabel = 'Busy';
+  //     else if (percent >= 25) busynessLabel = 'Moderate';
+  //     else busynessLabel = 'Quiet';
+  //   } else {
+  //     busynessLabel = 'No Data';
+  //   }
+  // }
 
   const handleWebsiteClick = () => {
     if (venue.uri) {
@@ -203,24 +203,7 @@ export default function VenueCard({ venue, variant = 'default', busynessMap }) {
                 {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
               </Typography>
             </Box>
-           {/* Busyness chip */}
-           {busynessLabel && (
-             <Chip
-               icon={<WhatshotIcon sx={{ color: '#fff' }} />}
-               label={busynessLabel}
-               size="small"
-               sx={{
-                 background: busynessLabel === 'No Data'
-                   ? 'linear-gradient(to right, #888, #bbb)'
-                   : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                 color: '#fff',
-                 fontWeight: 600,
-                 height: 24,
-                 ml: 1,
-               }}
-             />
-           )}
-            {/* Price */}
+           {/* Price */}
             <Box 
                 sx={{ 
                   display: 'flex', 
@@ -240,37 +223,8 @@ export default function VenueCard({ venue, variant = 'default', busynessMap }) {
             </Box>
         </Box>
 
-        {/* Tags */}
-        <Box
-            sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 1,
-            mt: 1,
-            }}
-        >
-            {(venue.tags || []).map((tag) => (
-            <Chip
-                key={tag}
-                label={tag}
-                variant="outlined"
-                size="small"
-                sx={{
-                backgroundColor: '#394150',
-                color: '#fff',
-                borderColor: '#ffffff',
-                borderWidth: '0.2px',
-                borderStyle: 'solid',
-                borderRadius: '8px',
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                letterSpacing: '0.3px',
-                paddingX: '6px',
-                height: '24px',
-                }}
-            />
-            ))}
-        </Box>
+        {/* Tags - removed */}
+        {/* <Box ...> ... </Box> */}
 
         {/* Website link */}
         {venue.uri && (
