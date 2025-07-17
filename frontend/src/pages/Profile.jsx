@@ -11,6 +11,8 @@ import ProfileForm from '../components/ProfileForm';
 import FriendsList from '../components/FriendsList';
 import FavouriteVenues from '../components/FavouriteVenues';
 import SavedPlans from '../components/SavedPlans';
+import SharedPlans from '../components/SharedPlans';
+
 
 // Custom styling for each Tab
 const tabStyles = {
@@ -41,9 +43,14 @@ const tabStyles = {
 
 export default function Profile() {
   const location = useLocation();
-  const [tabIndex, setTabIndex] = useState(() =>
-    location.state?.showSavedPlans ? 3 : 0
-  );
+  const queryTab = new URLSearchParams(window.location.search).get('tab');
+
+  const [tabIndex, setTabIndex] = useState(() => {
+    if (location.state?.showSavedPlans) return 3;
+    if (location.state?.showFriendsTab || queryTab === 'friends') return 1;
+    if (location.state?.showSharedPlans) return 4;
+    return 0;
+  });
 
   useEffect(() => {
     if (location.state?.showSavedPlans) {
@@ -90,6 +97,7 @@ export default function Profile() {
           <Tab label="Friends" sx={tabStyles} />
           <Tab label="Favourite Venues" sx={tabStyles} />
           <Tab label="Saved Plans" sx={tabStyles} />
+          <Tab label="Shared With Me" sx={tabStyles} />
         </Tabs>
 
         {/* Tab Panels */}
@@ -104,6 +112,9 @@ export default function Profile() {
         </Box>
         <Box hidden={tabIndex !== 3}>
           <SavedPlans />
+        </Box>
+        <Box hidden={tabIndex !== 4}>
+          <SharedPlans />
         </Box>
       </Paper>
     </Container>
