@@ -7,7 +7,8 @@ import {
   MenuItem,
   FormControl,
   Select,
-  InputLabel
+  InputLabel,
+  CircularProgress
 } from "@mui/material";
 import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
@@ -16,6 +17,7 @@ import PlanSummary from "../components/PlanSummary";
 // Turf imports for data enrichment
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
+
 
 
 export default function FindMyVibe() {
@@ -34,6 +36,13 @@ export default function FindMyVibe() {
 
   // state for zone data
   const [zoneData, setZoneData] = useState(null); // GeoJSON data for zone lookups
+
+  // track readiness of busyness data
+  const isDataReady = zoneData && Object.keys(busynessMap).length > 0 && allVenues.length > 0;
+
+  // state to track if a search was initiated
+  const [pendingSearch, setPendingSearch] = useState(false);
+
 
  useEffect(() => {
     const fetchInitialData = async () => {
@@ -69,6 +78,12 @@ export default function FindMyVibe() {
     if (!input && !vibe && !venueType && !cuisine) {
       setAllResults([]);
       setHasSearched(true);
+      return;
+    }
+    // avoid searching before the data is ready
+    if (!isDataReady) {
+      console.warn("Data still loading. Will retry when ready.");
+      setPendingSearch(true); // Queue the search
       return;
     }
 
@@ -191,8 +206,17 @@ export default function FindMyVibe() {
       setAllResults([]);
     } finally {
       setIsLoading(false);
+      setPendingSearch(false);
     }
   }, [input, vibe, venueType, cuisine, zoneData, allVenues]);
+
+  useEffect(() => {
+    if (pendingSearch && isDataReady) {
+      console.log("Retrying pending search now that data is ready.");
+      performSearch(); // Re-run the search
+    }
+  }, [pendingSearch, isDataReady, performSearch]);
+
 
   // Form submission handler
   const handleFormSubmit = (e) => {
@@ -322,9 +346,19 @@ export default function FindMyVibe() {
 
         {/* Loading / Empty States */}
         {isLoading ? (
-          <Typography align="center" sx={{ color: "#aaa", my: 4 }}>Loading...</Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", my: 4 }}>
+            <CircularProgress size={24} sx={{ mb: 1 }} />
+            <Typography sx={{ color: "#aaa" }}>Searching...</Typography>
+          </Box>
+        ) : pendingSearch && !isDataReady ? (
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", my: 4 }}>
+            <CircularProgress size={24} sx={{ mb: 1 }} />
+            <Typography sx={{ color: "#aaa" }}>Getting things ready...</Typography>
+          </Box>
         ) : hasSearched && allResults.length === 0 ? (
-          <Typography align="center" sx={{ color: "#aaa", my: 4 }}>No matching venues found.</Typography>
+          <Typography align="center" sx={{ color: "#aaa", my: 4 }}>
+            No matching venues found.
+          </Typography>
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'flex-start', gap: 3 }}>
