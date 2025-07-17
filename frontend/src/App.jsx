@@ -66,10 +66,22 @@ function AppLayout({ children }) {
   const { isAuthenticated } = useAuth();
 
   return (
-    <Box>
+    <Box 
+      sx={{ 
+        backgroundColor: '#000000', 
+        minHeight: '100vh' 
+      }}
+    >
       <NavBar />
 
-      <Box sx={{ minHeight: "calc(100vh - 200px)" }}>{children}</Box>
+      <Box 
+        sx={{ 
+          minHeight: "calc(100vh - 200px)" 
+        }}
+      >
+        {children}
+      </Box>
+
 
       {/* Only show Skyline and Footer on main pages, not on login/signup pages */}
       {isAuthenticated && (

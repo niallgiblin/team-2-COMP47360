@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -10,43 +10,43 @@ import {
   Alert,
 } from "@mui/material";
 import { useAuth } from "../hooks/useAuth";
-import { useMemo } from "react";
 import { usePlan } from '../context/PlanContext';
 import { useNavigate } from 'react-router-dom';
 import { useState as useReactState } from 'react';
+import { useFriendRequests } from '../context/FriendRequestContext';
 
 export default function FriendsList() {
   const { token, makeAuthenticatedRequest } = useAuth();
   const [usernameToAdd, setUsernameToAdd] = useState("");
   const [message, setMessage] = useState({ type: "", text: "" });           // feedback alert
 
-  const [acceptedFriends, setAcceptedFriends] = useState([]);
+  const {
+    acceptedFriends,
+    fetchFriendRequests,
+    fetchAcceptedFriends,
+  } = useFriendRequests();
+
   const [sentRequests, setSentRequests] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
-
-  // Shared plans state
   const [sharedPlans, setSharedPlans] = useState([]);
-
   const { loadPlan, clearPlan, savePlanFromVenues, refreshSavedPlans, savedPlans } = usePlan();
   const navigate = useNavigate();
   const [saveMsg, setSaveMsg] = useReactState('');
 
-  // fetch list of friends from backend
-  const fetchFriends = useCallback(async () => {
+  // Load sent and received friend requests separately
+  const fetchSentAndReceived = useCallback(async () => {
     if (!token) return;
     try {
       const response = await makeAuthenticatedRequest(`/api/friends/list`);
       const data = await response.json();
-      setAcceptedFriends(data.accepted || []);
       setSentRequests(data.sent || []);
       setReceivedRequests(data.received || []);
     } catch (err) {
       console.error(err);
-      setMessage({ type: "error", text: "Could not load friends." });
+      setMessage({ type: "error", text: "Could not load friend requests." });
     }
   }, [token, makeAuthenticatedRequest]);
 
-  // fetch shared plans
   const fetchSharedPlans = useCallback(async () => {
     if (!token) return;
     try {
@@ -59,15 +59,19 @@ export default function FriendsList() {
   }, [token, makeAuthenticatedRequest]);
 
   useEffect(() => {
-    fetchFriends();
+    fetchFriendRequests();
+    fetchAcceptedFriends();
+    fetchSentAndReceived();
     fetchSharedPlans();
-  }, [fetchFriends, fetchSharedPlans]);
+  }, [fetchFriendRequests, fetchAcceptedFriends, fetchSentAndReceived, fetchSharedPlans]);
 
   const handleAccept = async (requesterId) => {
     try {
       await makeAuthenticatedRequest(`/api/friends/accept/${requesterId}`, { method: 'POST' });
       setMessage({ type: 'success', text: 'Friend request accepted!' });
-      fetchFriends(); // Refresh the lists
+      fetchFriendRequests();
+      fetchAcceptedFriends();
+      fetchSentAndReceived();
     } catch (err) {
       console.error('Error accepting friend request:', err);
       setMessage({ type: "error", text: "Failed to accept request." });
@@ -78,15 +82,14 @@ export default function FriendsList() {
     try {
       await makeAuthenticatedRequest(`/api/friends/decline/${requesterId}`, { method: 'POST' });
       setMessage({ type: 'info', text: 'Friend request declined.' });
-      fetchFriends(); // Refresh the lists
+      fetchFriendRequests();
+      fetchSentAndReceived();
     } catch (err) {
       console.error('Error declining friend request:', err);
       setMessage({ type: "error", text: "Failed to decline request." });
     }
   };
 
-
-  // call when user clicks 'add', to send a friend request
   const handleAddFriend = async () => {
     if (!usernameToAdd.trim() || !token) {
       setMessage({ type: 'error', text: 'You must be logged in to add friends.' });
@@ -96,30 +99,23 @@ export default function FriendsList() {
     try {
       const response = await makeAuthenticatedRequest(`/api/friends/add`, {
         method: "POST",
-        body: JSON.stringify({
-          // The backend now expects 'username' based on AddFriendRequest DTO
-          username: usernameToAdd.trim(),
-        }),
+        body: JSON.stringify({ username: usernameToAdd.trim() }),
       });
 
-      // error message
       if (!response.ok) {
         const result = await response.json();
         throw new Error(result.error || "Failed to add friend");
       }
 
-      // clear input 
       setUsernameToAdd("");
       setMessage({ type: "success", text: "Friend request sent!" });
-      
-      // re-fetch updated list
-      fetchFriends();
+      fetchFriendRequests();
+      fetchSentAndReceived();
     } catch (err) {
       setMessage({ type: "error", text: err.message });
     }
   };
 
-  // Group shared plans by sharer
   const sharedPlansBySharer = useMemo(() => {
     const grouped = {};
     for (const sp of sharedPlans) {
@@ -129,6 +125,7 @@ export default function FriendsList() {
     }
     return grouped;
   }, [sharedPlans]);
+
 
   return (
     <Box>
