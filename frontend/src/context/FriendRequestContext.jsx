@@ -1,49 +1,64 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-// Create the context
-const FriendRequestContext = createContext();
+const FriendRequestContext = createContext(null); // null default prevents undefined access
 
-// Custom hook for easy access
-export const useFriendRequests = () => useContext(FriendRequestContext);
+export const useFriendRequests = () => {
+  const context = useContext(FriendRequestContext);
+  if (!context) {
+    throw new Error("useFriendRequests must be used within a FriendRequestProvider");
+  }
+  return context;
+};
 
-// Provider component
 export const FriendRequestProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [acceptedFriends, setAcceptedFriends] = useState([]);
 
-  // Fetch friend requests from backend
   const fetchFriendRequests = async () => {
     try {
       const res = await fetch("http://localhost:8080/api/friends/requests", {
-        credentials: "include", // Send cookies for auth
+        credentials: "include",
       });
       const data = await res.json();
       setPendingRequests(data.pending || []);
     } catch (err) {
       console.error("Failed to fetch friend requests:", err);
+      setPendingRequests([]); // ensure it's always an array
     }
   };
 
-  // Run on mount - TEMP commented out, for testing
-  //useEffect(() => {
-  //  fetchFriendRequests();
-  //}, []);
+  const fetchAcceptedFriends = async () => {
+    try {
+      const res = await fetch("http://localhost:8080/api/friends?status=accepted", {
+        credentials: "include",
+      });
+      const data = await res.json();
+      setAcceptedFriends([
+        ...(Array.isArray(data) ? data : []),
+        { id: 'dummy123', username: 'testfriend' }, // TEMP: remove later
+      ]);
+    } catch (err) {
+      console.error("Failed to fetch accepted friends:", err);
+      setAcceptedFriends([]); // fallback
+    }
+  };
 
   useEffect(() => {
-  // TEMPORARY dummy request for UI testing
-  setPendingRequests([
-    {
-      id: 'test123',
-      from: { id: 'user1', name: 'Dummy User' },
-      to: { id: 'your-user-id', name: 'You' },
-      status: 'pending',
-    }
-  ]);
-}, []);
-
+    fetchFriendRequests();
+    fetchAcceptedFriends();
+  }, []);
 
   return (
-    <FriendRequestContext.Provider value={{ pendingRequests, fetchFriendRequests }}>
+    <FriendRequestContext.Provider
+      value={{
+        pendingRequests,
+        acceptedFriends,
+        fetchFriendRequests,
+        fetchAcceptedFriends,
+      }}
+    >
       {children}
     </FriendRequestContext.Provider>
   );
 };
+

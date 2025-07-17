@@ -11,7 +11,7 @@ import { usePlan } from '../context/PlanContext';
 
 
 // Functional component that displays information about a venue and handles actions
-export default function VenueCard({ venue, variant = 'default' }) {
+export default function VenueCard({ venue, variant = 'default', disableActions = false }) {   // add disable actions, so add/remove buttons don't show on shared plans
   console.log('VenueCard venue:', venue);
   const { plan, addToPlan, removeFromPlan } = usePlan();
 
@@ -105,7 +105,7 @@ export default function VenueCard({ venue, variant = 'default' }) {
       >
 
         {/* remove from plan x button */}
-        {isInPlan && (
+        {!disableActions && isInPlan && (
         <Box sx={{ position: 'absolute', top: -12, right: -4, zIndex: 2 }}>
           <Tooltip title="Remove from Plan" arrow>
             <Button
@@ -267,8 +267,8 @@ export default function VenueCard({ venue, variant = 'default' }) {
             </Box>
           )}
 
-          {/* Add to Plan Button: Only shows if the venue is not already in the plan */}
-          {!isInPlan && (
+          {/* Add to Plan Button: Only shows if the venue is not already in the plan and not a shared plan */}
+          {!disableActions && !isInPlan && (
             <Box sx={{ mt: 'auto', pt: 1 }}>
               <Tooltip title={isPlanFull ? "Your plan is full (max 3 venues)" : ""} arrow>
                 {/* The Tooltip needs a span wrapper to work when the button is disabled */}
