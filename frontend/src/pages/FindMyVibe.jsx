@@ -1,3 +1,6 @@
+// interactive search page for Find My Vibe
+// Displays results using TrendingVenueCard and PlanSummary (which uses VenueCard) 
+
 import { useState, useEffect, useCallback } from "react";
 import { 
   Box,
@@ -18,8 +21,7 @@ import PlanSummary from "../components/PlanSummary";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
-
-
+// main page component
 export default function FindMyVibe() {
   // State hooks for user input and results
   const [input, setInput] = useState("");           // manual text input 
@@ -30,6 +32,7 @@ export default function FindMyVibe() {
   const [hasSearched, setHasSearched] = useState(false); // track if a search has been triggered, so the plan summary is displayed
   const [isLoading, setIsLoading] = useState(false);
 
+  // state for venue and metadata
   const [allResults, setAllResults] = useState([]);
   const [busynessMap, setBusynessMap] = useState({});
   const [allVenues, setAllVenues] = useState([]);
@@ -43,7 +46,7 @@ export default function FindMyVibe() {
   // state to track if a search was initiated
   const [pendingSearch, setPendingSearch] = useState(false);
 
-
+  // data fetching on mount
  useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -83,7 +86,7 @@ export default function FindMyVibe() {
     // avoid searching before the data is ready
     if (!isDataReady) {
       console.warn("Data still loading. Will retry when ready.");
-      setPendingSearch(true); // Queue the search
+      setPendingSearch(true); // Queue the search to try later
       return;
     }
 
@@ -210,6 +213,7 @@ export default function FindMyVibe() {
     }
   }, [input, vibe, venueType, cuisine, zoneData, allVenues]);
 
+  // retry search automaticaly when data is ready
   useEffect(() => {
     if (pendingSearch && isDataReady) {
       console.log("Retrying pending search now that data is ready.");
@@ -227,6 +231,7 @@ export default function FindMyVibe() {
   return (
     <PageWrapper fullWidth>
       <Box sx={{ maxWidth: 1000, mx: "auto", mb: 10, px: 2 }}>
+        {/* Heading */}
         <Typography
           variant="h4"
           align="center"
@@ -240,6 +245,8 @@ export default function FindMyVibe() {
         >
           Find Your Vibe
         </Typography>
+        
+        {/* Subtitle */}
         <Typography
           variant="body2"
           align="center"
@@ -361,13 +368,35 @@ export default function FindMyVibe() {
           </Typography>
         ) : null}
 
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'flex-start', gap: 3 }}>
+        {/* Results & Plan sidebar */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', md: 'row' }, 
+            alignItems: 'flex-start', 
+            gap: 3 
+          }}
+        >
           {/* Always render the sidebar, even if empty, to reserve space and prevent overlap */}
-          <Box sx={{ width: { xs: '100%', md: 320 }, position: { md: 'sticky' }, top: { md: 80 }, alignSelf: 'flex-start', zIndex: 0, minHeight: 200 }}>
+          <Box 
+            sx={{ 
+              width: { xs: '100%', md: 320 }, 
+              position: { md: 'sticky' }, 
+              top: { md: 80 }, 
+              alignSelf: 'flex-start', 
+              zIndex: 0, 
+              minHeight: 200 
+            }}
+          >
             <PlanSummary busynessMap={busynessMap} />
           </Box>
 
-          <Box sx={{ flex: 1, zIndex: 1 }}>
+          <Box 
+            sx={{ 
+              flex: 1, 
+              zIndex: 1   //controls the z-axis stacking order, which elements appear in front/ behind
+            }}
+          >
             {allResults.map((venue, index) => (
               <TrendingVenueCard
                 key={venue.id || index}

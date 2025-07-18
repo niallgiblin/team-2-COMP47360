@@ -1,3 +1,7 @@
+// main map view page
+// can view a user's current plan, load a saved or shared plan, favourite venue
+// displays colour-coded busyness zones
+
 // react and routing components
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
@@ -24,18 +28,19 @@ import CompactSavedPlans from '../components/CompactSavedPlans';
 import CompactFavorites from '../components/CompactFavorites';
 import SharedPlans from "../components/SharedPlans";
 import CompactSharedPlans from "../components/CompactSharedPlans";
-import { DateTime } from "luxon";
 
 // Data and context
 import mockVenues from "../data/mockVenues";
 import { usePlan } from "../context/PlanContext";
 import { useLike } from "../context/LikeContext";
 
-// Utilities for directions and geo-calculations
+// External libraries, utilities for directions and geo-calculations
 import polyline from "@mapbox/polyline";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
+import { DateTime } from "luxon";
 
+// function to generate forecast timestamps in NY time
 const generateNext12Hours = () => {
   const timestamps = [];
 
@@ -47,6 +52,7 @@ const generateNext12Hours = () => {
   return timestamps;
 };
 
+// main component - renders map, venue cards, forecast slider
 export default function MapView() {
   // Define tab styles
   const tabStyles = {
@@ -71,14 +77,14 @@ export default function MapView() {
   // Get state from route (eg when coming from a plan)
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
-  const fromPlan = location.state?.fromPlan || false;
-  
+  const fromPlan = location.state?.fromPlan || false;  
   const { plan, addVenueToPlan } = usePlan();
   const { likedVenues, handleLike } = useLike();
   const { setFromPlan } = usePlan();
-
   const mapSectionRef = useRef(null);
 
+  // --- state ---
+  
   // Memoize timestamps once
   const forecastTimestamps = useMemo(() => generateNext12Hours(), []);
 
@@ -90,7 +96,6 @@ export default function MapView() {
   const [zoneCenter, setZoneCenter] = useState(null);
   const [manualStart, setManualStart] = useState("");
   const [userLocation, setUserLocation] = useState(null);
-
 
   // Reset map by fully refreshing the page, when button is clicked
   const [resetMapKey] = useState(0);
@@ -211,12 +216,12 @@ export default function MapView() {
       }
     };
     fetchData();
-  }, [fromPlan, plan, selectedVenueFromState]);
+  }, [fromPlan, plan, selectedVenueFromState, location.state?.fromPlan]);
 
   // 4. Enrich venues with zone IDs once all data is loaded
   useEffect(() => {
     if (!zoneData || venues.length === 0) {
-      if (location.state?.fromPlan === true && plan.length > 0) {
+      if (fromPlan && plan.length > 0) {
         setEnrichedVenues(plan);
       }
       return;
@@ -238,7 +243,8 @@ export default function MapView() {
     if (!selectedVenueFromState && !selectedVenue && enriched.length > 0) {
       setSelectedVenue(enriched[0]);
     }
-  }, [zoneData, venues, fromPlan, selectedVenue]);
+  }, [zoneData, venues, fromPlan, plan, selectedVenue, selectedVenueFromState]);
+
 
   // 5. Use real forecast data if available; otherwise, fallback to dummy
   useEffect(() => {

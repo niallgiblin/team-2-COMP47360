@@ -1,7 +1,11 @@
+// provides a horizontally scrollable summary of the user's plan.
+// displays each venue in the plan, using the compact variant from VenueCard.jsx
+// is rendered in the Current Plan on the MapView
+
 import { Box, Typography, IconButton } from '@mui/material';
-import { usePlan } from '../context/PlanContext';
-import { useAuth } from '../hooks/useAuth';
-import VenueCard from './VenueCard';
+import { usePlan } from '../context/PlanContext';                   // context hook for accessing the current plan
+import { useAuth } from '../hooks/useAuth';                         // hook to get user's data
+import VenueCard from './VenueCard';                                // import VenueCard component
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRef } from 'react';
@@ -16,6 +20,7 @@ export default function CompactPlanSummary() {
   const planArray = Array.isArray(plan) ? plan : (plan?.venues || []);
   console.log('CompactPlanSummary planArray:', planArray);
 
+  // plan title using the user's first name if available
   const planTitle = user?.firstName
     ? `Plan for ${user.firstName}`
     : 'Your Plan';

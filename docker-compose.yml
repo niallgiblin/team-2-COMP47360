@@ -126,7 +126,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 6
-      start_period: 15s # Give 15s to start. If it fails after this, we know it's crashing.
+      start_period: 60s # Give 15s to start. If it fails after this, we know it's crashing.
     deploy:
       resources:
         limits:

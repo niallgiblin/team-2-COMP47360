@@ -1,3 +1,6 @@
+// component to show a hroizontally scrollable list of liked venues
+// uses VenueCard component to display favourite venues
+
 import { Box, Typography, IconButton } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "@mui/icons-material";
 import { useLike } from "../context/LikeContext";
@@ -12,6 +15,7 @@ export default function CompactFavorites() {
     const [enrichedVenues, setEnrichedVenues] = useState([]);
     const [allVenues, setAllVenues] = useState([]);
 
+    // fetch busyness and location data
     useEffect(() => {
         fetch("/api/vibe/map-data")
             .then((res) => res.json())
@@ -35,6 +39,7 @@ export default function CompactFavorites() {
         setEnrichedVenues(merged);
     }, [likedVenues, allVenues]);
 
+    // handler for left/right chevrons
     const handleScroll = (direction) => {
         const container = scrollRef.current;
         if (!container) return;
@@ -45,6 +50,7 @@ export default function CompactFavorites() {
         });
     };
 
+    // if no liked venues, show message instead
     if (!enrichedVenues || enrichedVenues.length === 0) {
         return (
             <Typography
@@ -61,8 +67,6 @@ export default function CompactFavorites() {
 
     return (
         <Box>
-
-
             <Box
                 sx={{
                     position: "relative",
