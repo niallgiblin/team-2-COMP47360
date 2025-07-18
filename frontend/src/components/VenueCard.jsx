@@ -79,13 +79,18 @@ export default function VenueCard({ venue, variant = 'default' }) {
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
+        height: variant === 'compact' ? 300 : 'auto',
     }}
     >
 
       {/* remove from plan x button */}
       {isInPlan && (
-      <Box sx={{ position: 'absolute', top: -12, right: -4, zIndex: 2 }}>
+      <Box 
+        sx={{ 
+          position: 'absolute', 
+          top: -12, 
+          right: -4, 
+          zIndex: 2 }}>
         <Tooltip title="Remove from Plan" arrow>
           <Button
             onClick={() => removeFromPlan(venue.id)}
