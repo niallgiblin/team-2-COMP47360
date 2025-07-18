@@ -11,13 +11,18 @@ import org.springframework.transaction.annotation.Transactional;
 import com.manhattan.busyness_predictor.dto.CreatePlanRequest;
 import com.manhattan.busyness_predictor.dto.LocationDto;
 import com.manhattan.busyness_predictor.dto.PlanResponse;
+import com.manhattan.busyness_predictor.dto.SharePlanRequest;
+import com.manhattan.busyness_predictor.dto.SharedPlanResponse;
+import com.manhattan.busyness_predictor.dto.UserDto;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.model.Plan;
+import com.manhattan.busyness_predictor.model.PlanShared;
 import com.manhattan.busyness_predictor.model.PlanVenue;
 import com.manhattan.busyness_predictor.model.User;
 import com.manhattan.busyness_predictor.repository.LocationRepository;
 import com.manhattan.busyness_predictor.repository.PlanRepository;
 import com.manhattan.busyness_predictor.repository.PlanVenueRepository;
+import com.manhattan.busyness_predictor.repository.PlanSharedRepository;
 import com.manhattan.busyness_predictor.repository.UserRepository;
 
 /**
@@ -37,6 +42,9 @@ public class PlanService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private PlanSharedRepository planSharedRepository;
 
     /**
      * Creates a new plan for the given user.
@@ -124,6 +132,41 @@ public class PlanService {
 
         // Deleting the plan will cascade to PlanVenue entries due to CascadeType.ALL
         planRepository.delete(plan);
+    }
+
+    /**
+     * Shares a plan with a list of friends (userIds).
+     */
+    @Transactional
+    public void sharePlan(Integer planId, Integer senderId, List<Integer> userIds) {
+        Plan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new RuntimeException("Plan not found"));
+        if (!plan.getCreatedBy().getId().equals(senderId)) {
+            throw new RuntimeException("You can only share your own plans");
+        }
+        for (Integer userId : userIds) {
+            if (userId.equals(senderId)) continue; // Don't share with self
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+            if (!planSharedRepository.existsByPlanAndUser(plan, user)) {
+                planSharedRepository.save(new PlanShared(plan, user));
+            }
+        }
+    }
+
+    /**
+     * Returns all plans shared with the current user, including who shared them.
+     */
+    public List<SharedPlanResponse> getPlansSharedWithUser(Integer userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        List<PlanShared> shared = planSharedRepository.findByUser(user);
+        List<SharedPlanResponse> result = new ArrayList<>();
+        for (PlanShared ps : shared) {
+            Plan plan = ps.getPlan();
+            User sharer = plan.getCreatedBy();
+            result.add(new SharedPlanResponse(convertToResponse(plan), UserDto.fromUser(sharer)));
+        }
+        return result;
     }
 
     /**

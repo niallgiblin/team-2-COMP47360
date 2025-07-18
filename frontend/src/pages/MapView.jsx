@@ -22,6 +22,8 @@ import ForecastSlider from "../components/ForecastSlider";
 import DirectionsSidebar from "../components/DirectionSidebar";
 import CompactSavedPlans from '../components/CompactSavedPlans';
 import CompactFavorites from '../components/CompactFavorites';
+import SharedPlans from "../components/SharedPlans";
+import CompactSharedPlans from "../components/CompactSharedPlans";
 import { DateTime } from "luxon";
 
 // Data and context
@@ -164,6 +166,8 @@ export default function MapView() {
       // use plan directly if user came from plan route
       if (location.state?.fromPlan === true && plan.length > 0) {
         setVenues(plan);
+        console.log('MapView plan:', plan);
+        console.log('MapView venues:', plan);
         setLoading(false);
         return;
       }
@@ -832,6 +836,7 @@ export default function MapView() {
               <Tab label="Current Plan" value="plan" sx={tabStyles} />
               <Tab label="Saved Plans" value="saved" sx={tabStyles} />
               <Tab label="Favourites" value="favourites" sx={tabStyles} />
+              <Tab label="Shared With Me" value="shared" sx={tabStyles} />
             </Tabs>
 
             {/* Horizontal Tabs on mobile only */}
@@ -853,6 +858,7 @@ export default function MapView() {
               <Tab label="Current Plan" value="plan" sx={tabStyles} />
               <Tab label="Saved Plans" value="saved" sx={tabStyles} />
               <Tab label="Favourites" value="favourites" sx={tabStyles} />
+              <Tab label="Shared With Me" value="shared" sx={tabStyles} />
             </Tabs>
 
           {/* Conditional View Content */}
@@ -884,6 +890,7 @@ export default function MapView() {
             {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
 
             {viewMode === 'favourites' && <CompactFavorites />}
+            {viewMode === 'shared' && <CompactSharedPlans setViewMode={setViewMode} />}
           </Box>
           </Box>
         </Box>

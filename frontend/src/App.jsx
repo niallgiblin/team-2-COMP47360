@@ -74,7 +74,14 @@ function AppLayout({ children }) {
     >
       <NavBar />
 
-      <Box sx={{ minHeight: "calc(100vh - 200px)" }}>{children}</Box>
+      <Box 
+        sx={{ 
+          minHeight: "calc(100vh - 200px)" 
+        }}
+      >
+        {children}
+      </Box>
+
 
       {/* Only show Skyline and Footer on main pages, not on login/signup pages */}
       {isAuthenticated && (
