@@ -6,9 +6,9 @@ WORKDIR /app
 # Install pip-tools to compile requirements
 RUN pip install --no-cache-dir pip-tools
 
-# Copy requirements.in and compile it to requirements.txt
-COPY requirements.in .
-RUN pip-compile requirements.in -o requirements.txt
+# Copy requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir --timeout=100 -r requirements.txt
 
 # --- Final Stage ---
 FROM python:3.11-slim
