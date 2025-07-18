@@ -21,7 +21,7 @@ export default function PageWrapper({ children, fullWidth = false, fullHeight = 
           paddingX: { xs: 1, sm: 2, md: 4, lg: 6 },            // horizontal padding
           ...(fullWidth
             ? {  
-                maxWidth: {  xs: '500px', sm: '700px', md: '850px', lg: '1300px'},   // allow wider views
+                maxWidth: {  xs: '500px', sm: '700px', md: '850px', lg: '1200px'},   // allow wider views
                 width: '100%',
                 mx: 'auto',           // center the content again
               }  

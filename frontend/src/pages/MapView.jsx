@@ -642,7 +642,8 @@ export default function MapView() {
           px: { xs: 1, md: 2 },
           mx: 0,
           mb: 5,
-          overflow: "hidden",
+          overflowX: "hidden",
+          overflowY: 'visible',
         }}
       >
         {/* Reset map button */}
