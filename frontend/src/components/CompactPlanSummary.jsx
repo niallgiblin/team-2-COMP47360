@@ -92,7 +92,8 @@ export default function CompactPlanSummary() {
         ref={scrollRef}
         sx={{
           display: 'flex',
-          overflowX: 'auto',
+          // overflowX: 'auto',
+          overflowY: 'visible',
           gap: 2,
           pb: 1,
           scrollBehavior: 'smooth',
