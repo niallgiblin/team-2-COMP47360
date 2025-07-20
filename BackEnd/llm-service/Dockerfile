@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pip-tools for dependency management
+RUN pip install --no-cache-dir pip-tools
+
 # Copy requirements, then install them with a longer timeout
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=100 -r requirements.txt
