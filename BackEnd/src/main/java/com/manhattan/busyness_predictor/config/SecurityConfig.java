@@ -39,26 +39,17 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // This configuration disables default security, sets up a stateless session
-        // policy for JWT, and adds our custom filter to the chain.
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Apply CORS config
-                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF
-                // Set session management to stateless, as we are using JWTs
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Allow CORS preflight requests
-                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                        // Define public endpoints for authentication
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Allow all OPTIONS requests
                         .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
-                        // Allow public search and viewing of locations and vibes
                         .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
-                        // All other API routes must be authenticated
                         .requestMatchers("/api/**").authenticated()
-                        // Permit any other requests that don't match (e.g., root, static assets)
                         .anyRequest().permitAll())
-                // Add our custom JWT filter to the security chain before the default username/password filter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -67,11 +58,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Add EC2 public IP to allowed origins for frontend
         config.setAllowedOriginPatterns(List.of(
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://34.246.193.191:5173"
+                "http://localhost:*", // Allow any localhost port
+                "http://34.246.193.191:*" // Allow any port on your EC2 IP
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
@@ -80,7 +69,7 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config); // Apply CORS to all API routes
+        source.registerCorsConfiguration("/**", config); // Apply to all routes, not just /api/**
         return source;
     }
 }
