@@ -1,6 +1,6 @@
 // API Service for making backend calls
-// Base configuration
-const API_BASE_URL = 'http://localhost:8080/api';
+// Base configuration for EC2
+  const API_BASE_URL = "http://34.246.193.191:8080/api";
 
 // Helper function to get auth token from localStorage
 const getAuthToken = () => {

@@ -65,8 +65,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Using allowedOriginPatterns is more flexible than allowedOrigins
-        config.setAllowedOriginPatterns(List.of("http://localhost:5173", "http://localhost:3000"));
+        // Add EC2 public IP to allowed origins for frontend
+        config.setAllowedOriginPatterns(List.of(
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://34.246.193.191:5173"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

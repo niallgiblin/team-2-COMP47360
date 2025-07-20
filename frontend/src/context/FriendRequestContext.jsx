@@ -14,9 +14,12 @@ export const FriendRequestProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [acceptedFriends, setAcceptedFriends] = useState([]);
 
+  // Use env variable or fallback to EC2 IP
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://34.246.193.191:8080/api';
+
   const fetchFriendRequests = async () => {
     try {
-      const res = await fetch("http://localhost:8080/api/friends/requests", {
+      const res = await fetch(`${API_BASE_URL}/friends/requests`, {
         credentials: "include",
       });
       const data = await res.json();
@@ -29,7 +32,7 @@ export const FriendRequestProvider = ({ children }) => {
 
   const fetchAcceptedFriends = async () => {
     try {
-      const res = await fetch("http://localhost:8080/api/friends?status=accepted", {
+      const res = await fetch(`${API_BASE_URL}/friends?status=accepted`, {
         credentials: "include",
       });
       const data = await res.json();
