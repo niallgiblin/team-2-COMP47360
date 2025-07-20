@@ -47,6 +47,8 @@ public class SecurityConfig {
                 // Set session management to stateless, as we are using JWTs
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Allow CORS preflight requests
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         // Define public endpoints for authentication
                         .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
                         // Allow public search and viewing of locations and vibes
