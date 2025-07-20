@@ -14,13 +14,17 @@ export const FriendRequestProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [acceptedFriends, setAcceptedFriends] = useState([]);
 
-  // Use env variable or fallback to EC2 IP
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://34.246.193.191:8080/api';
 
   useEffect(() => {
     const fetchFriendRequests = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/friends/requests`, { credentials: 'include' });
+        const res = await fetch(`${API_BASE_URL}/friends/requests`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include'
+        });
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
         setPendingRequests(data);
@@ -33,8 +37,13 @@ export const FriendRequestProvider = ({ children }) => {
 
   useEffect(() => {
     const fetchAcceptedFriends = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/friends?status=accepted`, { credentials: 'include' });
+        const res = await fetch(`${API_BASE_URL}/friends?status=accepted`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include'
+        });
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
         setAcceptedFriends(data);
