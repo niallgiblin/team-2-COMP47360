@@ -58,9 +58,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
+        // Allow local dev and production frontend origins
         config.setAllowedOriginPatterns(List.of(
-                "http://localhost:*", // Allow any localhost port
-                "http://34.246.193.191:*" // Allow any port on your EC2 IP
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://34.246.193.191:5173" // Explicitly allow your EC2 frontend port
+            // Add your production domain here if you have one, e.g. "https://yourdomain.com"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
@@ -69,7 +72,7 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config); // Apply to all routes, not just /api/**
+        source.registerCorsConfiguration("/**", config); // Apply to all routes
         return source;
     }
 }
