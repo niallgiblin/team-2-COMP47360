@@ -25,6 +25,8 @@ services:
       - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
     networks:
       - app-network
+    mem_limit: 1g
+    cpus: 0.5
 
   backend:
     build:
@@ -53,6 +55,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    mem_limit: 1g
+    cpus: 0.5
 
   frontend:
     build:
@@ -72,6 +76,8 @@ services:
       - backend
     networks:
       - app-network
+    mem_limit: 1g
+    cpus: 0.5
 
   llm-service:
     build:
@@ -99,15 +105,9 @@ services:
       timeout: 15s
       retries: 5
       start_period: 120s  # Give more time for model loading
-    deploy:
-      resources:
-        limits:
-          memory: 2G  # Increased memory for sentence transformers
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.25'
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.5
 
   busyness-service:
     build:
@@ -127,15 +127,9 @@ services:
       timeout: 3s
       retries: 6
       start_period: 15s # Give 15s to start. If it fails after this, we know it's crashing.
-    deploy:
-      resources:
-        limits:
-          memory: 2G  # Final memory increase to handle TensorFlow's peak usage
-          cpus: '2.0'
-        reservations:
-          memory: 2G  # Guarantee the full memory amount to prevent swapping
-          cpus: '0.5'
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: 0.5
 
 networks:
   app-network:
