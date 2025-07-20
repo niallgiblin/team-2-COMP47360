@@ -337,6 +337,8 @@ export default function MapView() {
         return;
       }
       setUserLocation(start); // cache it
+    } else if (hasPlan && planVenues.length > 0) {
+      start = planVenues[0]; // fallback to first venue in plan
     }
 
     // Determine Destination
