@@ -80,7 +80,7 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config); // Apply CORS to all API routes
+        source.registerCorsConfiguration("/**", config); // Apply CORS to all API routes
         return source;
     }
 }
