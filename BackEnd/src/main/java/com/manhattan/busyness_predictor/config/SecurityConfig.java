@@ -68,7 +68,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         // Add EC2 public IP to allowed origins for frontend
-        config.setAllowedOrigins(List.of(
+        config.setAllowedOriginPatterns(List.of(
             "http://localhost:5173",
             "http://localhost:3000",
             "http://34.246.193.191:5173"
@@ -80,7 +80,7 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config); // Apply CORS to all API routes
+        source.registerCorsConfiguration("/api/**", config); // Apply CORS to all API routes
         return source;
     }
 }
