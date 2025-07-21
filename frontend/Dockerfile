@@ -1,36 +1,40 @@
-# Use the official Node image to build the app
-FROM node:20-alpine AS builder
+# ---- 1. Build Stage ----
+# Create a temporary image to build our static assets
+FROM node:18-alpine AS builder
 
-# Set working directory
+# Set the working directory
 WORKDIR /app
 
-# Install dependencies first (using package*.json)
+# Copy package files and install dependencies
+# This is done in a separate layer to leverage Docker's caching
 COPY package*.json ./
 RUN npm install
 
-# Copy the rest of your source code
+# Copy the environment file for the build process
+# IMPORTANT: This file must exist on your EC2 instance in the frontend/ directory
+COPY .env.production ./
+
+# Copy the rest of the application source code
 COPY . .
 
-EXPOSE 5173 24678
+# Build the production-ready static files
+# Vite will automatically use .env.production
+RUN npm run build
 
-CMD ["npm", "run", "dev"]
+# ---- 2. Final Stage ----
+# Use a lightweight Nginx image to serve the built files
+FROM nginx:1.25-alpine
 
-# ----------------------------------------
+# Copy the built static assets from the 'builder' stage
+# The output of 'npm run build' is in the /app/dist directory
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Use a smaller image to run the app
-# FROM node:20-alpine AS runner
+# Copy our custom Nginx config to handle SPA routing
+# We will create this file next.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Set working directory
-# WORKDIR /app
+# Expose port 80 for the Nginx server
+EXPOSE 80
 
-# Install only vite globally to run the preview server
-# RUN npm install -g vite
-
-# Copy built files from the builder stage
-# COPY --from=builder /app/dist ./dist
-
-# Default Vite preview port
-# EXPOSE 4173
-
-# Serve the built app using Vite’s preview server
-# CMD ["vite", "preview", "--host"]
+# The command to start the Nginx server
+CMD ["nginx", "-g", "daemon off;"]
