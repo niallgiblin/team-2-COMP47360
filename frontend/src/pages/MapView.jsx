@@ -52,6 +52,28 @@ const generateNext12Hours = () => {
   return timestamps;
 };
 
+// geocode address into lat/lng using nominatim
+const geocodeAddress = async (address) => {
+  const encoded = encodeURIComponent(address.trim());
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`
+    );
+    if (!res.ok) throw new Error(`Geocoding failed: ${res.statusText}`);
+    const results = await res.json();
+    if (results.length > 0) {
+      return {
+        lat: parseFloat(results[0].lat),
+        lng: parseFloat(results[0].lon),
+      };
+    }
+  } catch (err) {
+    console.error("Geocoding error:", err);
+  }
+  return null;
+};
+
+
 // main component - renders map, venue cards, forecast slider
 export default function MapView() {
   // Define tab styles
@@ -95,6 +117,7 @@ export default function MapView() {
   const [selectedVenue, setSelectedVenue] = useState(selectedVenueFromState);
   const [zoneCenter, setZoneCenter] = useState(null);
   const [manualStart, setManualStart] = useState("");
+  const [manualDestination, setManualDestination] = useState("");
   const [userLocation, setUserLocation] = useState(null);
 
   // Reset map by fully refreshing the page, when button is clicked
@@ -300,20 +323,39 @@ export default function MapView() {
 
     const hasPlan = fromPlan && plan.length > 0;
     const planVenues = hasPlan ? plan : [];
-    const destinationVenue = hasPlan
-      ? planVenues[planVenues.length - 1]
-      : selectedVenue;
 
-    if (!destinationVenue) {
-      console.error("No destination venue found");
-      return;
+    let start = null;
+    let destination = null;
+
+    // Determine Start Location
+    if (userLocation) {
+      start = userLocation;
+    } else if (manualStart.trim()) {
+      start = await geocodeAddress(manualStart);
+      if (!start) {
+        alert("Could not find the start location.");
+        return;
+      }
+      setUserLocation(start); // cache it
+    } else if (hasPlan && planVenues.length > 0) {
+      start = planVenues[0]; // fallback to first venue in plan
     }
 
-    const startLocation =
-      userLocation || (hasPlan ? planVenues[0] : selectedVenue);
+    // Determine Destination
+    if (hasPlan) {
+      destination = planVenues[planVenues.length - 1];
+    } else if (manualDestination.trim()) {
+      destination = await geocodeAddress(manualDestination);
+      if (!destination) {
+        alert("Could not find the destination.");
+        return;
+      }
+    } else if (selectedVenue) {
+      destination = selectedVenue;
+    }
 
-    if (!startLocation) {
-      console.error("No start location found");
+    if (!start || !destination) {
+      alert("Start or destination is missing.");
       return;
     }
 
@@ -322,213 +364,104 @@ export default function MapView() {
       let combinedPolyline = [];
 
       if (travelMode === "TRANSIT" && hasPlan && planVenues.length > 1) {
-        // For TRANSIT mode with multiple stops, make separate API calls for each leg
         const allStops = [
-          { lat: startLocation.lat, lng: startLocation.lng, name: "Start" },
-          ...planVenues.map((venue) => ({
-            lat: venue.lat,
-            lng: venue.lng,
-            name: venue.name,
+          { lat: start.lat, lng: start.lng, name: "Start" },
+          ...planVenues.map((v) => ({
+            lat: v.lat,
+            lng: v.lng,
+            name: v.name,
           })),
         ];
 
         for (let i = 0; i < allStops.length - 1; i++) {
           const origin = {
-            location: {
-              latLng: {
-                latitude: allStops[i].lat,
-                longitude: allStops[i].lng,
-              },
-            },
+            location: { latLng: { latitude: allStops[i].lat, longitude: allStops[i].lng } },
+          };
+          const dest = {
+            location: { latLng: { latitude: allStops[i + 1].lat, longitude: allStops[i + 1].lng } },
           };
 
-          const destination = {
-            location: {
-              latLng: {
-                latitude: allStops[i + 1].lat,
-                longitude: allStops[i + 1].lng,
-              },
-            },
-          };
-
-          const response = await fetch(
-            "https://routes.googleapis.com/directions/v2:computeRoutes",
-            {
-              method: "POST",
-              headers: {
-                "X-Goog-Api-Key": GOOGLE_API_KEY,
-                "X-Goog-FieldMask":
-                  "routes.legs,routes.polyline.encodedPolyline",
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                origin,
-                destination,
-                travelMode: "TRANSIT",
-              }),
-            }
-          );
-
-          const data = await response.json();
-
-          if (!data.routes || data.routes.length === 0) {
-            console.warn(`No route found for leg ${i + 1}:`, data);
-            // Add a fallback step for this leg
-            allDirections.push({
-              summary: `${allStops[i].name} → ${allStops[i + 1].name}`,
-              instructions: `No transit route available. Consider walking or using alternative transportation.`,
-              transitDetails: null,
-            });
-            continue;
-          }
-
-          const route = data.routes[0];
-          const encoded = route.polyline?.encodedPolyline;
-
-          if (encoded) {
-            const decodedPath = polyline.decode(encoded);
-            combinedPolyline.push(...decodedPath);
-          }
-
-          // Process steps for this leg
-          const legSteps = route.legs.flatMap(
-            (leg) =>
-              leg.steps?.map((step, stepIndex) => ({
-                summary: `${allStops[i].name} → ${allStops[i + 1].name} (Step ${
-                  stepIndex + 1
-                })`,
-                instructions:
-                  step.navigationInstruction?.instructions ||
-                  step.text ||
-                  "Continue to next stop",
-                transitDetails: step.transitDetails || null,
-              })) || []
-          );
-
-          allDirections.push(...legSteps);
-        }
-      } else {
-        // For WALK mode or single destination, use the original logic
-        const origin = {
-          location: {
-            latLng: {
-              latitude: startLocation.lat,
-              longitude: startLocation.lng,
-            },
-          },
-        };
-
-        const destination = {
-          location: {
-            latLng: {
-              latitude: destinationVenue.lat,
-              longitude: destinationVenue.lng,
-            },
-          },
-        };
-
-        // For WALK mode with a plan, include all venues as intermediates (except the last one which is the destination)
-        let intermediates = [];
-        if (travelMode === "WALK" && hasPlan) {
-          // If userLocation exists, use all plan venues except the last as intermediates
-          if (userLocation) {
-            intermediates = planVenues.slice(0, -1).map((v) => ({
-              location: { latLng: { latitude: v.lat, longitude: v.lng } },
-            }));
-          } else {
-            // If no userLocation, use plan venues except first and last as intermediates
-            intermediates = planVenues.slice(1, -1).map((v) => ({
-              location: { latLng: { latitude: v.lat, longitude: v.lng } },
-            }));
-          }
-        }
-
-        const response = await fetch(
-          "https://routes.googleapis.com/directions/v2:computeRoutes",
-          {
+          const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
             method: "POST",
             headers: {
               "X-Goog-Api-Key": GOOGLE_API_KEY,
               "X-Goog-FieldMask": "routes.legs,routes.polyline.encodedPolyline",
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              origin,
-              destination,
-              intermediates,
-              travelMode,
-            }),
+            body: JSON.stringify({ origin, destination: dest, travelMode: "TRANSIT" }),
+          });
+
+          const data = await response.json();
+          const route = data.routes?.[0];
+
+          if (route?.polyline?.encodedPolyline) {
+            combinedPolyline.push(...polyline.decode(route.polyline.encodedPolyline));
           }
-        );
+
+          const steps = route?.legs?.flatMap((leg, stepIndex) =>
+            leg.steps?.map((step) => ({
+              summary: `${allStops[i].name} → ${allStops[i + 1].name}`,
+              instructions: step.navigationInstruction?.instructions || step.text || "Continue",
+              transitDetails: step.transitDetails || null,
+            }))
+          ) || [];
+
+          allDirections.push(...steps);
+        }
+      } else {
+        // WALK or single route
+        const origin = { location: { latLng: { latitude: start.lat, longitude: start.lng } } };
+        const dest = { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } };
+
+        let intermediates = [];
+        if (travelMode === "WALK" && hasPlan && planVenues.length > 2) {
+          intermediates = planVenues.slice(1, -1).map((v) => ({
+            location: { latLng: { latitude: v.lat, longitude: v.lng } },
+          }));
+        }
+
+        const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+          method: "POST",
+          headers: {
+            "X-Goog-Api-Key": GOOGLE_API_KEY,
+            "X-Goog-FieldMask": "routes.legs,routes.polyline.encodedPolyline",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            origin,
+            destination: dest,
+            intermediates,
+            travelMode,
+          }),
+        });
 
         const data = await response.json();
+        const route = data.routes?.[0];
 
-        if (!data.routes || data.routes.length === 0) {
-          console.error("No routes found in API response:", data);
-          throw new Error("No routes found");
+        if (!route?.polyline?.encodedPolyline) {
+          throw new Error("No encoded polyline in response.");
         }
 
-        const route = data.routes[0];
-        const encoded = route.polyline?.encodedPolyline;
+        combinedPolyline = polyline.decode(route.polyline.encodedPolyline);
 
-        if (!encoded) {
-          throw new Error("No encoded polyline in API response");
-        }
-
-        const decodedPath = polyline.decode(encoded);
-        combinedPolyline = decodedPath;
-
-        // Process steps for single route
-        const steps = route.legs.flatMap(
-          (leg, legIndex) =>
-            leg.steps?.map((step, stepIndex) => ({
-              summary: hasPlan
-                ? `Leg ${legIndex + 1}, Step ${stepIndex + 1}`
-                : `Step ${stepIndex + 1}`,
-              instructions:
-                step.navigationInstruction?.instructions ||
-                step.text ||
-                "Continue",
-              transitDetails: step.transitDetails || null,
-            })) || []
+        const steps = route.legs.flatMap((leg, legIndex) =>
+          leg.steps?.map((step, stepIndex) => ({
+            summary: `Leg ${legIndex + 1}, Step ${stepIndex + 1}`,
+            instructions: step.navigationInstruction?.instructions || step.text || "Continue",
+            transitDetails: step.transitDetails || null,
+          })) || []
         );
 
         allDirections = steps;
       }
 
-      // Update state with combined results
+      // Update UI
       setDirectionsPolyline(combinedPolyline);
       setDirections(allDirections);
       setShowDirections(true);
     } catch (err) {
-      console.error("❌ Google Directions API failed:", err);
-      alert("Failed to load directions. Check console for details.");
-    }
-  };
-
-  // Geocode manually input start address
-  const handleGeocodeStart = async () => {
-    if (!manualStart.trim()) return;
-    const encoded = encodeURIComponent(manualStart.trim());
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}`
-      );
-      if (!res.ok)
-        throw new Error(`Geocoding service failed: ${res.statusText}`);
-      const results = await res.json();
-      if (results.length > 0) {
-        const firstResult = results[0];
-        setUserLocation({
-          lat: parseFloat(firstResult.lat),
-          lng: parseFloat(firstResult.lon),
-        });
-      } else {
-        alert("Address not found. Try being more specific.");
-      }
-    } catch (err) {
-      console.error("Geocoding error:", err);
-      alert("Failed to find location.");
+      console.error("❌ Error fetching directions:", err);
+      alert("Could not load directions.");
     }
   };
 
@@ -704,9 +637,9 @@ export default function MapView() {
             <Box
               sx={{
                 display: "flex",
-                flexDirection: "row",
+                flexDirection: "column",
                 alignItems: "center",
-                gap: 1,
+                gap: 3,
               }}
             >
               <TextField
@@ -732,24 +665,29 @@ export default function MapView() {
                 }}
                 InputLabelProps={{ shrink: true }}
               />
-              <Button
-                onClick={handleGeocodeStart}
+              <TextField
+                size="small"
+                label="Destination"
+                placeholder="Enter destination address or venue"
+                variant="outlined"
+                value={manualDestination}
+                onChange={(e) => setManualDestination(e.target.value)}
                 sx={{
-                  fontWeight: "bold",
-                  textTransform: "uppercase",
-                  background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                  color: "#000",
-                  px: 3,
-                  py: 1.2,
-                  borderRadius: "8px",
-                  height: "40px",
-                  "&:hover": {
-                    background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
+                  width: 280,
+                  "& .MuiInputBase-input": { color: "white" },
+                  "& .MuiInputLabel-root": { color: "white" },
+                  "& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "white",
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#ccc",
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#3ABEFF",
                   },
                 }}
-              >
-                Set
-              </Button>
+                InputLabelProps={{ shrink: true }}
+              />
             </Box>
             {((fromPlan && (userLocation || plan.length > 0)) ||
               selectedVenue) && (
