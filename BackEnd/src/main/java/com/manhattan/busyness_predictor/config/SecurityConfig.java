@@ -19,7 +19,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 import com.manhattan.busyness_predictor.security.JwtAuthenticationFilter;
 
@@ -45,18 +45,21 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Allow all OPTIONS requests
-                        .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
-                        .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // Configure CORS first
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+        
+        // Then configure the rest of the security chain
+        http.csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().permitAll())
+            // Add JWT filter after CORS but before authorization
+            .addFilterBefore(jwtAuthenticationFilter, AuthorizationFilter.class);
 
         return http.build();
     }
@@ -65,9 +68,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         
-        // Split the comma-separated string into a list
-        List<String> allowedOrigins = Arrays.asList(allowedOriginsStr.split(","));
-        config.setAllowedOrigins(allowedOrigins);
+        // Convert origins to patterns for more flexible matching
+        List<String> origins = Arrays.asList(allowedOriginsStr.split(","));
+        config.setAllowedOriginPatterns(origins.stream()
+            .map(origin -> origin.replace(".", "\\.").replace("*", ".*"))
+            .toList());
         
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
@@ -76,7 +81,7 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config); // Apply to all routes
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 }
