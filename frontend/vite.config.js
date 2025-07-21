@@ -10,13 +10,13 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to the backend service
       '/api': {
-        target: 'http://34.244.154.146:8080',
+        target: 'http://46.137.74.122',
         changeOrigin: true,
         secure: false,
       },
       // Proxy LLM service requests
       '/api/chat': {
-        target: 'http://34.244.154.146:5001',
+        target: 'http://46.137.74.122:5001',
         changeOrigin: true,
         secure: false,
       },
