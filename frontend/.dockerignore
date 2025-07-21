@@ -8,6 +8,10 @@ dist
 # Local env files
 .env
 .env.*
+# --- EXCEPTIONS ---
+# We MUST include .env.production in the build context
+# so that the Dockerfile can COPY it into the builder stage.
+!/.env.production
 
 # System files
 .DS_Store

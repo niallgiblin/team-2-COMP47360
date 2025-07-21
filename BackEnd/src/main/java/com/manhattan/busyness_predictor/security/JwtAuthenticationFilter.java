@@ -36,19 +36,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response, 
                                     @NonNull FilterChain filterChain) 
                                     throws ServletException, IOException {
+        // Skip JWT processing for OPTIONS requests (CORS preflight)
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String jwt = getJwtFromRequest(request);
 
         if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
             Integer userId = tokenProvider.getUserIdFromJWT(jwt);
-            if (userId != null) { // This check is already here, which is good.
+            if (userId != null) {
                 try {
                     UserDetails userDetails = customUserDetailsService.loadUserById(userId);
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 } catch (UsernameNotFoundException ex) {
-                    // This can happen if the user has been deleted from the DB but the token is still valid.
-                    // In this case, we just clear the context and let them proceed as unauthenticated.
                     SecurityContextHolder.clearContext();
                     logger.warn("JWT token corresponds to a user that no longer exists (ID: {}). Clearing security context.", userId);
                 }

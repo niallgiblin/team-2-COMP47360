@@ -17,6 +17,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.filter.CorsFilter;
+import org.springframework.core.Ordered;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 
 import com.manhattan.busyness_predictor.security.JwtAuthenticationFilter;
 
@@ -36,45 +41,42 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
+    
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // This configuration disables default security, sets up a stateless session
-        // policy for JWT, and adds our custom filter to the chain.
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Apply CORS config
-                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF
-                // Set session management to stateless, as we are using JWTs
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        // Define public endpoints for authentication
-                        .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
-                        // Allow public search and viewing of locations and vibes
-                        .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
-                        // All other API routes must be authenticated
-                        .requestMatchers("/api/**").authenticated()
-                        // Permit any other requests that don't match (e.g., root, static assets)
-                        .anyRequest().permitAll())
-                // Add our custom JWT filter to the security chain before the default username/password filter
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
+    public FilterRegistrationBean<CorsFilter> corsFilter() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowCredentials(true);
+        config.setAllowedOriginPatterns(List.of(
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://46.137.74.122"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        source.registerCorsConfiguration("/**", config);
+        
+        FilterRegistrationBean<CorsFilter> bean = new FilterRegistrationBean<>(new CorsFilter(source));
+        // Set the filter to have the highest precedence
+        bean.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return bean;
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        // Using allowedOriginPatterns is more flexible than allowedOrigins
-        config.setAllowedOriginPatterns(List.of("http://localhost:5173", "http://localhost:3000"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
-        config.setExposedHeaders(List.of("Authorization"));
-        config.setMaxAge(3600L);
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                // Disable Spring's default CORS handling, as we use our own CorsFilter bean
+                .cors(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().permitAll())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config); // Apply CORS to all API routes
-        return source;
+        return http.build();
     }
 }

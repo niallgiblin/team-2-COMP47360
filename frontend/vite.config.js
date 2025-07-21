@@ -10,7 +10,13 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to the backend service
       '/api': {
-        target: 'http://urban-gala-backend:8080',
+        target: 'http://46.137.74.122',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Proxy LLM service requests
+      '/api/chat': {
+        target: 'http://46.137.74.122:5001',
         changeOrigin: true,
         secure: false,
       },

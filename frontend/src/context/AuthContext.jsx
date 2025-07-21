@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 export const AuthContext = createContext(null);
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
@@ -23,13 +25,12 @@ export const AuthProvider = ({ children }) => {
   }, [navigate]);
 
   // On first load, validate the token from localStorage with the backend.
-  // The dependency array [logout] ensures this runs only once on mount.
   useEffect(() => {
     const validateToken = async () => {
       const savedToken = localStorage.getItem("token");
       if (savedToken) {
         try {
-          const response = await fetch(`/api/auth/me`, {
+          const response = await fetch(`${API_BASE_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${savedToken}` },
           });
 
@@ -38,10 +39,8 @@ export const AuthProvider = ({ children }) => {
             setUser(userData);
             setToken(savedToken);
             setIsAuthenticated(true);
-            // Also update user in localStorage to keep it fresh
             localStorage.setItem("user", JSON.stringify(userData));
           } else {
-            // Token is invalid or expired, so log out
             logout();
           }
         } catch (error) {
@@ -51,7 +50,6 @@ export const AuthProvider = ({ children }) => {
       }
       setLoading(false);
     };
-
     validateToken();
   }, [logout]);
 
@@ -63,17 +61,12 @@ export const AuthProvider = ({ children }) => {
         logout();
         throw new Error("Not authenticated. Please log in.");
       }
-
       const headers = { ...options.headers };
-      // Don't set Content-Type for FormData, let the browser do it
       if (!(options.body instanceof FormData)) {
         headers["Content-Type"] = "application/json";
       }
       headers["Authorization"] = `Bearer ${currentToken}`;
-
       const response = await fetch(url, { ...options, headers });
-
-      // If token is expired or invalid, log out automatically
       if (response.status === 401) {
         logout();
         throw new Error("Session expired. Please log in again.");
@@ -85,14 +78,13 @@ export const AuthProvider = ({ children }) => {
 
   // Login function
   const login = async (usernameOrEmail, password) => {
-    const response = await fetch(`/api/auth/login`, {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ usernameOrEmail, password }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Login failed");
-
     localStorage.setItem("user", JSON.stringify(data.user));
     localStorage.setItem("token", data.token);
     setUser(data.user);
@@ -104,14 +96,13 @@ export const AuthProvider = ({ children }) => {
 
   // Signup function
   const signup = async (userData) => {
-    const response = await fetch(`/api/auth/signup`, {
+    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(userData),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Signup failed");
-
     localStorage.setItem("user", JSON.stringify(data.user));
     localStorage.setItem("token", data.token);
     setUser(data.user);
@@ -124,7 +115,7 @@ export const AuthProvider = ({ children }) => {
   // Update user profile (text data)
   const updateProfile = async (userId, updateData) => {
     const response = await makeAuthenticatedRequest(
-      `/api/auth/profile/${userId}`,
+      `${API_BASE_URL}/auth/profile/${userId}`,
       {
         method: "PUT",
         body: JSON.stringify(updateData),
@@ -142,7 +133,7 @@ export const AuthProvider = ({ children }) => {
     const formData = new FormData();
     formData.append("avatar", file);
     const response = await makeAuthenticatedRequest(
-      `/api/auth/profile/${userId}/avatar`,
+      `${API_BASE_URL}/auth/profile/${userId}/avatar`,
       {
         method: "POST",
         body: formData,
@@ -158,7 +149,7 @@ export const AuthProvider = ({ children }) => {
   // Delete user avatar
   const deleteAvatar = async (userId) => {
     const response = await makeAuthenticatedRequest(
-      `/api/auth/profile/${userId}/avatar`,
+      `${API_BASE_URL}/auth/profile/${userId}/avatar`,
       {
         method: "DELETE",
       }
@@ -184,9 +175,8 @@ export const AuthProvider = ({ children }) => {
     makeAuthenticatedRequest,
   };
 
-  // Prevents a "flash" of the logged-out page while the token is being validated.
   if (loading) {
-    return null; // Or a loading spinner
+    return null;
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
