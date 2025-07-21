@@ -35,6 +35,9 @@ export const FriendRequestProvider = ({ children }) => {
     }
   }, [makeAuthenticatedRequest]);
 
+  const clearFriendRequests = () => setPendingRequests([]);
+  const clearAcceptedFriends = () => setAcceptedFriends([]);
+
   useEffect(() => {
     fetchFriendsData();
   }, [fetchFriendsData]);
@@ -43,7 +46,16 @@ export const FriendRequestProvider = ({ children }) => {
   const refreshFriendsData = fetchFriendsData;
 
   return (
-    <FriendRequestContext.Provider value={{ pendingRequests, acceptedFriends, refreshFriendsData }}>
+    <FriendRequestContext.Provider
+      value={{
+        pendingRequests,
+        acceptedFriends,
+        fetchFriendRequests,
+        fetchAcceptedFriends,
+        clearFriendRequests,
+        clearAcceptedFriends,
+      }}
+    >
       {children}
     </FriendRequestContext.Provider>
   );
