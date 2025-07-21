@@ -1,10 +1,8 @@
 package com.manhattan.busyness_predictor.config;
 
-import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,7 +17,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.manhattan.busyness_predictor.security.JwtAuthenticationFilter;
 
@@ -35,9 +34,6 @@ public class SecurityConfig {
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
-    private String allowedOriginsStr;
-
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -45,21 +41,26 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // Configure CORS first
-        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
-        
-        // Then configure the rest of the security chain
-        http.csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().permitAll())
-            // Add JWT filter after CORS but before authorization
-            .addFilterBefore(jwtAuthenticationFilter, AuthorizationFilter.class);
+        // This configuration disables default security, sets up a stateless session
+        // policy for JWT, and adds our custom filter to the chain.
+        http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Apply CORS config
+                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF
+                // Set session management to stateless, as we are using JWTs
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        // Define public endpoints for authentication
+                        .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll()
+                        // Allow public search and viewing of locations and vibes
+                        .requestMatchers(HttpMethod.POST, "/api/vibe/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/vibe/**", "/api/locations/**").permitAll()
+                        // All other API routes must be authenticated
+                        .requestMatchers("/api/**").authenticated()
+                        // Permit any other requests that don't match (e.g., root, static assets)
+                        .anyRequest().permitAll())
+                // Add our custom JWT filter to the security chain before the default
+                // username/password filter
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -67,13 +68,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        
-        // Convert origins to patterns for more flexible matching
-        List<String> origins = Arrays.asList(allowedOriginsStr.split(","));
-        config.setAllowedOriginPatterns(origins.stream()
-            .map(origin -> origin.replace(".", "\\.").replace("*", ".*"))
-            .toList());
-        
+        // Allow both local dev and the deployed EC2 frontend
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://34.244.154.146:5173" // Your EC2 Frontend URL
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
@@ -81,7 +81,7 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
+        source.registerCorsConfiguration("/api/**", config); // Apply CORS to all API routes
         return source;
     }
 }
