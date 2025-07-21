@@ -5,7 +5,7 @@ const LikeContext = createContext();
 
 export const useLike = () => useContext(LikeContext);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://34.246.193.191:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://34.244.154.146:8080/api';
 
 export const LikeProvider = ({ children }) => {
     const [likedVenues, setLikedVenues] = useState([]);

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 export const AuthContext = createContext(null);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://34.246.193.191:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://34.244.154.146:8080/api';
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
