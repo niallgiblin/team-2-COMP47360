@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useAuth } from "../hooks/useAuth";
 
 // Base URL for API requests
-const API_BASE_URL = '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // Create context and custom hook
 const PlanContext = createContext();

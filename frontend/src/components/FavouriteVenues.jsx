@@ -14,7 +14,7 @@ function FavouriteVenues() {
 
     // Fetch busyness data for the busyness chip
     useEffect(() => {
-        const API_BASE_URL = '/api';
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
         fetch(`${API_BASE_URL}/vibe/map-data`)
             .then((res) => res.json())
             .then((data) => {

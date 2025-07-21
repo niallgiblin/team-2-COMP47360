@@ -48,7 +48,7 @@ const AIChatWidget = () => {
     setIsLoading(true);
 
     // Use env variable or fallback to EC2 IP
-    const LLM_API_URL = '/api/chat';
+    const LLM_API_URL = import.meta.env.VITE_LLM_API_URL;
 
     try {
       const response = await fetch(LLM_API_URL, {
