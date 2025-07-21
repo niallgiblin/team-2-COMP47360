@@ -1,3 +1,5 @@
+// used on the hompage, includes a looping video, which only displays when the connection speed is good enough
+
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import nycVideo from '../assets/hero.mp4';

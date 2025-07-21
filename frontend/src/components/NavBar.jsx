@@ -1,3 +1,5 @@
+// sticky nav bar, with a reponsive layout including a hamburger menu drawer
+
 import {
     AppBar,
     Toolbar,
@@ -27,7 +29,7 @@ const navItems = [
 
 export default function NavBar() {
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const { isAuthenticated, user, logout } = useAuth();
+    const { isAuthenticated, logout } = useAuth();
 
     return (
         <>
@@ -60,6 +62,7 @@ export default function NavBar() {
                             flexWrap: 'wrap',
                         }}
                     >
+                        {/* Logo and Site name */}
                         <Box
                             component={Link}
                             to="/"

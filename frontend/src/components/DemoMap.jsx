@@ -1,3 +1,7 @@
+// Map component, using leaflet, supports busyness overlay, forecast/ live mode switching, routing directions, tooltips for each zone and venue
+// Used on MapView.jsx page
+
+// Leaflet map components
 import {
   MapContainer,
   TileLayer,
@@ -11,17 +15,19 @@ import {
 
 import { Box } from "@mui/material";
 import { useEffect, useState, useRef } from "react";
-import RouteDisplay from "./RouteDisplay";
+import RouteDisplay from "./RouteDisplay";            // custom component for routing
 import L from "leaflet";
 import { getVenueIcon } from "../utils/mapIcons";
 
 import { usePlan } from "../context/PlanContext";
-import { DateTime } from "luxon";
+import { DateTime } from "luxon";                     // library for handling time zones, datetime formatting
 
+// import custom icons for map markers
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
+// remove internal leaflet method for returning default icons, force leaflet to use custom markers
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -29,6 +35,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+// component definition
 export default function DemoMap({
   venues = [],
   onSelectVenue,
@@ -44,15 +51,15 @@ export default function DemoMap({
   resetMapKey = 0,
   zoneCenter,
   setZoneCenter,
-  fromPlan: fromPlanProp, // 🔄 renamed
+  fromPlan: fromPlanProp,
 }) {
   const [routeKey, setRouteKey] = useState(0);
   const [activeZoneVenues, setActiveZoneVenues] = useState([]);
   const allVenuesRef = useRef([]);
   const { selectedVenue } = usePlan();
-  const [overridePlanMode, setOverridePlanMode] = useState(false);
+  const [overridePlanMode, setOverridePlanMode] = useState(false);  // disables plan display if zone is manually clicked
 
-
+  // choropleth styling
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
     if (busyness >= 50) return "#FFA500";
@@ -62,6 +69,8 @@ export default function DemoMap({
 
   const getZoneStyle = (feature) => {
   const locationId = feature.properties.LocationID;
+  
+  // match current timestamp for forecast mode or use live value
   const match = mode === "forecast"
     ? predictionData
         .find((z) => String(z.LocationID) === String(locationId))
@@ -75,7 +84,7 @@ export default function DemoMap({
         })
     : busynessData.find((z) => String(z.LocationID) === String(locationId));
 
-
+    // fallback to grey if no match
     const fillColor = match ? getColorForBusyness((match.busyness || 0) * 100) : "#CCCCCC";
     return {
       fillColor,
@@ -86,12 +95,15 @@ export default function DemoMap({
     };
   };
 
+  // update and click handlers
+  
+  // stores latest array of venues in allVenuesRef, enables efficient filtering inside other functions
   useEffect(() => {
     allVenuesRef.current = venues;
     console.log("[DemoMap] allVenuesRef updated:", venues.length, venues.map(v => v.name || v.id));
   }, [venues]);
 
-
+  // when a zone is clicked - get LocationID from GeoJSON, important for zone exploration
   const handleZoneClick = (feature) => {
     const zoneId = feature.properties.LocationID;
     try {
@@ -99,14 +111,14 @@ export default function DemoMap({
         (v) => String(v.zone) === String(zoneId)
       );
       setActiveZoneVenues(filteredVenues);
-      setOverridePlanMode(true); // 👈 important
+      setOverridePlanMode(true);              // ensures zone click takes precedence over previously loaded plans or selections
     } catch (err) {
       console.error("Failed to load venues for zone:", err);
       setActiveZoneVenues([]);
     }
   };
 
-
+  // hook to make each zone interactive and informative
   const onEachZone = (feature, layer) => {
     layer.on({
       mouseover: (e) => {
@@ -147,6 +159,7 @@ export default function DemoMap({
     );
   };
 
+// function toe smoothly pan and zoom to selected venues
 function FlyToVenue({ venue, showDirections }) {
   const map = useMap();
   const hasZoomedRef = useRef(false); // track zoom state
@@ -171,9 +184,7 @@ function FlyToVenue({ venue, showDirections }) {
 
   return null;
 }
-
-
-
+  // zoom to zone centre
   function FlyToZone({ center }) {
     const map = useMap();
     useEffect(() => {

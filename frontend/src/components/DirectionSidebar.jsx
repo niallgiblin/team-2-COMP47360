@@ -1,15 +1,19 @@
+// right-hand drawer that displays directions for walking or transit
+// used in the MapView page
+
 import { Drawer, Box, Typography, IconButton, Divider } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 
+// sidebar component for displaying directions
 export default function DirectionsSidebar({ open, onClose, directions, travelMode, setTravelMode }) {
   return (
     <Drawer
-      anchor="right"
+      anchor="right"              // sidebar slides in from the right
       open={open}
       onClose={onClose}
-      hideBackdrop
-      variant="persistent"
+      hideBackdrop                // prevent dark overlay
+      variant="persistent"        // keeps the drawer open until user closes it
       sx={{
         '& .MuiDrawer-paper': {
           position: 'fixed',
@@ -57,8 +61,8 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
 
       {/* Travel Mode Toggle */}
       <ToggleButtonGroup
-        value={travelMode}
-        exclusive
+        value={travelMode}            // current mode
+        exclusive                     // only one mode can be active at a time
         onChange={(e, mode) => mode && setTravelMode(mode)}
         size="small"
         sx={{
@@ -114,6 +118,7 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
               key={index} 
               sx={{ mb: 2 }}>
               
+              {/* Summary title*/}
               <Typography variant="subtitle1" 
                 sx={{ 
                   fontWeight: 'bold', 
@@ -123,6 +128,7 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
                 {step.summary}
               </Typography>
 
+              {/* Instruction details */}
               <Typography 
                 variant="body1" 
                 sx={{ 
