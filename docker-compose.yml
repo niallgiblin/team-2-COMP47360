@@ -1,10 +1,26 @@
 services:
+  nginx:
+    image: nginx:latest
+    container_name: urban-gala-nginx
+    ports:
+      - "80:80"
+      - "443:443" # For future HTTPS
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - llm-service
+    networks:
+      - app-network
+
   db:
     image: mysql:8.0
     container_name: urban-gala-db
     restart: unless-stopped
-    ports:
-      - "3307:3306"
+    # No need to expose DB port to host machine
+    # ports:
+    #   - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: urban_gala
@@ -25,6 +41,8 @@ services:
       - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
     networks:
       - app-network
+    mem_limit: 1g
+    cpus: 0.5
 
   backend:
     build:
@@ -32,8 +50,9 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
     container_name: urban-gala-backend
-    ports:
-      - "8080:8080"
+    # Port is now exposed only to the internal network, not the host
+    # ports:
+    #   - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -53,18 +72,16 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    mem_limit: 1g
+    cpus: 0.5
 
   frontend:
     build:
       context: ./frontend
     container_name: urban-gala-frontend
-    ports:
-      - "5173:5173"
-      - "24678:24678"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev
+    # No command needed, the Dockerfile's CMD will be used
+    # No volumes needed for production, as the build is self-contained
+    # No ports exposed to host
     environment:
       - HOST=0.0.0.0
       -  VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
@@ -72,6 +89,8 @@ services:
       - backend
     networks:
       - app-network
+    mem_limit: 1g
+    cpus: 0.5
 
   llm-service:
     build:
@@ -99,15 +118,9 @@ services:
       timeout: 15s
       retries: 5
       start_period: 120s  # Give more time for model loading
-    deploy:
-      resources:
-        limits:
-          memory: 2G  # Increased memory for sentence transformers
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.25'
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.5
 
   busyness-service:
     build:
@@ -126,16 +139,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 6
-      start_period: 60s # Give 15s to start. If it fails after this, we know it's crashing.
-    deploy:
-      resources:
-        limits:
-          memory: 2G  # Final memory increase to handle TensorFlow's peak usage
-          cpus: '2.0'
-        reservations:
-          memory: 2G  # Guarantee the full memory amount to prevent swapping
-          cpus: '0.5'
+      start_period: 15s # Give 15s to start. If it fails after this, we know it's crashing.
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: 0.5
 
 networks:
   app-network:
