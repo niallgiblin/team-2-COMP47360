@@ -398,7 +398,7 @@ export default function MapView() {
             combinedPolyline.push(...polyline.decode(route.polyline.encodedPolyline));
           }
 
-          const steps = route?.legs?.flatMap((leg, stepIndex) =>
+          const steps = route?.legs?.flatMap((leg) =>
             leg.steps?.map((step) => ({
               summary: `${allStops[i].name} → ${allStops[i + 1].name}`,
               instructions: step.navigationInstruction?.instructions || step.text || "Continue",

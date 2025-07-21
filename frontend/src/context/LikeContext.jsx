@@ -72,8 +72,10 @@ export const LikeProvider = ({ children }) => {
         }
     }, [isAuthenticated, likedVenues, makeAuthenticatedRequest]);
 
+    const clearLikes = () => setLikedVenues([]);
+
     return (
-        <LikeContext.Provider value={{ likedVenues, handleLike }}>
+        <LikeContext.Provider value={{ likedVenues, handleLike, clearLikes }}>
             {children}
         </LikeContext.Provider>
     );

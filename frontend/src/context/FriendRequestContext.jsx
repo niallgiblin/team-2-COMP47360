@@ -43,6 +43,9 @@ export const FriendRequestProvider = ({ children }) => {
     }
   };
 
+  const clearFriendRequests = () => setPendingRequests([]);
+  const clearAcceptedFriends = () => setAcceptedFriends([]);
+
   useEffect(() => {
     fetchFriendRequests();
     fetchAcceptedFriends();
@@ -55,6 +58,8 @@ export const FriendRequestProvider = ({ children }) => {
         acceptedFriends,
         fetchFriendRequests,
         fetchAcceptedFriends,
+        clearFriendRequests,
+        clearAcceptedFriends,
       }}
     >
       {children}

@@ -18,6 +18,9 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import logo from '../assets/urban-gala-logo.svg';
 import { useAuth } from '../hooks/useAuth';
+import { useLike } from '../context/LikeContext';
+import { usePlan } from '../context/PlanContext';
+import { useFriendRequests } from '../context/FriendRequestContext';
 
 const navItems = [
     { label: 'Home', to: '/' },
@@ -30,6 +33,9 @@ const navItems = [
 export default function NavBar() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const { isAuthenticated, logout } = useAuth();
+    const { clearLikes } = useLike();
+    const { clearPlan } = usePlan();
+    const { clearFriendRequests, clearAcceptedFriends } = useFriendRequests();
 
     return (
         <>
@@ -159,19 +165,25 @@ export default function NavBar() {
                                         <NotificationsIcon fontSize="medium" />
                                     </IconButton>
                                     <Button
-                                        onClick={logout}
-                                        sx={{
-                                            fontWeight: 'bold',
-                                            color: '#FFFFFF',
-                                            border: '1px solid #FF4ECD',
-                                            px: 2,
-                                            '&:hover': {
-                                                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                                                color: '#000',
-                                            },
-                                        }}
+                                    onClick={() => {
+                                        clearLikes();
+                                        clearPlan();
+                                        clearFriendRequests();
+                                        clearAcceptedFriends();
+                                        logout();
+                                    }}
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        color: '#FFFFFF',
+                                        border: '1px solid #FF4ECD',
+                                        px: 2,
+                                        '&:hover': {
+                                        background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                                        color: '#000',
+                                        },
+                                    }}
                                     >
-                                        Log Out
+                                    Log Out
                                     </Button>
                                 </Box>
                             ) : (
@@ -225,7 +237,7 @@ export default function NavBar() {
                                     padding: 1,
                                 }}
                             >
-                                <MenuIcon />
+                            <MenuIcon />
                             </IconButton>
                         </Box>
                     </Box>
@@ -249,89 +261,96 @@ export default function NavBar() {
             >
                 <List>
                     {navItems.map((item) => (
-                        <ListItem
-                            button
-                            key={item.to}
-                            component={Link}
-                            to={item.to}
-                            onClick={() => setDrawerOpen(false)}
-                            sx={{ py: 1.5, borderBottom: '1px solid #333' }}
-                        >
-                            <Typography sx={{ ...drawerLinkStyles }}>
-                                {item.label}
-                            </Typography>
-                        </ListItem>
+                    <ListItem
+                        button
+                        key={item.to}
+                        component={Link}
+                        to={item.to}
+                        onClick={() => setDrawerOpen(false)}
+                        sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                    >
+                        <Typography sx={{ ...drawerLinkStyles }}>
+                            {item.label}
+                        </Typography>
+                    </ListItem>
                     ))}
 
                     {isAuthenticated ? (
                         <>
-                            <ListItem
-                                button
-                                component={Link}
-                                to="/profile"
-                                onClick={() => setDrawerOpen(false)}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <AccountCircleIcon />
-                                    <Typography sx={drawerLinkStyles}>Profile</Typography>
-                                </Box>
-                            </ListItem>
+                        <ListItem
+                            button
+                            component={Link}
+                            to="/profile"
+                            onClick={() => setDrawerOpen(false)}
+                            sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <AccountCircleIcon />
+                                <Typography sx={drawerLinkStyles}>Profile</Typography>
+                            </Box>
+                        </ListItem>
 
-                            <ListItem
-                                button
-                                component={Link}
-                                to="/notifications"
-                                onClick={() => setDrawerOpen(false)}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <NotificationsIcon />
-                                    <Typography sx={drawerLinkStyles}>Notifications</Typography>
-                                </Box>
-                            </ListItem>
+                        <ListItem
+                            button
+                            component={Link}
+                            to="/notifications"
+                            onClick={() => setDrawerOpen(false)}
+                            sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <NotificationsIcon />
+                                <Typography sx={drawerLinkStyles}>Notifications</Typography>
+                            </Box>
+                        </ListItem>
 
-                            <ListItem
-                                button
-                                onClick={() => {
-                                    logout();
-                                    setDrawerOpen(false);
+                        <ListItem
+                        button
+                        onClick={() => {
+                            clearLikes();
+                            clearPlan();
+                            clearFriendRequests();
+                            clearAcceptedFriends();
+                            logout();
+                            setDrawerOpen(false);
+                        }}
+                            sx={{ 
+                                py: 1.5, 
+                                borderBottom: '1px solid #333' 
+                            }}
+                        >
+                            <Typography
+                                component="span"
+                                sx={{
+                                    ...drawerLinkStyles,
+                                    '&:hover': { color: '#3ABEFF' },
                                 }}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
                             >
-                                <Typography
-                                    component="span"
-                                    sx={{
-                                        ...drawerLinkStyles,
-                                        '&:hover': { color: '#3ABEFF' },
-                                    }}
-                                >
-                                    Log Out
-                                </Typography>
-                            </ListItem>
-                        </>
-                    ) : (
-                        <>
-                            <ListItem
-                                button
-                                component={Link}
-                                to="/login"
-                                onClick={() => setDrawerOpen(false)}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
-                            >
-                                <Typography sx={drawerLinkStyles}>Log In</Typography>
-                            </ListItem>
-                            <ListItem
-                                button
-                                component={Link}
-                                to="/signup"
-                                onClick={() => setDrawerOpen(false)}
-                                sx={{ py: 1.5, borderBottom: '1px solid #333' }}
-                            >
-                                <Typography sx={drawerLinkStyles}>Sign Up</Typography>
-                            </ListItem>
-                        </>
-                    )}
+                                Log Out
+                            </Typography>
+                        </ListItem>
+                    </>
+                ) : (
+                    <>
+                        <ListItem
+                            button
+                            component={Link}
+                            to="/login"
+                            onClick={() => setDrawerOpen(false)}
+                            sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                        >
+                            <Typography sx={drawerLinkStyles}>Log In</Typography>
+                        </ListItem>
+                        <ListItem
+                            button
+                            component={Link}
+                            to="/signup"
+                            onClick={() => setDrawerOpen(false)}
+                            sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                        >
+                            <Typography sx={drawerLinkStyles}>Sign Up</Typography>
+                        </ListItem>
+                    </>
+                )}
                 </List>
             </Drawer>
         </>
