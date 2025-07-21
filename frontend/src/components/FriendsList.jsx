@@ -12,66 +12,43 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { usePlan } from '../context/PlanContext';
 import { useNavigate } from 'react-router-dom';
-import { useState as useReactState } from 'react';
 import { useFriendRequests } from '../context/FriendRequestContext';
 
 export default function FriendsList() {
-  const { token, makeAuthenticatedRequest } = useAuth();
+  const { makeAuthenticatedRequest } = useAuth();
   const [usernameToAdd, setUsernameToAdd] = useState("");
-  const [message, setMessage] = useState({ type: "", text: "" });           // feedback alert
+  const [message, setMessage] = useState({ type: "", text: "" });
 
   const {
     acceptedFriends,
-    fetchFriendRequests,
-    fetchAcceptedFriends,
+    pendingRequests, // Use pendingRequests directly from context
+    refreshFriendsData, // Use the new refresh function
   } = useFriendRequests();
 
-  const [sentRequests, setSentRequests] = useState([]);
-  const [receivedRequests, setReceivedRequests] = useState([]);
   const [sharedPlans, setSharedPlans] = useState([]);
   const { loadPlan, clearPlan, savePlanFromVenues, refreshSavedPlans, savedPlans } = usePlan();
   const navigate = useNavigate();
-  const [saveMsg, setSaveMsg] = useReactState('');
-
-  // Load sent and received friend requests separately
-  const fetchSentAndReceived = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await makeAuthenticatedRequest(`/api/friends/list`);
-      const data = await response.json();
-      setSentRequests(data.sent || []);
-      setReceivedRequests(data.received || []);
-    } catch (err) {
-      console.error(err);
-      setMessage({ type: "error", text: "Could not load friend requests." });
-    }
-  }, [token, makeAuthenticatedRequest]);
+  const [saveMsg, setSaveMsg] = useState('');
 
   const fetchSharedPlans = useCallback(async () => {
-    if (!token) return;
     try {
-      const response = await makeAuthenticatedRequest(`/api/plans/shared-with-me`);
-      const data = await response.json();
+      const data = await makeAuthenticatedRequest(`/api/plans/shared-with-me`);
       setSharedPlans(data.sharedPlans || []);
     } catch {
       setSharedPlans([]);
     }
-  }, [token, makeAuthenticatedRequest]);
+  }, [makeAuthenticatedRequest]);
 
+  // The main useEffect now only fetches shared plans, as friends data is handled by the context
   useEffect(() => {
-    fetchFriendRequests();
-    fetchAcceptedFriends();
-    fetchSentAndReceived();
     fetchSharedPlans();
-  }, [fetchFriendRequests, fetchAcceptedFriends, fetchSentAndReceived, fetchSharedPlans]);
+  }, [fetchSharedPlans]);
 
   const handleAccept = async (requesterId) => {
     try {
       await makeAuthenticatedRequest(`/api/friends/accept/${requesterId}`, { method: 'POST' });
       setMessage({ type: 'success', text: 'Friend request accepted!' });
-      fetchFriendRequests();
-      fetchAcceptedFriends();
-      fetchSentAndReceived();
+      refreshFriendsData(); // Refresh all friend data
     } catch (err) {
       console.error('Error accepting friend request:', err);
       setMessage({ type: "error", text: "Failed to accept request." });
@@ -82,8 +59,7 @@ export default function FriendsList() {
     try {
       await makeAuthenticatedRequest(`/api/friends/decline/${requesterId}`, { method: 'POST' });
       setMessage({ type: 'info', text: 'Friend request declined.' });
-      fetchFriendRequests();
-      fetchSentAndReceived();
+      refreshFriendsData(); // Refresh all friend data
     } catch (err) {
       console.error('Error declining friend request:', err);
       setMessage({ type: "error", text: "Failed to decline request." });
@@ -91,28 +67,23 @@ export default function FriendsList() {
   };
 
   const handleAddFriend = async () => {
-    if (!usernameToAdd.trim() || !token) {
-      setMessage({ type: 'error', text: 'You must be logged in to add friends.' });
+    if (!usernameToAdd.trim()) {
+      setMessage({ type: 'error', text: 'Please enter a username.' });
       return;
     }
 
     try {
-      const response = await makeAuthenticatedRequest(`/api/friends/add`, {
+      await makeAuthenticatedRequest(`/api/friends/add`, {
         method: "POST",
         body: JSON.stringify({ username: usernameToAdd.trim() }),
       });
 
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Failed to add friend");
-      }
-
       setUsernameToAdd("");
       setMessage({ type: "success", text: "Friend request sent!" });
-      fetchFriendRequests();
-      fetchSentAndReceived();
+      refreshFriendsData(); // Refresh all friend data
     } catch (err) {
-      setMessage({ type: "error", text: err.message });
+      const errorMessage = err.response?.data?.message || err.message || "Failed to add friend";
+      setMessage({ type: "error", text: errorMessage });
     }
   };
 
@@ -208,16 +179,13 @@ export default function FriendsList() {
             Requests You've Sent
         </Typography>
         <List>
-          {sentRequests.map((f) => (
-            <ListItem key={f.id} sx={{ px: 0 }}>
-              <ListItemText primary={`@${f.username} (Request Sent)`} primaryTypographyProps={{ color: "#BBB" }} />
-            </ListItem>
-          ))}
+          {/* Note: The API does not currently provide sent requests in a separate list in the new structure */}
+          {/* If needed, this would require a backend change or filtering on the frontend */}
         </List>
 
         <Typography variant="subtitle1" sx={{ color: "#fff", mt: 3 }}>Incoming Friend Requests</Typography>
         <List>
-          {receivedRequests.map((f) => (
+          {pendingRequests.map((f) => (
             <ListItem key={f.id} sx={{ px: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <ListItemText primary={`@${f.username}`} primaryTypographyProps={{ color: "#fff" }} />
               <Box sx={{ display: "flex", gap: 1 }}>
