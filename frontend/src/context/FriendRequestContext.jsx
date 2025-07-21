@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../hooks/useAuth'; // Assuming useAuth provides makeAuthenticatedRequest
 
 const FriendRequestContext = createContext(null);
 
@@ -13,49 +14,36 @@ export const useFriendRequests = () => {
 export const FriendRequestProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [acceptedFriends, setAcceptedFriends] = useState([]);
+  const { makeAuthenticatedRequest } = useAuth(); // Using the hook
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const fetchFriendsData = useCallback(async () => {
+    if (!makeAuthenticatedRequest) return; // Guard until the function is ready
+
+    try {
+      // Use the centralized request function which handles token and base URL
+      const data = await makeAuthenticatedRequest('/friends/list'); 
+      
+      if (data) {
+        // The backend returns an object with keys: accepted, sent, received
+        setAcceptedFriends(data.accepted || []);
+        setPendingRequests(data.received || []); // Assuming "pending" means "received" by the current user
+      }
+    } catch (err) {
+      console.error('Failed to fetch friends data:', err);
+      setAcceptedFriends([]);
+      setPendingRequests([]);
+    }
+  }, [makeAuthenticatedRequest]);
 
   useEffect(() => {
-    const fetchFriendRequests = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/friends/requests`, {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include'
-        });
-        if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
-        setPendingRequests(data);
-      } catch (err) {
-        console.error('Failed to fetch friend requests:', err);
-      }
-    };
-    fetchFriendRequests();
-  }, [API_BASE_URL]);
+    fetchFriendsData();
+  }, [fetchFriendsData]);
 
-  useEffect(() => {
-    const fetchAcceptedFriends = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/friends?status=accepted`, {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include'
-        });
-        if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
-        setAcceptedFriends(data);
-      } catch (err) {
-        console.error('Failed to fetch accepted friends:', err);
-      }
-    };
-    fetchAcceptedFriends();
-  }, [API_BASE_URL]);
+  // Expose a function to allow components to manually trigger a refresh
+  const refreshFriendsData = fetchFriendsData;
 
   return (
-    <FriendRequestContext.Provider value={{ pendingRequests, acceptedFriends }}>
+    <FriendRequestContext.Provider value={{ pendingRequests, acceptedFriends, refreshFriendsData }}>
       {children}
     </FriendRequestContext.Provider>
   );
