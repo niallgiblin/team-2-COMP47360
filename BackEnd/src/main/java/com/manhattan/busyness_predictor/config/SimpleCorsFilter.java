@@ -11,6 +11,7 @@ public class SimpleCorsFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
+        System.out.println("SimpleCorsFilter: Adding CORS headers");
         HttpServletResponse res = (HttpServletResponse) response;
         res.setHeader("Access-Control-Allow-Origin", "http://34.244.154.146:5173");
         res.setHeader("Access-Control-Allow-Credentials", "true");
