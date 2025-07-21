@@ -79,22 +79,4 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", config); // Apply to all routes
         return source;
     }
-
-    // Global CORS filter to force CORS headers on all requests (failsafe)
-    @Bean
-    public CorsFilter corsFilter() {
-        CorsConfiguration config = new CorsConfiguration();
-        // Use the same origins from application.properties
-        List<String> allowedOrigins = Arrays.asList(allowedOriginsStr.split(","));
-        config.setAllowedOrigins(allowedOrigins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
-        config.setExposedHeaders(List.of("Authorization"));
-        config.setMaxAge(3600L);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return new CorsFilter(source);
-    }
 }
