@@ -1,10 +1,24 @@
 services:
+  nginx:
+    image: nginx:latest
+    container_name: urban-gala-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
   db:
     image: mysql:8.0
     container_name: urban-gala-db
     restart: unless-stopped
-    ports:
-      - "3307:3306"
+    # No need to expose DB port to host machine
+    # ports:
+    #   - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: urban_gala
@@ -34,8 +48,9 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
     container_name: urban-gala-backend
-    ports:
-      - "8080:8080"
+    # Port is now exposed only to the internal network, not the host
+    # ports:
+    #   - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -62,9 +77,10 @@ services:
     build:
       context: ./frontend
     container_name: urban-gala-frontend
-    ports:
-      - "5173:5173"
-      - "24678:24678"
+    # Port is now exposed only to the internal network, not the host
+    # ports:
+    #   - "5173:5173"
+    #   - "24678:24678"
     volumes:
       - ./frontend:/app
       - /app/node_modules
