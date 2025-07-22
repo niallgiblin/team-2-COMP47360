@@ -97,8 +97,8 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           display: 'flex',
           flexDirection: 'column',
           height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
-          border: highlighted ? '2.5px solid #FF4ECD' : undefined,
-          boxShadow: highlighted ? '0 0 0 4px rgba(255,78,205,0.10)' : undefined,
+          border: highlighted ? '1px solid #900B6A' : undefined,
+          boxShadow: undefined,
       }}
       >
         {/* Like (heart) button for Favourites tab */}

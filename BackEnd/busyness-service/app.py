@@ -68,25 +68,21 @@ def health():
 
 @app.route("/busyness", methods=['GET'])
 def get_busyness():
-    """
-    Returns live and forecast busyness predictions for all zones.
-    """
+    global cache
     if not initialized:
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "Service is not ready. Please try again later.",
-            "details": initialization_error 
+            "details": initialization_error
         }), 503
 
-    global cache
     if cache is not None:
         logger.info("Returning cached busyness predictions.")
         return jsonify(cache)
 
     try:
-        # Get both live and forecast predictions for all zones
-        zone_data = calculate_busyness()  # {zone: [v1, v2, ..., v12]}
-
+        # zone_data: {zone: [v1, v2, ..., v12]}
+        zone_data = calculate_busyness()
         now = datetime.now()
         live_busyness = {}
         predictions = {}
@@ -94,7 +90,7 @@ def get_busyness():
         for zone, values in zone_data.items():
             if not values:
                 continue
-            live_busyness[zone] = float(values[0])  # first value is 'live'
+            live_busyness[zone] = float(values[0])
             predictions[zone] = [
                 {"timestamp": (now + timedelta(hours=i)).isoformat(), "busyness": float(val)}
                 for i, val in enumerate(values)
