@@ -125,17 +125,14 @@ public class VibeService {
         Map<String, Object> busynessReport = fetchBusynessReport();
 
         // Extract live busyness and forecast predictions separately
-        Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("predictions",
+        Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("live_busyness",
                 Collections.emptyMap());
 
-        // The python service returns predictions as a Map, not a List. We must convert it.
+        // Forward predictions as a Map<String, Object>
         Object rawPredictions = busynessReport.get("predictions");
-        List<Object> predictions = new ArrayList<>();
+        Map<String, Object> predictions = new HashMap<>();
         if (rawPredictions instanceof Map) {
-            Map<String, Object> predictionsMap = (Map<String, Object>) rawPredictions;
-            predictions = predictionsMap.entrySet().stream()
-                    .map(entry -> Map.of("LocationID", entry.getKey(), "predictions", entry.getValue()))
-                    .collect(Collectors.toList());
+            predictions = (Map<String, Object>) rawPredictions;
         }
 
         String explanation = "Complete location data for map view.";
@@ -372,12 +369,12 @@ public class VibeService {
     // Helper to build VibeSearchResponse DTO
     private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
             Map<String, Double> busynessData) {
-        return buildResponse(locations, explanation, confidence, busynessData, Collections.emptyList());
+        return buildResponse(locations, explanation, confidence, busynessData, Collections.emptyMap());
     }
 
     // Overloaded helper to include predictions for the map view
     private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
-            Map<String, Double> busynessData, List<Object> predictions) {
+            Map<String, Double> busynessData, Map<String, Object> predictions) {
         VibeSearchResponse response = new VibeSearchResponse();
         List<LocationDto> locationDtos = locations.stream().map(LocationDto::fromLocation).collect(Collectors.toList());
         response.setLocations(locationDtos);
