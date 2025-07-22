@@ -78,7 +78,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
 
     // Determine if venue is in the current plan and if the plan is full
     const isInPlan = Array.isArray(plan) ? plan.some(v => v.id === id) : false;
-    const isPlanFull = Array.isArray(plan) ? plan.length >= 3 : false;
+    const isPlanFull = Array.isArray(plan) ? plan.length >= 5 : false;
 
     return (
       <Card
@@ -285,17 +285,27 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           )}
         </Box>
         {/* Add to Plan Button pinned to bottom */}
-        {!disableActions && !isInPlan && (
+        {!disableActions && (
           <Box sx={{ mt: 'auto', pt: 1 }}>
-            <Tooltip title={isPlanFull ? "Your plan is full (max 3 venues)" : ""} arrow>
+            <Tooltip title={
+              isInPlan
+                ? "Already in your plan"
+                : isPlanFull
+                ? "Your plan is full (max 5 venues)"
+                : ""
+            } arrow>
               {/* The Tooltip needs a span wrapper to work when the button is disabled */}
               <span>
                 <Button
                   variant="contained"
                   size="small"
                   fullWidth
-                onClick={() => { if (addToPlan) addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri }); }}
-                  disabled={isPlanFull}
+                  onClick={() => {
+                    if (!isPlanFull && !isInPlan && addToPlan) {
+                      addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri });
+                    }
+                  }}
+                  disabled={isPlanFull || isInPlan}
                   sx={{
                     background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                     fontWeight: 'bold',
@@ -310,7 +320,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                   Add to Plan
                 </Button>
               </span>
-            </Tooltip>            
+            </Tooltip>
           </Box>
         )}
       </Card>
