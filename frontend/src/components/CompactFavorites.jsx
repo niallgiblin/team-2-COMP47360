@@ -136,51 +136,22 @@ export default function CompactFavorites() {
                         display: "flex",
                         position: "relative",
                         overflowX: "auto",
+                        overflowY: "hidden", // Prevent vertical scroll
                         gap: 2,
                         pb: 1,
                         px: 2,
                     }}
                 >
                     {enrichedVenues.map((venue) => (
-                        <Box
+                        <VenueCard
                             key={venue.id}
-                            sx={{
-                                position: "relative",
-                                minWidth: 180,
-                                maxWidth: 250,
-                                backgroundColor: "#111",
-                                border: "1px solid #900B6A",
-                                borderRadius: 2,
-                                p: 2,
-                                flexShrink: 0,
-                            }}
-                        >
-                            {/* Updated Like Button */}
-                            <IconButton
-                                onClick={() => handleLike(venue)}
-                                sx={{
-                                    position: "absolute",
-                                    top: 8,
-                                    right: 8,
-                                    zIndex: 10,
-                                    background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                                    color: "#fff",
-                                    width: 32,
-                                    height: 32,
-                                    padding: 0,
-                                    borderRadius: "50%",
-                                    boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
-                                    "&:hover": {
-                                        background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
-                                    },
-                                }}
-                            >
-                                <FavoriteIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-
-                            {/* Venue content */}
-                            <VenueCard venue={venue} variant="compact" busynessMap={busynessMap} tags={venue.tags} />
-                        </Box>
+                            venue={venue}
+                            variant="compact"
+                            busynessMap={busynessMap}
+                            tags={venue.tags}
+                            showLikeButton // Custom prop to show heart button
+                            onLike={() => handleLike(venue)}
+                        />
                     ))}
                 </Box>
             </Box>

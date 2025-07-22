@@ -155,22 +155,21 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           sx={{ 
             fontSize: '1.25rem',
             lineHeight: variant === 'compact' ? 1.3 : 1.6,
-            mb: variant === 'compact' ? 'auto' : 0,
-            flexGrow: variant === 'compact' ? 1 : 0,
+            mb: 0.5,
+            flexGrow: 0,
           }}
         >
           {name}
         </Typography>
-        
-        {/* Display the price level and rating */}
-          <Box sx={{ mt: variant === 'compact' ? 0 : 'auto' }}>
+        {/* Info section: rating, price, website, all pushed up */}
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
           {/* Rating, busyness, and price */}
           <Box
               sx={{
                 display: 'flex',
-                flexDirection: variant === 'compact' ? 'column' : 'row',
-                alignItems: variant === 'compact' ? 'flex-start' : 'center',
-                gap: variant === 'compact' ? 0.5 : 5,
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 0.5,
                 mt: 1,
               }}
           >
@@ -225,7 +224,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                     display: 'flex', 
                     alignItems: 'center',
                     gap: '0.25rem',
-                    mt: variant === 'compact' ? 0.5 : 0,
+                    mt: 0.5,
                   }}>
               {[1, 2, 3, 4, 5].map((i) => (
                   <AttachMoneyIcon
@@ -238,9 +237,6 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
               ))}
               </Box>
           </Box>
-
-          {/* Tags - removed */}
-          {/* <Box ...> ... </Box> */}
 
           {/* Website link */}
           {uri && (
@@ -261,39 +257,36 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
               </Button>
             </Box>
           )}
-
-          {/* Add to Plan Button: Only shows if the venue is not already in the plan and not a shared plan */}
-          {!disableActions && !isInPlan && (
-            <Box sx={{ mt: 'auto', pt: 1 }}>
-              <Tooltip title={isPlanFull ? "Your plan is full (max 3 venues)" : ""} arrow>
-                {/* The Tooltip needs a span wrapper to work when the button is disabled */}
-                <span>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    fullWidth
-                  onClick={() => { if (addToPlan) addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri }); }}
-                    disabled={isPlanFull}
-                    sx={{
-                      background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                      fontWeight: 'bold',
-                      color: '#121212',
-                      '&:disabled': {
-                        background: '#555',
-                        color: '#888',
-                        cursor: 'not-allowed'
-                      }
-                    }}
-                  >
-                    Add to Plan
-                  </Button>
-                </span>
-              </Tooltip>            
-            </Box>
-          )}
-
-          {/* Like Button: Always visible */}
+        </Box>
+        {/* Add to Plan Button pinned to bottom */}
+        {!disableActions && !isInPlan && (
+          <Box sx={{ mt: 'auto', pt: 1 }}>
+            <Tooltip title={isPlanFull ? "Your plan is full (max 3 venues)" : ""} arrow>
+              {/* The Tooltip needs a span wrapper to work when the button is disabled */}
+              <span>
+                <Button
+                  variant="contained"
+                  size="small"
+                  fullWidth
+                onClick={() => { if (addToPlan) addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri }); }}
+                  disabled={isPlanFull}
+                  sx={{
+                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                    fontWeight: 'bold',
+                    color: '#121212',
+                    '&:disabled': {
+                      background: '#555',
+                      color: '#888',
+                      cursor: 'not-allowed'
+                    }
+                  }}
+                >
+                  Add to Plan
+                </Button>
+              </span>
+            </Tooltip>            
           </Box>
+        )}
       </Card>
     );
   } catch (err) {
