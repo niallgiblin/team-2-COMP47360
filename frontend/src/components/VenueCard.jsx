@@ -10,12 +10,13 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import LaunchIcon from '@mui/icons-material/Launch';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import { getCategory, categoryImages } from '../utils/tagMapping';
+import { Favorite as FavoriteIcon } from '@mui/icons-material';
 
 import { usePlan } from '../context/PlanContext';
 
 
 // Functional component that displays information about a venue and handles actions
-export default function VenueCard({ venue, variant = 'default', disableActions = false }) {
+export default function VenueCard({ venue, variant = 'default', disableActions = false, showLikeButton = false, onLike }) {
   const { plan, addToPlan, removeFromPlan } = usePlan();
   try {
     console.log('VenueCard venue:', venue);
@@ -98,6 +99,31 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
       }}
       >
+        {/* Like (heart) button for Favourites tab */}
+        {showLikeButton && (
+          <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+            <Tooltip title="Remove from Favourites" arrow>
+              <Button
+                onClick={onLike}
+                sx={{
+                  minWidth: 0,
+                  width: 32,
+                  height: 32,
+                  padding: 0,
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                  '&:hover': {
+                    background: 'linear-gradient(to right, #FF4ECD, #3ABEFF)',
+                  },
+                }}
+              >
+                <FavoriteIcon sx={{ fontSize: 18 }} />
+              </Button>
+            </Tooltip>
+          </Box>
+        )}
 
         {/* remove from plan x button */}
         {!disableActions && isInPlan && (
@@ -238,8 +264,8 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
               </Box>
           </Box>
 
-          {/* Website link */}
-          {uri && (
+          {/* Website link: hide if showLikeButton and content is too tall */}
+          {uri && (!showLikeButton || (showLikeButton && !isPlanFull)) && (
             <Box sx={{ mt: 1 }}>
               <Button
                 variant="text"

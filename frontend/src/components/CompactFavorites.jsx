@@ -149,7 +149,7 @@ export default function CompactFavorites() {
                             variant="compact"
                             busynessMap={busynessMap}
                             tags={venue.tags}
-                            showLikeButton // Custom prop to show heart button
+                            showLikeButton={true}
                             onLike={() => handleLike(venue)}
                         />
                     ))}
