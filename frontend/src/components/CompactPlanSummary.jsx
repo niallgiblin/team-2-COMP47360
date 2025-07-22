@@ -117,11 +117,13 @@ export default function CompactPlanSummary() {
         ref={scrollRef}
         sx={{
           display: 'flex',
-          // overflowX: 'auto',
+          overflowX: 'auto',
           overflowY: 'visible',
           gap: 2,
           pb: 1,
           scrollBehavior: 'smooth',
+          minWidth: 0,
+          maxWidth: '100%',
         }}
       >
         {planArray.map((venue) => (
