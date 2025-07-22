@@ -88,7 +88,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           color: '#fff',
           backgroundColor: '#222',
           boxSizing: 'border-box',
-          p: variant === 'compact' ? 1 : variant === 'map' ? 1.5 : 2,
+          p: variant === 'compact' ? '18px 8px 8px 8px' : variant === 'map' ? 1.5 : 2, // extra top padding for heart
           minWidth: variant === 'compact' ? 200 : undefined,
           maxWidth: variant === 'compact' ? 220 : undefined,
           width: variant === 'compact' ? 200 : '100%',
@@ -101,7 +101,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
       >
         {/* Like (heart) button for Favourites tab */}
         {showLikeButton && (
-          <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+          <Box sx={{ position: 'absolute', top: 2, right: 8, zIndex: 10 }}>
             <Tooltip title="Remove from Favourites" arrow>
               <Button
                 onClick={onLike}
@@ -126,7 +126,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
         )}
 
         {/* remove from plan x button */}
-        {!disableActions && isInPlan && (
+        {!disableActions && isInPlan && !showLikeButton && (
         <Box sx={{ position: 'absolute', top: -12, right: -4, zIndex: 2 }}>
           <Tooltip title="Remove from Plan" arrow>
             <Button
