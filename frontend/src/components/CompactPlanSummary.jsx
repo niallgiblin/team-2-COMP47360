@@ -8,13 +8,14 @@ import { useAuth } from '../hooks/useAuth';                         // hook to g
 import VenueCard from './VenueCard';                                // import VenueCard component
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 export default function CompactPlanSummary() {
   const { plan } = usePlan();
   const { user } = useAuth();  
 
   const scrollRef = useRef(null);
+  const [showArrows, setShowArrows] = useState(false);
 
   // Defensive: ensure plan is always an array
   const planArray = Array.isArray(plan) ? plan : (plan?.venues || []);
@@ -24,6 +25,17 @@ export default function CompactPlanSummary() {
   const planTitle = user?.firstName
     ? `Plan for ${user.firstName}`
     : 'Your Plan';
+
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (scrollRef.current) {
+        setShowArrows(scrollRef.current.scrollWidth > scrollRef.current.clientWidth);
+      }
+    };
+    checkOverflow();
+    window.addEventListener('resize', checkOverflow);
+    return () => window.removeEventListener('resize', checkOverflow);
+  }, [planArray]);
 
   if (!planArray || planArray.length === 0) return null;
 
@@ -60,41 +72,45 @@ export default function CompactPlanSummary() {
       </Typography>
 
       {/* Chevron Buttons */}
-      <IconButton
-        onClick={scrollLeft}
-        sx={{
-          position: 'absolute',
-          left: -10,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: 2,
-          color: '#FF4ECD',
-          backgroundColor: '#000',
-          '&:hover': {
-            backgroundColor: '#111',
-          },
-        }}
-      >
-        <ChevronLeftIcon />
-      </IconButton>
+      {showArrows && (
+        <IconButton
+          onClick={scrollLeft}
+          sx={{
+            position: 'absolute',
+            left: -10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 2,
+            color: '#FF4ECD',
+            backgroundColor: '#000',
+            '&:hover': {
+              backgroundColor: '#111',
+            },
+          }}
+        >
+          <ChevronLeftIcon />
+        </IconButton>
+      )}
 
-      <IconButton
-        onClick={scrollRight}
-        sx={{
-          position: 'absolute',
-          right: -10,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: 2,
-          color: '#FF4ECD',
-          backgroundColor: '#000',
-          '&:hover': {
-            backgroundColor: '#111',
-          },
-        }}
-      >
-        <ChevronRightIcon />
-      </IconButton>
+      {showArrows && (
+        <IconButton
+          onClick={scrollRight}
+          sx={{
+            position: 'absolute',
+            right: -10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 2,
+            color: '#FF4ECD',
+            backgroundColor: '#000',
+            '&:hover': {
+              backgroundColor: '#111',
+            },
+          }}
+        >
+          <ChevronRightIcon />
+        </IconButton>
+      )}
       
       {/* Venue cards (horizontal scroll) */}
       <Box

@@ -177,19 +177,21 @@ export default function FindMyVibe() {
         if (!enriched.zoneId) {
           console.warn(`[VIBE DEBUG] No zoneId could be assigned for venue '${enriched.name}' (zone: '${enriched.zone}')`);
         }
-        // Add tags if missing
+        // Improved tag extraction logic
         if (!enriched.tags || enriched.tags.length === 0) {
           let tags = [];
-          if (venue.tags && Array.isArray(venue.tags)) {
+          if (venue.tags && Array.isArray(venue.tags) && venue.tags.length > 0) {
             tags = venue.tags;
-          } else if (canonical && Array.isArray(canonical.tags)) {
+          } else if (canonical && Array.isArray(canonical.tags) && canonical.tags.length > 0) {
             tags = canonical.tags;
-          } else {
-            if (venue.description) {
-              tags = venue.description.split(',').map(t => t.trim()).filter(Boolean);
-            } else if (venue.type) {
-              tags = venue.type.split(',').map(t => t.trim()).filter(Boolean);
-            }
+          } else if (venue.type) {
+            tags = venue.type.split(',').map(t => t.trim()).filter(Boolean);
+          } else if (venue.description) {
+            tags = venue.description.split(/[ ,]+/).map(t => t.trim()).filter(Boolean);
+          }
+          // Fallback: use the venue category as a tag
+          if (tags.length === 0 && venue.category) {
+            tags = [venue.category];
           }
           enriched.tags = tags;
         }

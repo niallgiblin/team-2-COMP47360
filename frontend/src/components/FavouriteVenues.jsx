@@ -53,17 +53,19 @@ function FavouriteVenues() {
                 const matchingZone = zoneData.features.find(feature => booleanPointInPolygon(venuePoint, feature.geometry));
                 enriched.zoneId = matchingZone ? matchingZone.properties.LocationID : undefined;
             }
-            // Add tags if missing
+            // Improved tag extraction logic
             if (!enriched.tags || enriched.tags.length === 0) {
                 let tags = [];
-                if (enriched.tags && Array.isArray(enriched.tags)) {
+                if (enriched.tags && Array.isArray(enriched.tags) && enriched.tags.length > 0) {
                     tags = enriched.tags;
-                } else {
-                    if (enriched.description) {
-                        tags = enriched.description.split(',').map(t => t.trim()).filter(Boolean);
-                    } else if (enriched.type) {
-                        tags = enriched.type.split(',').map(t => t.trim()).filter(Boolean);
-                    }
+                } else if (enriched.type) {
+                    tags = enriched.type.split(',').map(t => t.trim()).filter(Boolean);
+                } else if (enriched.description) {
+                    tags = enriched.description.split(/[ ,]+/).map(t => t.trim()).filter(Boolean);
+                }
+                // Fallback: use the venue category as a tag
+                if (tags.length === 0 && enriched.category) {
+                    tags = [enriched.category];
                 }
                 enriched.tags = tags;
             }

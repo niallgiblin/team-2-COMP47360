@@ -54,8 +54,10 @@ export default function PlanDisplay({ planName, venues, busynessMap, disableActi
       <Box
         sx={{
           display: "flex",
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
           overflowX: "auto",
           gap: 2,
+          minWidth: 0,
         }}
       >
         {venues.map((venue) => (
