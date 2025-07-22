@@ -284,7 +284,6 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
             </Box>
           )}
         </Box>
-        {/* Add to Plan Button pinned to bottom */}
         {!disableActions && (
           <Box sx={{ mt: 'auto', pt: 1 }}>
             <Tooltip title={
