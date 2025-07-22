@@ -9,9 +9,11 @@ try:
     from predictor.busyness import (
         initialize_busyness_models,
         predict_busyness_for_all_zones,
-        dnn_models
+        dnn_models,
+        calculate_busyness
     )
     from predictor import busyness as busyness_module
+    from datetime import datetime, timedelta
     IMPORT_SUCCESS = True
     IMPORT_ERROR = None
 except Exception as e:
@@ -67,8 +69,7 @@ def health():
 @app.route("/busyness", methods=['GET'])
 def get_busyness():
     """
-    Returns busyness predictions for all zones.
-    Accepts optional 'lat' and 'lon' query parameters.
+    Returns live and forecast busyness predictions for all zones.
     """
     if not initialized:
         return jsonify({
@@ -77,51 +78,27 @@ def get_busyness():
             "details": initialization_error 
         }), 503
 
-    global cache
-    # Check cache first
-    if cache:
-        logger.info("Returning cached busyness predictions (cached indefinitely).")
-        return jsonify({"success": True, "predictions": cache, "cached": True})
-
     try:
-        # Use provided lat/lon or default to a central Manhattan location (Times Square)
-        lat = request.args.get('lat', default=40.7580, type=float)
-        lon = request.args.get('lon', default=-73.9855, type=float)
-        
-        logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
-        predictions = predict_busyness_for_all_zones(lat, lon)
+        # Get both live and forecast predictions for all zones
+        zone_data = calculate_busyness()  # {zone: [v1, v2, ..., v12]}
 
-        # Normalize the raw scores to a 0-1 range for frontend display.
-        valid_scores = [score for score in predictions.values() if score is not None]
-        if not valid_scores:
-            # If all scores are None, return a dict of zeros
-            normalized_predictions = {zone.split()[0]: 0.0 for zone in predictions.keys()}
-        else:
-            min_score = min(valid_scores)
-            max_score = max(valid_scores)
-            score_range = max_score - min_score
+        now = datetime.now()
+        live_busyness = {}
+        predictions = {}
 
-            normalized_predictions = {}
-            for zone_name, busyness_score in predictions.items():
-                location_id = zone_name.split()[0]
-                if busyness_score is None:
-                    normalized_predictions[location_id] = 0.0
-                elif score_range > 0:
-                    # Apply Min-Max scaling to get a value between 0 and 1
-                    normalized_score = (busyness_score - min_score) / score_range
-                    normalized_predictions[location_id] = normalized_score
-                else:
-                    # All scores are the same, so they can be considered neutral (0.5)
-                    normalized_predictions[location_id] = 0.5
-
-        # Update cache
-        cache = normalized_predictions
-        logger.info("Busyness predictions generated and cached.")
+        for zone, values in zone_data.items():
+            if not values:
+                continue
+            live_busyness[zone] = float(values[0])  # first value is 'live'
+            predictions[zone] = [
+                {"timestamp": (now + timedelta(hours=i)).isoformat(), "busyness": float(val)}
+                for i, val in enumerate(values)
+            ]
 
         return jsonify({
             "success": True,
-            "predictions": normalized_predictions,
-            "cached": False
+            "live_busyness": live_busyness,
+            "predictions": predictions
         })
 
     except Exception as e:
