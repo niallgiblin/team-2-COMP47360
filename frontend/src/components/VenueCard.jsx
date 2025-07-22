@@ -86,7 +86,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           position: 'relative',
           overflow: 'visible',
           color: '#fff',
-          backgroundColor: '#222',
+          backgroundColor: highlighted ? '#111' : '#222',
           boxSizing: 'border-box',
           p: variant === 'compact' ? '18px 8px 8px 8px' : variant === 'map' ? 1.5 : 2, // extra top padding for heart
           minWidth: variant === 'compact' ? 200 : undefined,
