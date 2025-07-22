@@ -6,13 +6,25 @@ import { Box, Typography, Button, IconButton } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { usePlan } from '../context/PlanContext';
 import { useNavigate } from 'react-router-dom';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 export default function CompactSharedPlans({ setViewMode }) {
   // access shared plans, loader function, flag setter from context
   const { sharedPlans, loadPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
   const scrollRef = useRef(null);
+  const [showArrows, setShowArrows] = useState(false);
+
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (scrollRef.current) {
+        setShowArrows(scrollRef.current.scrollWidth > scrollRef.current.clientWidth);
+      }
+    };
+    checkOverflow();
+    window.addEventListener('resize', checkOverflow);
+    return () => window.removeEventListener('resize', checkOverflow);
+  }, [sharedPlans]);
 
   // handles horizontal scrolling
   const handleScroll = (direction) => {
@@ -60,38 +72,42 @@ export default function CompactSharedPlans({ setViewMode }) {
         }}
       >
         {/* Left chevron */}
-        <IconButton
-          onClick={() => handleScroll('left')}
-          sx={{
-            position: 'absolute',
-            left: -10,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 2,
-            color: '#FF4ECD',
-            backgroundColor: '#000',
-            '&:hover': { backgroundColor: '#111' },
-          }}
-        >
-          <ChevronLeft />
-        </IconButton>
+        {showArrows && (
+          <IconButton
+            onClick={() => handleScroll('left')}
+            sx={{
+              position: 'absolute',
+              left: -10,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 2,
+              color: '#FF4ECD',
+              backgroundColor: '#000',
+              '&:hover': { backgroundColor: '#111' },
+            }}
+          >
+            <ChevronLeft />
+          </IconButton>
+        )}
 
         {/* Right chevron */}
-        <IconButton
-          onClick={() => handleScroll('right')}
-          sx={{
-            position: 'absolute',
-            right: -10,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 2,
-            color: '#FF4ECD',
-            backgroundColor: '#000',
-            '&:hover': { backgroundColor: '#111' },
-          }}
-        >
-          <ChevronRight />
-        </IconButton>
+        {showArrows && (
+          <IconButton
+            onClick={() => handleScroll('right')}
+            sx={{
+              position: 'absolute',
+              right: -10,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 2,
+              color: '#FF4ECD',
+              backgroundColor: '#000',
+              '&:hover': { backgroundColor: '#111' },
+            }}
+          >
+            <ChevronRight />
+          </IconButton>
+        )}
 
         {/* Scrollable container for venue cards */}
         <Box

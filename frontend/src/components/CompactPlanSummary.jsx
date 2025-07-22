@@ -125,6 +125,7 @@ export default function CompactPlanSummary() {
           minWidth: 0,
           maxWidth: '100%',
           pr: 2, // Add padding right so last card is not cut off
+          pt: 2, // Add padding top so top of card and button are not cut off
         }}
       >
         {planArray.map((venue, idx) => (

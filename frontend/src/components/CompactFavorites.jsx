@@ -11,6 +11,7 @@ import { Favorite as FavoriteIcon } from "@mui/icons-material";
 export default function CompactFavorites() {
     const { likedVenues, handleLike } = useLike();
     const scrollRef = useRef(null);
+    const [showArrows, setShowArrows] = useState(false);
     const [busynessMap, setBusynessMap] = useState({});
     const [enrichedVenues, setEnrichedVenues] = useState([]);
     const [allVenues, setAllVenues] = useState([]);
@@ -39,16 +40,17 @@ export default function CompactFavorites() {
         setEnrichedVenues(merged);
     }, [likedVenues, allVenues]);
 
-    // handler for left/right chevrons
-    const handleScroll = (direction) => {
-        const container = scrollRef.current;
-        if (!container) return;
-        const scrollAmount = 300;
-        container.scrollBy({
-            left: direction === "left" ? -scrollAmount : scrollAmount,
-            behavior: "smooth",
-        });
-    };
+    // Show/hide chevrons based on overflow
+    useEffect(() => {
+        const checkOverflow = () => {
+            if (scrollRef.current) {
+                setShowArrows(scrollRef.current.scrollWidth > scrollRef.current.clientWidth);
+            }
+        };
+        checkOverflow();
+        window.addEventListener('resize', checkOverflow);
+        return () => window.removeEventListener('resize', checkOverflow);
+    }, [enrichedVenues]);
 
     // if no liked venues, show message instead
     if (!enrichedVenues || enrichedVenues.length === 0) {
@@ -65,6 +67,17 @@ export default function CompactFavorites() {
         );
     }
 
+    // handler for left/right chevrons
+    const handleScroll = (direction) => {
+        const container = scrollRef.current;
+        if (!container) return;
+        const scrollAmount = 300;
+        container.scrollBy({
+            left: direction === "left" ? -scrollAmount : scrollAmount,
+            behavior: "smooth",
+        });
+    };
+
     return (
         <Box>
             <Box
@@ -75,42 +88,46 @@ export default function CompactFavorites() {
                 }}
             >
                 {/* Left Chevron */}
-                <IconButton
-                    onClick={() => handleScroll("left")}
-                    sx={{
-                        position: "absolute",
-                        left: -10,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        zIndex: 2,
-                        color: "#FF4ECD",
-                        backgroundColor: "#000",
-                        "&:hover": {
-                            backgroundColor: "#111",
-                        },
-                    }}
-                >
-                    <ChevronLeft />
-                </IconButton>
+                {showArrows && (
+                    <IconButton
+                        onClick={() => handleScroll("left")}
+                        sx={{
+                            position: "absolute",
+                            left: -10,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            zIndex: 2,
+                            color: "#FF4ECD",
+                            backgroundColor: "#000",
+                            "&:hover": {
+                                backgroundColor: "#111",
+                            },
+                        }}
+                    >
+                        <ChevronLeft />
+                    </IconButton>
+                )}
 
                 {/* Right Chevron */}
-                <IconButton
-                    onClick={() => handleScroll("right")}
-                    sx={{
-                        position: "absolute",
-                        right: -10,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        zIndex: 2,
-                        color: "#FF4ECD",
-                        backgroundColor: "#000",
-                        "&:hover": {
-                            backgroundColor: "#111",
-                        },
-                    }}
-                >
-                    <ChevronRight />
-                </IconButton>
+                {showArrows && (
+                    <IconButton
+                        onClick={() => handleScroll("right")}
+                        sx={{
+                            position: "absolute",
+                            right: -10,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            zIndex: 2,
+                            color: "#FF4ECD",
+                            backgroundColor: "#000",
+                            "&:hover": {
+                                backgroundColor: "#111",
+                            },
+                        }}
+                    >
+                        <ChevronRight />
+                    </IconButton>
+                )}
 
                 {/* Scrollable venue cards */}
                 <Box
