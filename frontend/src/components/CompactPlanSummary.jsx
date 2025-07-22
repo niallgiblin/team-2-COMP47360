@@ -124,10 +124,16 @@ export default function CompactPlanSummary() {
           scrollBehavior: 'smooth',
           minWidth: 0,
           maxWidth: '100%',
+          pr: 2, // Add padding right so last card is not cut off
         }}
       >
-        {planArray.map((venue) => (
-          <VenueCard key={venue.id} venue={venue} variant="compact" /> // No handlers needed here anymore as they are global now
+        {planArray.map((venue, idx) => (
+          <VenueCard 
+            key={venue.id} 
+            venue={venue} 
+            variant="compact" 
+            sx={idx === planArray.length - 1 ? { marginRight: 8 } : {}} // Add marginRight to last card
+          />
         ))}
       </Box>
     </Box>
