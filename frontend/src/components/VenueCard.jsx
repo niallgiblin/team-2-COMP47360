@@ -298,7 +298,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
               <span>
                 <Button
                   variant="contained"
-                  size="small"
+                  size={showLikeButton ? "medium" : "small"}
                   fullWidth
                   onClick={() => {
                     if (!isPlanFull && !isInPlan && addToPlan) {
@@ -307,9 +307,14 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                   }}
                   disabled={isPlanFull || isInPlan}
                   sx={{
-                    background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                    background: showLikeButton ? 'linear-gradient(90deg, #3ABEFF 0%, #FF4ECD 100%)' : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                     fontWeight: 'bold',
-                    color: '#121212',
+                    color: showLikeButton ? '#000' : '#121212',
+                    fontSize: showLikeButton ? '1.1rem' : undefined,
+                    py: showLikeButton ? 1.2 : undefined,
+                    borderRadius: showLikeButton ? 2 : undefined,
+                    boxShadow: showLikeButton ? '0 2px 8px rgba(58,190,255,0.10)' : undefined,
+                    letterSpacing: showLikeButton ? '0.03em' : undefined,
                     '&:disabled': {
                       background: '#555',
                       color: '#888',

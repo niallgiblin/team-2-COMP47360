@@ -19,7 +19,7 @@ export const LikeProvider = ({ children }) => {
                 const res = await makeAuthenticatedRequest(`${API_BASE_URL}/favourites`);
                 if (!res.ok) throw new Error('Failed to fetch');
                 const data = await res.json();
-                setLikedVenues(data);
+                setLikedVenues(Array.isArray(data) ? data.map(fav => fav.location) : []);
             } catch (err) {
                 console.error('Failed to fetch liked venues:', err);
             }
