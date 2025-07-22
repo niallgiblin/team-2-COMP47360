@@ -134,6 +134,7 @@ export default function CompactPlanSummary() {
             venue={venue} 
             variant="compact" 
             disableActions={true}
+            highlighted={true}
             sx={idx === planArray.length - 1 ? { marginRight: 8 } : {}} // Add marginRight to last card
           />
         ))}

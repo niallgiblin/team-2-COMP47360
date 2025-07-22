@@ -41,7 +41,7 @@ CORS(app)
 # Global state
 initialized = False
 initialization_error = None
-cache = None # This will now be cached indefinitely after the first call
+cache = None
 
 @app.route("/health")
 def health():
@@ -78,6 +78,11 @@ def get_busyness():
             "details": initialization_error 
         }), 503
 
+    global cache
+    if cache is not None:
+        logger.info("Returning cached busyness predictions.")
+        return jsonify(cache)
+
     try:
         # Get both live and forecast predictions for all zones
         zone_data = calculate_busyness()  # {zone: [v1, v2, ..., v12]}
@@ -95,11 +100,12 @@ def get_busyness():
                 for i, val in enumerate(values)
             ]
 
-        return jsonify({
+        cache = {
             "success": True,
             "live_busyness": live_busyness,
             "predictions": predictions
-        })
+        }
+        return jsonify(cache)
 
     except Exception as e:
         logger.error(f"Error in /busyness endpoint: {str(e)}", exc_info=True)

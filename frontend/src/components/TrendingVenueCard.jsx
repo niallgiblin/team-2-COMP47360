@@ -417,10 +417,10 @@ export default function TrendingVenueCard({
             ))}
           </Box>
 
-          {!hidePlanButtons && (
+          {!hidePlanButtons && !isInPlan && (
             <Button
-              onClick={isInPlan ? handleRemoveFromPlan : handleAddToPlan}
-              disabled={!isInPlan && isPlanFull}
+              onClick={handleAddToPlan}
+              disabled={isPlanFull}
               variant="outlined"
               size="small"
               sx={{
@@ -447,7 +447,35 @@ export default function TrendingVenueCard({
                 transition: "all 0.2s ease",
               }}
             >
-              {isInPlan ? "Remove from Plan" : "Add to Plan"}
+              Add to Plan
+            </Button>
+          )}
+          {!hidePlanButtons && isInPlan && (
+            <Button
+              onClick={handleRemoveFromPlan}
+              variant="outlined"
+              size="small"
+              sx={{
+                textTransform: "none",
+                fontWeight: "bold",
+                borderRadius: 2,
+                borderColor: "#FF4ECD",
+                color: "#FF4ECD",
+                minWidth: 140,
+                minHeight: 32,
+                zIndex: 5,
+                "&:hover": {
+                  background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+                  color: "#000",
+                  borderColor: "transparent",
+                },
+                "&:active": {
+                  transform: "scale(0.98)",
+                },
+                transition: "all 0.2s ease",
+              }}
+            >
+              Remove from Plan
             </Button>
           )}
         </Box>

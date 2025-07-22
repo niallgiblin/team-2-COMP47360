@@ -16,7 +16,7 @@ import { usePlan } from '../context/PlanContext';
 
 
 // Functional component that displays information about a venue and handles actions
-export default function VenueCard({ venue, variant = 'default', disableActions = false, showLikeButton = false, onLike }) {
+export default function VenueCard({ venue, variant = 'default', disableActions = false, showLikeButton = false, onLike, highlighted = false }) {
   const { plan, addToPlan, removeFromPlan } = usePlan();
   try {
     console.log('VenueCard venue:', venue);
@@ -97,6 +97,8 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           display: 'flex',
           flexDirection: 'column',
           height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
+          border: highlighted ? '2.5px solid #FF4ECD' : undefined,
+          boxShadow: highlighted ? '0 0 0 4px rgba(255,78,205,0.10)' : undefined,
       }}
       >
         {/* Like (heart) button for Favourites tab */}
@@ -176,114 +178,69 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
         />
         
         {/* Display the venue's name as a heading */}
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            fontSize: '1.25rem',
-            lineHeight: variant === 'compact' ? 1.3 : 1.6,
-            mb: 0.5,
-            flexGrow: 0,
-          }}
-        >
-          {name}
-        </Typography>
-        {/* Info section: rating, price, website, all pushed up */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-          {/* Rating, busyness, and price */}
-          <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                gap: 0.5,
-                mt: 1,
-              }}
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, mt: 1 }}>
+          <Typography
+            variant="subtitle1"
+            sx={{ fontWeight: 'bold', color: '#fff', mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-              {/* Rating */}
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 0.25 
-                }}
-              >
-                {[1, 2, 3, 4, 5].map((i) => {
-                  if (parsedRating >= i) {
-                    return <StarIcon 
-                              key={i} 
-                              sx={{ 
-                                fontSize: 18, 
-                                color: '#FFD700' 
-                              }} 
-                            />;
-                  } else if (parsedRating >= i - 0.5) {
-                    return <StarHalfIcon 
-                              key={i} 
-                              sx={{ 
-                                fontSize: 18, 
-                                color: '#FFD700' 
-                              }} 
-                            />;
-                  } else {
-                    return <StarBorderIcon 
-                            key={i} 
-                            sx={{ 
-                              fontSize: 18, 
-                              color: '#FFD700' 
-                            }} 
-                          />;
-                  }
-                })}
-                <Typography 
-                  variant="body2" 
-                  sx={{ 
-                    color: '#fff', 
-                    ml: 1 
-                  }}
-                >
-                  {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
-                </Typography>
-              </Box>
-             {/* Price */}
-              <Box 
-                  sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    mt: 0.5,
-                  }}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                  <AttachMoneyIcon
-                  key={i}
-                  sx={{
-                      fontSize: 16,
-                      color: i <= level ? '#FFD700' : '#555555',
-                  }}
-                  />
-              ))}
-              </Box>
+            {name}
+          </Typography>
+          {/* Add flexible spacer between name and rating if highlighted */}
+          {highlighted && <Box sx={{ flexGrow: 1 }} />}
+          {/* Rating */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+            {[1, 2, 3, 4, 5].map((i) => {
+              if (parsedRating >= i) {
+                return <StarIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+              } else if (parsedRating >= i - 0.5) {
+                return <StarHalfIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+              } else {
+                return <StarBorderIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
+              }
+            })}
+            <Typography variant="body2" sx={{ color: '#fff', ml: 1 }}>
+              {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
+            </Typography>
           </Box>
-
-          {/* Website link: hide if showLikeButton and content is too tall */}
-          {uri && (!showLikeButton || (showLikeButton && !isPlanFull)) && (
-            <Box sx={{ mt: 1 }}>
-              <Button
-                variant="text"
-                size="small"
-                onClick={handleWebsiteClick}
-                startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
-                sx={{
-                  color: '#FF4ECD',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 0,
-                }}
-              >
-                Visit Website
-              </Button>
-            </Box>
-          )}
+          {/* Price */}
+          <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: '0.25rem',
+                mt: 0.5,
+              }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+              <AttachMoneyIcon
+              key={i}
+              sx={{
+                  fontSize: 16,
+                  color: i <= level ? '#FFD700' : '#555555',
+              }}
+              />
+          ))}
+          </Box>
         </Box>
+
+        {/* Website link: hide if showLikeButton and content is too tall */}
+        {uri && (!showLikeButton || (showLikeButton && !isPlanFull)) && (
+          <Box sx={{ mt: 1 }}>
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleWebsiteClick}
+              startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                color: '#FF4ECD',
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 0,
+              }}
+            >
+              Visit Website
+            </Button>
+          </Box>
+        )}
         {!disableActions && (
           <Box sx={{ mt: 'auto', pt: 1 }}>
             <Tooltip title={

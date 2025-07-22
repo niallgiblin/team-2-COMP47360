@@ -152,6 +152,7 @@ export default function CompactFavorites() {
                             showLikeButton={true}
                             onLike={() => handleLike(venue)}
                             disableActions={true}
+                            highlighted={true}
                         />
                     ))}
                 </Box>
