@@ -50,8 +50,7 @@ export const FriendRequestProvider = ({ children }) => {
       value={{
         pendingRequests,
         acceptedFriends,
-        fetchFriendRequests,
-        fetchAcceptedFriends,
+        refreshFriendsData,
         clearFriendRequests,
         clearAcceptedFriends,
       }}
