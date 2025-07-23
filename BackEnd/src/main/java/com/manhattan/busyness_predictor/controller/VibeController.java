@@ -89,4 +89,10 @@ public class VibeController {
 
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/debug-busyness")
+    public ResponseEntity<Map<String, Object>> debugBusyness() {
+        Map<String, Object> busynessReport = vibeService.fetchBusynessReport();
+        return ResponseEntity.ok(busynessReport);
+    }
 }
