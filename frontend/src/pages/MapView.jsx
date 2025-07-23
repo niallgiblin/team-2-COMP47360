@@ -224,15 +224,6 @@ export default function MapView() {
           setPredictionData(data.predictions);
           const first = data.predictions[0]?.predictions?.[0]?.timestamp;
           if (first) setSelectedTimestamp(first);
-        } else if (data.predictions && typeof data.predictions === "object" && Object.keys(data.predictions).length > 0) {
-          // Convert predictions map to array
-          const predictionArray = Object.entries(data.predictions).map(([zoneId, preds]) => ({
-            LocationID: zoneId,
-            predictions: preds,
-          }));
-          setPredictionData(predictionArray);
-          const first = predictionArray[0]?.predictions?.[0]?.timestamp;
-          if (first) setSelectedTimestamp(first);
         } else {
           console.warn("No real prediction data returned from backend.");
         }

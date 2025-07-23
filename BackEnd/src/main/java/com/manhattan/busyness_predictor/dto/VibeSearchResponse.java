@@ -9,7 +9,7 @@ public class VibeSearchResponse {
     private String explanation;
     private double confidence;
     private Map<String, Double> busyness;
-    private Map<String, Object> predictions;
+    private List<Map<String, Object>> predictions;
 
     // Getters and Setters
     public List<LocationDto> getLocations() {
@@ -44,11 +44,11 @@ public class VibeSearchResponse {
         this.busyness = busyness;
     }
 
-    public Map<String, Object> getPredictions() {
+    public List<Map<String, Object>> getPredictions() {
         return predictions;
     }
 
-    public void setPredictions(Map<String, Object> predictions) {
+    public void setPredictions(List<Map<String, Object>> predictions) {
         this.predictions = predictions;
     }
 }
