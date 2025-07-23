@@ -132,7 +132,9 @@ public class VibeService {
         // Forward predictions as a List<Map<String, Object>>
         Object rawPredictions = busynessReport.get("predictions");
         List<Map<String, Object>> predictionsList = new ArrayList<>();
-        if (rawPredictions instanceof Map) {
+        if (rawPredictions instanceof List) {
+            predictionsList = (List<Map<String, Object>>) rawPredictions;
+        } else if (rawPredictions instanceof Map) {
             Map<String, Object> predictionsMap = (Map<String, Object>) rawPredictions;
             for (Map.Entry<String, Object> entry : predictionsMap.entrySet()) {
                 Map<String, Object> obj = new HashMap<>();
