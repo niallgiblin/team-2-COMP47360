@@ -76,9 +76,9 @@ def get_busyness():
             "details": initialization_error
         }), 503
 
-    if cache is not None:
-        logger.info("Returning cached busyness predictions.")
-        return jsonify(cache)
+    # if cache is not None:
+    #     logger.info("Returning cached busyness predictions.")
+    #     return jsonify(cache)
 
     try:
         # zone_data: {zone: [v1, v2, ..., v12]}
