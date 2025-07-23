@@ -346,7 +346,7 @@ public class VibeService {
     }
 
     // Fetches the complete busyness report (live + forecast) from the Python service
-    private Map<String, Object> fetchBusynessReport() {
+    public Map<String, Object> fetchBusynessReport() {
         try {
             logger.info("Calling busyness service at {}", busynessServiceUrl + "/busyness");
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
