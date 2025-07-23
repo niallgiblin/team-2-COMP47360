@@ -90,7 +90,9 @@ def get_busyness():
         for zone, values in zone_data.items():
             if not values:
                 continue
+            # live busyness is the first value
             live_busyness[zone] = float(values[0])
+            # predictions: list of {timestamp, busyness}
             predictions[zone] = [
                 {"timestamp": (now + timedelta(hours=i)).isoformat(), "busyness": float(val)}
                 for i, val in enumerate(values)
