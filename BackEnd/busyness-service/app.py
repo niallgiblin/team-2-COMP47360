@@ -101,7 +101,13 @@ def get_busyness():
         cache = {
             "success": True,
             "live_busyness": live_busyness,
-            "predictions": predictions
+            "predictions": [
+                {
+                    "LocationID": zone,
+                    "predictions": preds
+                }
+                for zone, preds in predictions.items()
+            ]
         }
         return jsonify(cache)
 
