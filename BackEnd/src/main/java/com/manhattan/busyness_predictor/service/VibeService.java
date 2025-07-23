@@ -123,6 +123,7 @@ public class VibeService {
 
         // Fetch the full report including live and forecast data
         Map<String, Object> busynessReport = fetchBusynessReport();
+        logger.info("Busyness report from Python: " + busynessReport);
 
         // Extract live busyness and forecast predictions separately
         Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("live_busyness",
@@ -134,6 +135,7 @@ public class VibeService {
         if (rawPredictions instanceof Map) {
             predictions = (Map<String, Object>) rawPredictions;
         }
+        logger.info("Predictions extracted: " + predictions);
 
         String explanation = "Complete location data for map view.";
         double confidence = 1.0;
