@@ -87,21 +87,18 @@ def initialize_busyness_models():
 # --- Data Preparation (Original Logic) ---
 
 def get_hours(now=None):
-    """Generates a list of the last 12 hourly datetime objects."""
     if now is None:
         now = datetime.now()
     current_hour = now.replace(minute=0, second=0, microsecond=0)
-    return [current_hour - timedelta(hours=i) for i in reversed(range(12))]
+    hours_list = [current_hour - timedelta(hours=i) for i in reversed(range(12))]
+    start = int(hours_list[0].timestamp())
+    end = int(hours_list[-1].timestamp())
+    return [hours_list, start, end]
 
-def get_last_12_hours_temperature(hours, lat: float, lon: float):
-    """Fetches weather data for the last 12 hours from Open-Meteo."""
-    if not hours:
-        return []
-        
+def get_last_12_hours_temperature(hours, lat: float = 40.785091, lon: float = -73.968285):
     sorted_hours = sorted(hours)
     start_date = sorted_hours[0].strftime('%Y-%m-%d')
     end_date = sorted_hours[-1].strftime('%Y-%m-%d')
-    
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         'latitude': lat,
@@ -112,115 +109,91 @@ def get_last_12_hours_temperature(hours, lat: float, lon: float):
         'timezone': 'America/New_York',
         'temperature_unit': 'celsius'
     }
-    
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        
-        api_times = data['hourly']['time']
-        api_temps = data['hourly']['temperature_2m']
-        
-        results = []
+        times = data['hourly']['time']
+        temperatures = data['hourly']['temperature_2m']
+        tx = [0] * 12
+        result = []
         for hour in hours:
             hour_str = hour.strftime('%Y-%m-%dT%H:00')
-            temp = None
-            if hour_str in api_times:
-                idx = api_times.index(hour_str)
-                temp = api_temps[idx]
-            # The original model expects 0 for precipitation.
-            results.append({'temp': temp, 'precip': 0.0, 'day': hour})
-        
-        return results
-        
+            if hour_str in times:
+                idx = times.index(hour_str)
+                result.append(temperatures[idx])
+            else:
+                result.append(None)
+        return zip(result, tx, hours)
     except requests.RequestException as e:
-        logger.error(f"Error fetching weather data: {e}. Using default values.")
-        # Return default data if API fails
-        return [{'temp': 15.0, 'precip': 0.0, 'day': hour} for hour in hours]
+        print(f"Error fetching weather data: {e}")
+        return [None] * len(hours)
 
-def prep_data(weather_data):
-    """Prepares the feature DataFrame for the models."""
-    if not weather_data:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(weather_data)
-    
-    # Handle missing temperature data by forward-filling, then back-filling
-    # The 'method' argument is deprecated; using .ffill() and .bfill() is the modern approach.
-    df['temp'] = df['temp'].ffill().bfill()
-    df['temp'] = df['temp'].fillna(15.0) # Final fallback
-
-    df.rename(columns={'temp': 'TEMP_C', 'precip': 'PRECIP_MM'}, inplace=True)
-
+def prep_data(weather):
+    df = pd.DataFrame(weather, columns=['TEMP_C', 'PRECIP_MM', 'day'])
     df['is_weekend'] = (df['day'].dt.weekday >= 5).astype(int)
-    df['is_us_holiday'] = df['day'].apply(lambda x: x in us_holidays).astype(int)
-    df['month'] = df['day'].dt.month
-    df['day_of_month'] = df['day'].dt.day
-    df['hour'] = df['day'].dt.hour
-    
-    # Ensure column order matches the training data
-    feature_columns = ['TEMP_C', 'PRECIP_MM', 'is_weekend', 'is_us_holiday', 'month', 'day_of_month', 'hour']
-    return df[feature_columns]
+    us_holidays = holidays.US()
+    df['is_us_holiday'] = df['day'].dt.date.apply(lambda x: x in us_holidays).astype(int)
+    df['month'] = df['day'].dt.month.astype(int)
+    df['day_of_month'] = df['day'].dt.day.astype(int)
+    df['hour'] = df['day'].dt.hour.astype(int)
+    return df.drop(columns='day')
 
-# --- Prediction Pipeline (Original Logic) ---
+def compute_last_12(df_input):
+    model_names = [
+        "4 NET.keras", "12 NET.keras", "13 NET.keras", "24 NET.keras", "41 NET.keras",
+        "42 NET.keras", "43 NET.keras", "45 NET.keras", "48 NET.keras", "50 NET.keras",
+        "68 NET.keras", "74 NET.keras", "75 NET.keras", "79 NET.keras", "87 NET.keras",
+        "88 NET.keras", "90 NET.keras", "100 NET.keras", "105 NET.keras", "107 NET.keras",
+        "113 NET.keras", "114 NET.keras", "116 NET.keras", "120 NET.keras", "125 NET.keras",
+        "127 NET.keras", "128 NET.keras", "137 NET.keras", "140 NET.keras", "141 NET.keras",
+        "142 NET.keras", "143 NET.keras", "144 NET.keras", "148 NET.keras", "151 NET.keras",
+        "152 NET.keras", "153 NET.keras", "158 NET.keras", "161 NET.keras", "162 NET.keras",
+        "163 NET.keras", "164 NET.keras", "166 NET.keras", "170 NET.keras", "186 NET.keras",
+        "194 NET.keras", "202 NET.keras", "209 NET.keras", "211 NET.keras", "224 NET.keras",
+        "229 NET.keras", "230 NET.keras", "231 NET.keras", "232 NET.keras", "233 NET.keras",
+        "234 NET.keras", "236 NET.keras", "237 NET.keras", "238 NET.keras", "239 NET.keras",
+        "243 NET.keras", "244 NET.keras", "246 NET.keras", "249 NET.keras", "261 NET.keras",
+        "262 NET.keras", "263 NET.keras"
+    ]
+    results = {}
+    for model_n in model_names:
+        model = keras.models.load_model(f"./DNNs/{model_n}")
+        pred = model.predict(df_input, verbose=0)
+        results[model_n.replace(".keras", "")] = pred.flatten()
+    return pd.DataFrame(results)
 
-def predict_busyness_for_all_zones(lat, lon):
-    """
-    Main prediction function that orchestrates the entire pipeline:
-    1. Fetches last 12 hours of weather.
-    2. Prepares data into a feature DataFrame.
-    3. Runs data through all DNN models to get a 12-hour prediction sequence for each zone.
-    4. Feeds the combined sequence into the final LSTM model for the definitive prediction.
-    """
-    if not dnn_models or not final_lstm_model:
-        logger.error("Prediction pipeline cannot run: models are not initialized.")
-        return {}
+def preds_to_zone_dict(preds_array, zone_list):
+    result = {}
+    for i, zone in enumerate(zone_list):
+        zone_preds = preds_array[:, i]
+        result[str(zone)] = zone_preds.tolist()
+    return result
 
-    try:
-        # 1. & 2. Get and prepare data for the last 12 hours
-        logger.info("Step 1: Fetching and preparing last 12 hours of data...")
-        hours = get_hours()
-        weather = get_last_12_hours_temperature(hours, lat, lon)
-        df_features = prep_data(weather)
-
-        if df_features.empty:
-            logger.error("Feature preparation resulted in an empty DataFrame. Aborting.")
-            return {}
-
-        # 3. Run data through all DNN models
-        logger.info("Step 2: Generating 12-hour sequences with DNN models...")
-        # Sort zone names to ensure consistent column order for the LSTM model
-        sorted_zones = sorted(dnn_models.keys())
-        
-        dnn_predictions = {}
-        for zone_name in sorted_zones:
-            model = dnn_models[zone_name]
-            # Predict for all 12 hours at once
-            predictions = model.predict(df_features, verbose=0)
-            dnn_predictions[zone_name] = predictions.flatten()
-        
-        # Create a DataFrame of (12 hours x N zones)
-        df_dnn_results = pd.DataFrame(dnn_predictions)
-
-        # 4. Feed the sequence into the final LSTM model
-        logger.info("Step 3: Making final prediction with the LSTM meta-model...")
-        # Reshape data for LSTM: (batch_size, timesteps, features)
-        # Here, batch_size=1, timesteps=12, features=num_zones
-        input_for_lstm = np.expand_dims(df_dnn_results.to_numpy(), axis=0)
-        
-        # The LSTM predicts the next hour's busyness for all zones
-        final_prediction_array = final_lstm_model.predict(input_for_lstm, verbose=0)[0].flatten()
-
-        # 5. Format the output
-        logger.info("Step 4: Formatting final output.")
-        # The output is an array of predictions, one for each zone, in the sorted order
-        final_predictions = {
-            zone: float(score) for zone, score in zip(sorted_zones, final_prediction_array)
-        }
-        
-        logger.info(f"Successfully generated predictions for {len(final_predictions)} zones.")
-        return final_predictions
-
-    except Exception as e:
-        logger.error(f"An error occurred during the prediction pipeline: {e}", exc_info=True)
-        return {}
+def calculate_busyness():
+    hours, start, end = get_hours()
+    weather = get_last_12_hours_temperature(hours)
+    df = prep_data(weather)
+    predictions = compute_last_12(df)
+    keras.config.enable_unsafe_deserialization()
+    model = keras.models.load_model("./LSTMs/Fin.keras")
+    input_for_model = np.expand_dims(predictions, axis=0)
+    output = model.predict(input_for_model)[0]
+    zones = [
+        "4", "12", "13", "24", "41",
+        "42", "43", "45", "48", "50",
+        "68", "74", "75", "79", "87",
+        "88", "90", "100", "105", "107",
+        "113", "114", "116", "120", "125",
+        "127", "128", "137", "140", "141",
+        "142", "143", "144", "148", "151",
+        "152", "153", "158", "161", "162",
+        "163", "164", "166", "170", "186",
+        "194", "202", "209", "211", "224",
+        "229", "230", "231", "232", "233",
+        "234", "236", "237", "238", "239",
+        "243", "244", "246", "249", "261",
+        "262", "263"
+    ]
+    zone_data = preds_to_zone_dict(output, zones)
+    return zone_data
