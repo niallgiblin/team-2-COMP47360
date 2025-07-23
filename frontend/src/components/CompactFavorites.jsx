@@ -89,44 +89,44 @@ export default function CompactFavorites() {
             >
                 {/* Left Chevron */}
                 {showArrows && (
-                    <IconButton
-                        onClick={() => handleScroll("left")}
-                        sx={{
-                            position: "absolute",
-                            left: -10,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            zIndex: 2,
-                            color: "#FF4ECD",
-                            backgroundColor: "#000",
-                            "&:hover": {
-                                backgroundColor: "#111",
-                            },
-                        }}
-                    >
-                        <ChevronLeft />
-                    </IconButton>
+                <IconButton
+                    onClick={() => handleScroll("left")}
+                    sx={{
+                        position: "absolute",
+                        left: -10,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        zIndex: 2,
+                        color: "#FF4ECD",
+                        backgroundColor: "#000",
+                        "&:hover": {
+                            backgroundColor: "#111",
+                        },
+                    }}
+                >
+                    <ChevronLeft />
+                </IconButton>
                 )}
 
                 {/* Right Chevron */}
                 {showArrows && (
-                    <IconButton
-                        onClick={() => handleScroll("right")}
-                        sx={{
-                            position: "absolute",
-                            right: -10,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            zIndex: 2,
-                            color: "#FF4ECD",
-                            backgroundColor: "#000",
-                            "&:hover": {
-                                backgroundColor: "#111",
-                            },
-                        }}
-                    >
-                        <ChevronRight />
-                    </IconButton>
+                <IconButton
+                    onClick={() => handleScroll("right")}
+                    sx={{
+                        position: "absolute",
+                        right: -10,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        zIndex: 2,
+                        color: "#FF4ECD",
+                        backgroundColor: "#000",
+                        "&:hover": {
+                            backgroundColor: "#111",
+                        },
+                    }}
+                >
+                    <ChevronRight />
+                </IconButton>
                 )}
 
                 {/* Scrollable venue cards */}

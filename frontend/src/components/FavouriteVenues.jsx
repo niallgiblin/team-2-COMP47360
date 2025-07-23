@@ -58,11 +58,11 @@ function FavouriteVenues() {
                 let tags = [];
                 if (enriched.tags && Array.isArray(enriched.tags) && enriched.tags.length > 0) {
                     tags = enriched.tags;
-                } else if (enriched.type) {
-                    tags = enriched.type.split(',').map(t => t.trim()).filter(Boolean);
+                    } else if (enriched.type) {
+                        tags = enriched.type.split(',').map(t => t.trim()).filter(Boolean);
                 } else if (enriched.description) {
                     tags = enriched.description.split(/[ ,]+/).map(t => t.trim()).filter(Boolean);
-                }
+                    }
                 // Fallback: use the venue category as a tag
                 if (tags.length === 0 && enriched.category) {
                     tags = [enriched.category];

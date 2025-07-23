@@ -73,43 +73,43 @@ export default function CompactPlanSummary() {
 
       {/* Chevron Buttons */}
       {showArrows && (
-        <IconButton
-          onClick={scrollLeft}
-          sx={{
-            position: 'absolute',
-            left: -10,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 2,
-            color: '#FF4ECD',
-            backgroundColor: '#000',
-            '&:hover': {
-              backgroundColor: '#111',
-            },
-          }}
-        >
-          <ChevronLeftIcon />
-        </IconButton>
+      <IconButton
+        onClick={scrollLeft}
+        sx={{
+          position: 'absolute',
+          left: -10,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          zIndex: 2,
+          color: '#FF4ECD',
+          backgroundColor: '#000',
+          '&:hover': {
+            backgroundColor: '#111',
+          },
+        }}
+      >
+        <ChevronLeftIcon />
+      </IconButton>
       )}
 
       {showArrows && (
-        <IconButton
-          onClick={scrollRight}
-          sx={{
-            position: 'absolute',
-            right: -10,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 2,
-            color: '#FF4ECD',
-            backgroundColor: '#000',
-            '&:hover': {
-              backgroundColor: '#111',
-            },
-          }}
-        >
-          <ChevronRightIcon />
-        </IconButton>
+      <IconButton
+        onClick={scrollRight}
+        sx={{
+          position: 'absolute',
+          right: -10,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          zIndex: 2,
+          color: '#FF4ECD',
+          backgroundColor: '#000',
+          '&:hover': {
+            backgroundColor: '#111',
+          },
+        }}
+      >
+        <ChevronRightIcon />
+      </IconButton>
       )}
       
       {/* Venue cards (horizontal scroll) */}

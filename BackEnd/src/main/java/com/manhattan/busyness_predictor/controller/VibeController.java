@@ -68,8 +68,9 @@ public class VibeController {
         result.put("message", "Map data fetched successfully");
         result.put("locations", response.getLocations());
         result.put("busyness", response.getBusyness());
-        result.put("predictions", response.getPredictions());
-        result.put("totalResults", response.getLocations().size());
+        // Always include predictions, even if empty
+        result.put("predictions", response.getPredictions() != null ? response.getPredictions() : List.of());
+        result.put("totalResults", response.getLocations() != null ? response.getLocations().size() : 0);
 
         return ResponseEntity.ok(result);
     }

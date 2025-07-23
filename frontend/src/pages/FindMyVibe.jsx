@@ -184,11 +184,11 @@ export default function FindMyVibe() {
             tags = venue.tags;
           } else if (canonical && Array.isArray(canonical.tags) && canonical.tags.length > 0) {
             tags = canonical.tags;
-          } else if (venue.type) {
-            tags = venue.type.split(',').map(t => t.trim()).filter(Boolean);
+            } else if (venue.type) {
+              tags = venue.type.split(',').map(t => t.trim()).filter(Boolean);
           } else if (venue.description) {
             tags = venue.description.split(/[ ,]+/).map(t => t.trim()).filter(Boolean);
-          }
+            }
           // Fallback: use the venue category as a tag
           if (tags.length === 0 && venue.category) {
             tags = [venue.category];

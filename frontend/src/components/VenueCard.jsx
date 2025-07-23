@@ -179,70 +179,70 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
         
         {/* Display the venue's name as a heading */}
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, mt: 1 }}>
-          <Typography
+        <Typography 
             variant="subtitle1"
             sx={{ fontWeight: 'bold', color: '#fff', mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          >
-            {name}
-          </Typography>
+        >
+          {name}
+        </Typography>
           {/* Add flexible spacer between name and rating if highlighted */}
           {highlighted && <Box sx={{ flexGrow: 1 }} />}
-          {/* Rating */}
+              {/* Rating */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-            {[1, 2, 3, 4, 5].map((i) => {
-              if (parsedRating >= i) {
+                {[1, 2, 3, 4, 5].map((i) => {
+                  if (parsedRating >= i) {
                 return <StarIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
-              } else if (parsedRating >= i - 0.5) {
+                  } else if (parsedRating >= i - 0.5) {
                 return <StarHalfIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
-              } else {
+                  } else {
                 return <StarBorderIcon key={i} sx={{ fontSize: 18, color: '#FFD700' }} />;
-              }
-            })}
+                  }
+                })}
             <Typography variant="body2" sx={{ color: '#fff', ml: 1 }}>
-              {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
-            </Typography>
-          </Box>
-          {/* Price */}
-          <Box 
-              sx={{ 
-                display: 'flex', 
-                alignItems: 'center',
-                gap: '0.25rem',
+                  {parsedRating ? parsedRating.toFixed(1) : 'N/A'}
+                </Typography>
+              </Box>
+             {/* Price */}
+              <Box 
+                  sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '0.25rem',
                 mt: 0.5,
-              }}>
-          {[1, 2, 3, 4, 5].map((i) => (
-              <AttachMoneyIcon
-              key={i}
-              sx={{
-                  fontSize: 16,
-                  color: i <= level ? '#FFD700' : '#555555',
-              }}
-              />
-          ))}
+                  }}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                  <AttachMoneyIcon
+                  key={i}
+                  sx={{
+                      fontSize: 16,
+                      color: i <= level ? '#FFD700' : '#555555',
+                  }}
+                  />
+              ))}
+              </Box>
           </Box>
-        </Box>
 
         {/* Website link: hide if showLikeButton and content is too tall */}
         {uri && (!showLikeButton || (showLikeButton && !isPlanFull)) && (
-          <Box sx={{ mt: 1 }}>
-            <Button
-              variant="text"
-              size="small"
-              onClick={handleWebsiteClick}
-              startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
-              sx={{
-                color: '#FF4ECD',
-                textTransform: 'none',
-                fontWeight: 600,
-                px: 0,
-              }}
-            >
-              Visit Website
-            </Button>
-          </Box>
-        )}
+            <Box sx={{ mt: 1 }}>
+              <Button
+                variant="text"
+                size="small"
+                onClick={handleWebsiteClick}
+                startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  color: '#FF4ECD',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 0,
+                }}
+              >
+                Visit Website
+              </Button>
+            </Box>
+          )}
         {!disableActions && (
-          <Box sx={{ mt: 'auto', pt: 1 }}>
+            <Box sx={{ mt: 'auto', pt: 1 }}>
             <Tooltip title={
               isInPlan
                 ? "Already in your plan"
@@ -250,40 +250,40 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                 ? "Your plan is full (max 5 venues)"
                 : ""
             } arrow>
-              {/* The Tooltip needs a span wrapper to work when the button is disabled */}
-              <span>
-                <Button
-                  variant="contained"
+                {/* The Tooltip needs a span wrapper to work when the button is disabled */}
+                <span>
+                  <Button
+                    variant="contained"
                   size={showLikeButton ? "medium" : "small"}
-                  fullWidth
+                    fullWidth
                   onClick={() => {
                     if (!isPlanFull && !isInPlan && addToPlan) {
                       addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri });
                     }
                   }}
                   disabled={isPlanFull || isInPlan}
-                  sx={{
+                    sx={{
                     background: showLikeButton ? 'linear-gradient(90deg, #3ABEFF 0%, #FF4ECD 100%)' : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                    fontWeight: 'bold',
+                      fontWeight: 'bold',
                     color: showLikeButton ? '#000' : '#121212',
                     fontSize: showLikeButton ? '1.1rem' : undefined,
                     py: showLikeButton ? 1.2 : undefined,
                     borderRadius: showLikeButton ? 2 : undefined,
                     boxShadow: showLikeButton ? '0 2px 8px rgba(58,190,255,0.10)' : undefined,
                     letterSpacing: showLikeButton ? '0.03em' : undefined,
-                    '&:disabled': {
-                      background: '#555',
-                      color: '#888',
-                      cursor: 'not-allowed'
-                    }
-                  }}
-                >
-                  Add to Plan
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-        )}
+                      '&:disabled': {
+                        background: '#555',
+                        color: '#888',
+                        cursor: 'not-allowed'
+                      }
+                    }}
+                  >
+                    Add to Plan
+                  </Button>
+                </span>
+              </Tooltip>            
+            </Box>
+          )}
       </Card>
     );
   } catch (err) {
