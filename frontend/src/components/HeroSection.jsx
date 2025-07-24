@@ -27,7 +27,7 @@ export default function HeroSection() {
     <Box
       sx={{
         width: '100vw', // Full viewport width
-        height: {xs: '50vw', sm: '30vw', md: '10vw'},
+        height: {xs: '70vw', sm: '60vw', md: '45vw', lg: '40vw'},
         backgroundColor: '#414141', // fallback background if video doesn't load
         color: '#FFFFFF', // default text colour
         textAlign: 'center', // centre all text
