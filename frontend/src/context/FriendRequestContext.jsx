@@ -14,7 +14,7 @@ export const useFriendRequests = () => {
 export const FriendRequestProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [acceptedFriends, setAcceptedFriends] = useState([]);
-  const { makeAuthenticatedRequest } = useAuth(); // Using the hook
+  const { makeAuthenticatedRequest, isAuthenticated } = useAuth(); // Add isAuthenticated
 
   const fetchFriendsData = useCallback(async () => {
     if (!makeAuthenticatedRequest) return; // Guard until the function is ready
@@ -39,8 +39,13 @@ export const FriendRequestProvider = ({ children }) => {
   const clearAcceptedFriends = () => setAcceptedFriends([]);
 
   useEffect(() => {
-    fetchFriendsData();
-  }, [fetchFriendsData]);
+    if (isAuthenticated) {
+      fetchFriendsData();
+    } else {
+      setAcceptedFriends([]);
+      setPendingRequests([]);
+    }
+  }, [fetchFriendsData, isAuthenticated]);
 
   // Expose a function to allow components to manually trigger a refresh
   const refreshFriendsData = fetchFriendsData;
