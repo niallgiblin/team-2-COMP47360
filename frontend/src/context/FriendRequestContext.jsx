@@ -21,8 +21,8 @@ export const FriendRequestProvider = ({ children }) => {
 
     try {
       // Use the centralized request function which handles token and base URL
-      const data = await makeAuthenticatedRequest('/friends/list'); 
-      
+      const response = await makeAuthenticatedRequest('/api/friends/list'); 
+      const data = await response.json();
       if (data) {
         // The backend returns an object with keys: accepted, sent, received
         setAcceptedFriends(data.accepted || []);
