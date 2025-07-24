@@ -127,7 +127,6 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
 
         </Box>
         )}
-
         {/* Display the venue's image using CardMedia */}
         <CardMedia
           component="img"

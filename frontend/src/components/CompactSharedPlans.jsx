@@ -92,7 +92,6 @@ export default function CompactSharedPlans({ setViewMode }) {
         >
           <ChevronRight />
         </IconButton>
-
         {/* Scrollable container for venue cards */}
         <Box
           ref={scrollRef}
@@ -125,7 +124,6 @@ export default function CompactSharedPlans({ setViewMode }) {
               >
                 {item.plan.name}
               </Typography>
-
               {/* Username of the user who shared the plan */}
               <Typography variant="caption" sx={{ color: '#aaa', mb: 1, display: 'block' }}>
                 Shared by @{item.sharedBy?.username || 'Unknown'}
