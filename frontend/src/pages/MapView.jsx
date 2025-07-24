@@ -28,7 +28,6 @@ import CompactSavedPlans from '../components/CompactSavedPlans';
 import CompactFavorites from '../components/CompactFavorites';
 import SharedPlans from "../components/SharedPlans";
 import CompactSharedPlans from "../components/CompactSharedPlans";
-import { DateTime } from "luxon";
 
 // Data and context
 import mockVenues from "../data/mockVenues";
