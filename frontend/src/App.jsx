@@ -168,13 +168,13 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <FriendRequestProvider>
+      <PlanProvider>
         <LikeProvider>
-          <PlanProvider>
+          <FriendRequestProvider>
             <AppContent />
-          </PlanProvider>
+          </FriendRequestProvider>
         </LikeProvider>
-      </FriendRequestProvider>
+      </PlanProvider>
     </AuthProvider>
   );
 }

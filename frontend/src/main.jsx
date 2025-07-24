@@ -5,8 +5,6 @@ import App from './App.jsx';
 import 'leaflet/dist/leaflet.css';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { LikeProvider } from './context/LikeContext'; // included here
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
 // Create a custom MUI theme using Urbanist font
@@ -17,15 +15,11 @@ const theme = createTheme({
 });
 
 createRoot(document.getElementById('root')).render(
-    <StrictMode>
-      <ThemeProvider theme={theme}>
-        <BrowserRouter>
-          <AuthProvider>
-            <LikeProvider>
-              <App />
-            </LikeProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </ThemeProvider>
-    </StrictMode>
+  <StrictMode>
+    <ThemeProvider theme={theme}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ThemeProvider>
+  </StrictMode>
 );

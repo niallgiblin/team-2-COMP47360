@@ -1,3 +1,6 @@
+// component to display a list of saved plans, created by the user
+// used on the Profile.jsx page, under "Saved Plans" tab
+
 // MUI components for layout and styling
 import { Box, Typography, Stack, Button, Divider } from "@mui/material";
 
@@ -14,7 +17,7 @@ import PlanDisplay from "./PlanDisplay";
 import { useNavigate } from "react-router-dom";
 
 // React state and lifecycle hooks
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 // Modal component to handle sharing a plan
 import SharePlanModal from './SharePlanModal';
@@ -103,12 +106,13 @@ export default function SavedPlans() {
               </Typography>
             </Box>
 
-            {/* Embedded display of plan content (e.g., venues) */}
+            {/* Display venues in the saved plan */}
             <PlanDisplay planName={plan.name} venues={plan.venues} />
 
-            {/* Plan action buttons: view, delete, share */}
+            {/* Action buttons for each saved plan */}
             <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
-              {/* Load plan into context and navigate to map */}
+              
+              {/* View plan on map */}
               <Button
                 onClick={() => {
                   loadPlan(plan.venues);
@@ -125,7 +129,7 @@ export default function SavedPlans() {
                 View on Map
               </Button>
 
-              {/* Delete the plan */}
+              {/* Button to delete this saved plan */}
               <Button
                 onClick={() => deletePlan(plan.id)}
                 variant="outlined"
