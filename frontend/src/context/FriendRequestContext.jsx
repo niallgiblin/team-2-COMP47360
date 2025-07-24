@@ -51,6 +51,8 @@ export const FriendRequestProvider = ({ children }) => {
         pendingRequests,
         acceptedFriends,
         refreshFriendsData,
+        fetchFriendRequests: fetchFriendsData,
+        fetchAcceptedFriends: fetchFriendsData,
         clearFriendRequests,
         clearAcceptedFriends,
       }}
