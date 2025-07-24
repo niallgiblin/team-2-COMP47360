@@ -1,3 +1,7 @@
+// displays plans that have been shared with the user
+// uses the compact variant of VenueCard, and displays them in a horizontally scrollable format
+// used on MapView
+
 import { Box, Typography, Button, IconButton } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { usePlan } from '../context/PlanContext';
@@ -5,10 +9,12 @@ import { useNavigate } from 'react-router-dom';
 import { useRef } from 'react';
 
 export default function CompactSharedPlans({ setViewMode }) {
+  // access shared plans, loader function, flag setter from context
   const { sharedPlans, loadPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
   const scrollRef = useRef(null);
 
+  // handles horizontal scrolling
   const handleScroll = (direction) => {
     const container = scrollRef.current;
     if (!container) return;
@@ -16,6 +22,7 @@ export default function CompactSharedPlans({ setViewMode }) {
     container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
   };
 
+  // show fallback message if there are no shared plans
   if (!sharedPlans || sharedPlans.length === 0) {
     return (
       <Typography 
@@ -32,6 +39,7 @@ export default function CompactSharedPlans({ setViewMode }) {
 
   return (
     <Box>
+      {/* Headding */}
       <Typography
         variant="subtitle1"
         sx={{
@@ -43,6 +51,7 @@ export default function CompactSharedPlans({ setViewMode }) {
         Plans Shared With You
       </Typography>
 
+      {/* Container for cards and chevrons*/}
       <Box 
         sx={{ 
           position: 'relative',
@@ -50,6 +59,7 @@ export default function CompactSharedPlans({ setViewMode }) {
           overflow: 'hidden',
         }}
       >
+        {/* Left chevron */}
         <IconButton
           onClick={() => handleScroll('left')}
           sx={{
@@ -66,6 +76,7 @@ export default function CompactSharedPlans({ setViewMode }) {
           <ChevronLeft />
         </IconButton>
 
+        {/* Right chevron */}
         <IconButton
           onClick={() => handleScroll('right')}
           sx={{
@@ -81,7 +92,7 @@ export default function CompactSharedPlans({ setViewMode }) {
         >
           <ChevronRight />
         </IconButton>
-
+        {/* Scrollable container for venue cards */}
         <Box
           ref={scrollRef}
           sx={{
@@ -106,21 +117,24 @@ export default function CompactSharedPlans({ setViewMode }) {
                 flexShrink: 0,
               }}
             >
+              {/* PLan name */}
               <Typography
                 variant="body1"
                 sx={{ color: '#fff', fontWeight: 'bold', mb: 1 }}
               >
                 {item.plan.name}
               </Typography>
-
+              {/* Username of the user who shared the plan */}
               <Typography variant="caption" sx={{ color: '#aaa', mb: 1, display: 'block' }}>
                 Shared by @{item.sharedBy?.username || 'Unknown'}
               </Typography>
 
+              {/* Date plan was shared */}
               <Typography variant="caption" sx={{ color: '#aaa', display: 'block' }}>
                 Shared on: {new Date(item.plan.createdAt).toLocaleDateString()}
               </Typography>
 
+              {/* View on map button */}
               <Button
                 fullWidth
                 onClick={() => {

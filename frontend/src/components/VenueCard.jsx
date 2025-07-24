@@ -1,3 +1,7 @@
+// Card component to display venue's image, rating, price level and link to website
+// less detail than trending venue card, to give a compact idea of the venue
+// used in PlanSummary, PlanDisplay, FindMyVibe, MapView, Profile 
+
 import { Box, Typography, Chip, Button, Card, CardMedia, Tooltip } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
 import StarHalfIcon from '@mui/icons-material/StarHalf';
@@ -11,12 +15,13 @@ import { usePlan } from '../context/PlanContext';
 
 
 // Functional component that displays information about a venue and handles actions
-export default function VenueCard({ venue, variant = 'default', disableActions = false }) {   // add disable actions, so add/remove buttons don't show on shared plans
-  console.log('VenueCard venue:', venue);
+export default function VenueCard({ venue, variant = 'default', disableActions = false }) {
   const { plan, addToPlan, removeFromPlan } = usePlan();
-
   try {
-    // Defensive: fallback for missing fields
+    console.log('VenueCard venue:', venue);
+    if (!venue) return null; // Defensive: render nothing if venue is missing
+
+    // Destructure venue object with fallbacks to prevent crashes
     const {
       id = '',
       name = 'Unknown Venue',
@@ -26,12 +31,12 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
       rating,
       price,
       tags = [],
-      imageUrl = '',
+      imageUrl: rawImageUrl = '',
       description = '',
       uri = ''
-    } = venue || {};
+    } = venue;
 
-    // Defensive: handle review/rating
+    // Parse rating from either 'review' or 'rating' field
     let parsedRating = 0;
     if (typeof review === 'string') {
       const match = review.match(/([0-9.]+)/);
@@ -42,50 +47,37 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
       parsedRating = rating;
     }
 
-    // Defensive: handle price
+    // Normalize price to 1-5 level
+    const priceLevels = {
+      'price level very cheap': 1,
+      'price level cheap': 2,
+      'price level moderate': 3,
+      'price level expensive': 4,
+      'price level very expensive': 5,
+    };
+
     let level = 0;
     if (typeof price === 'number') {
       level = price;
     } else if (typeof price === 'string') {
       const normalizedPrice = price.trim().toLowerCase();
-      const priceLevels = {
-        'price level very cheap': 1,
-        'price level cheap': 2,
-        'price level moderate': 3,
-        'price level expensive': 4,
-        'price level very expensive': 5,
-      };
       level = priceLevels[normalizedPrice] || 0;
     }
 
+    // Pick fallback image based on category
     const category = getCategory(description || '');
-    const imageUrlFinal = imageUrl || categoryImages[category] || categoryImages.default;
+    const imageUrlFinal = rawImageUrl || categoryImages[category] || categoryImages.default;
 
-    // Remove busyness chip logic
-    // let busynessLabel = null;
-    // if (busynessMap && venue.zoneId) {
-    //   const value = busynessMap[String(venue.zoneId)];
-    //   if (typeof value === 'number') {
-    //     const percent = value * 100;
-    //     if (percent >= 75) busynessLabel = 'Very Busy';
-    //     else if (percent >= 50) busynessLabel = 'Busy';
-    //     else if (percent >= 25) busynessLabel = 'Moderate';
-    //     else busynessLabel = 'Quiet';
-    //   } else {
-    //     busynessLabel = 'No Data';
-    //   }
-    // }
-
+    // Handle "Visit Website" click
     const handleWebsiteClick = () => {
       if (uri) {
         window.open(uri, '_blank');
       }
     };
 
-    // Defensive: ensure plan is an array before calling .some()
+    // Determine if venue is in the current plan and if the plan is full
     const isInPlan = Array.isArray(plan) ? plan.some(v => v.id === id) : false;
     const isPlanFull = Array.isArray(plan) ? plan.length >= 3 : false;
-
 
     return (
       <Card
@@ -135,7 +127,6 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
 
         </Box>
         )}
-
         {/* Display the venue's image using CardMedia */}
         <CardMedia
           component="img"

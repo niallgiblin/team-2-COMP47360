@@ -1,3 +1,6 @@
+// component with detailed venue information
+// used on Recommendations.jsx (What's Hot) page, FindMyVibe.jsx page
+
 import {
   Card,
   CardMedia,
@@ -12,6 +15,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { usePlan } from "../context/PlanContext";
 import { categoryImages } from "../utils/tagMapping";
+
+// import icons for feedback, tags, price etc
 import {
   Favorite as FavoriteIcon,
   FavoriteBorder as FavoriteBorderIcon,
@@ -38,8 +43,10 @@ export default function TrendingVenueCard({
   const { isAuthenticated } = useAuth();
   const { likedVenues, handleLike } = useLike();
 
+  // check if current venue is in favourites
   const isLiked = likedVenues.some((v) => v.id === venue.id);
 
+  // check both string and numeric rating for price
   const priceLevels = {
     "price level very cheap": 1,
     "price level cheap": 2,
@@ -56,10 +63,12 @@ export default function TrendingVenueCard({
     level = priceLevels[normalizedPrice] || 0;
   }
 
+  // check if venue is already in the plan, and if plan is full
   const { plan, addToPlan, removeFromPlan } = usePlan();
   const isInPlan = plan.some((v) => v.id === venue.id);
   const isPlanFull = plan.length >= 5;
 
+  // select a category image 
   const getCategoryFromFlags = (venue) => {
     if (venue.isRestaurant) return "restaurant";
     if (venue.isBar) return "bar";
@@ -72,7 +81,7 @@ export default function TrendingVenueCard({
   const imageUrl =
     venue.imageUrl || categoryImages[category] || categoryImages.default;
 
-  // Fixed: Add proper event handling for Add to Plan button
+  // event handling for Add to Plan button
   const handleAddToPlan = (e) => {
     e.stopPropagation(); // Prevent event bubbling
     if (!isAuthenticated) {
@@ -84,13 +93,13 @@ export default function TrendingVenueCard({
     }
   };
 
-  // Fixed: Add proper event handling for Remove from Plan
+  // event handling for Remove from Plan
   const handleRemoveFromPlan = (e) => {
     e.stopPropagation(); // Prevent event bubbling
     removeFromPlan(venue.id);
   };
 
-  // Fixed: Add proper event handling for Like button
+  // event handling for Like button
   const handleLikeClick = (e) => {
     e.stopPropagation(); // Prevent event bubbling
     if (unlikeOnlyFromFavorites && isLiked) {
@@ -107,7 +116,7 @@ export default function TrendingVenueCard({
     }
   };
 
-  // Fixed: Add proper event handling for map navigation
+  // event handling for map navigation
   const handleMapNavigation = (e) => {
     e.stopPropagation(); // Prevent event bubbling
     setSelectedVenue(venue);
@@ -139,14 +148,15 @@ export default function TrendingVenueCard({
         mt: 4,
       }}
     >
+      {/* Like button */}
       {showLikeButton && (
         <IconButton
-          onClick={handleLikeClick} // Fixed: Use proper event handler
+          onClick={handleLikeClick} // event handler
           sx={{
             position: "absolute",
             top: -12,
             right: 12,
-            zIndex: 10, // Fixed: Increased z-index to ensure it's above other elements
+            zIndex: 10, // ensure it's above other elements
             background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
             color: "#fff",
             width: 32,
@@ -156,12 +166,12 @@ export default function TrendingVenueCard({
             boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
             "&:hover": {
               background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
-              transform: "scale(1.05)", // Added: Subtle hover effect
+              transform: "scale(1.05)", // Subtle hover effect
             },
             "&:active": {
-              transform: "scale(0.95)", // Added: Click feedback
+              transform: "scale(0.95)", // Click feedback
             },
-            transition: "all 0.2s ease", // Added: Smooth transitions
+            transition: "all 0.2s ease", // Smooth transitions
           }}
         >
           {isLiked ? (
@@ -172,6 +182,7 @@ export default function TrendingVenueCard({
         </IconButton>
       )}
 
+      {/* Venue card layout */}
       <Card
         sx={{
           display: "flex",
@@ -190,7 +201,15 @@ export default function TrendingVenueCard({
           position: "relative",
         }}
       >
-        <Box sx={{ display: "flex", gap: 2, flex: 1, minWidth: 0 }}>
+        {/* Image and info section */}
+        <Box 
+          sx={{ 
+            display: "flex", 
+            gap: 2, 
+            flex: 1, 
+            minWidth: 0 
+          }}
+        >
           <CardMedia
             component="img"
             image={imageUrl}
@@ -204,7 +223,12 @@ export default function TrendingVenueCard({
             }}
           />
 
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Box 
+            sx={{ 
+              flexGrow: 1, 
+              minWidth: 0 
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
@@ -254,6 +278,7 @@ export default function TrendingVenueCard({
               {venue.summary || venue.description || ""}
             </Typography>
 
+            {/* Actions */}
             <Box
               sx={{
                 display: "flex",
@@ -264,14 +289,14 @@ export default function TrendingVenueCard({
               <Button
                 variant="text"
                 size="small"
-                onClick={handleMapNavigation} // Fixed: Use proper event handler
+                onClick={handleMapNavigation} // event handler
                 sx={{
                   color: "#3ABEFF",
                   textTransform: "none",
                   fontWeight: 600,
                   px: 0,
                   "&:hover": {
-                    backgroundColor: "rgba(58, 190, 255, 0.1)", // Added: Hover effect
+                    backgroundColor: "rgba(58, 190, 255, 0.1)", // hover effect
                   },
                 }}
               >
@@ -282,7 +307,7 @@ export default function TrendingVenueCard({
                 <Button
                   variant="text"
                   size="small"
-                  onClick={handleWebsiteClick} // Fixed: Use proper event handler
+                  onClick={handleWebsiteClick} // event handler
                   startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
                   sx={{
                     color: "#FF4ECD",
@@ -290,7 +315,7 @@ export default function TrendingVenueCard({
                     fontWeight: 600,
                     px: 0,
                     "&:hover": {
-                      backgroundColor: "rgba(255, 78, 205, 0.1)", // Added: Hover effect
+                      backgroundColor: "rgba(255, 78, 205, 0.1)", // Hover effect
                     },
                   }}
                 >
@@ -301,7 +326,14 @@ export default function TrendingVenueCard({
 
             {/* Tags */}
             {tagList.length > 0 && (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  flexWrap: 'wrap', 
+                  gap: 1, 
+                  mt: 1 
+                }}
+              >
                 {tagList.map((tag) => (
                   <Chip
                     key={tag}
@@ -328,6 +360,7 @@ export default function TrendingVenueCard({
           </Box>
         </Box>
 
+        {/* Right column - info and plan button */}
         <Box
           sx={{
             display: "flex",

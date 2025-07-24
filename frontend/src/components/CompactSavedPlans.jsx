@@ -1,3 +1,7 @@
+// displays the user's saved plans as summary cards, in a horizontally scrollable container
+// allows the user to reload a selected plan
+// Used on the MapView page
+
 import { Box, Typography, Button, IconButton } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { usePlan } from '../context/PlanContext';
@@ -24,6 +28,7 @@ export default function CompactSavedPlans({ setViewMode }) {
   const [selectedFriends, setSelectedFriends] = useState([]);
   const [shareMessage, setShareMessage] = useState('');
 
+  // scroll container
   const handleScroll = (direction) => {
     const container = scrollRef.current;
     if (!container) return;
@@ -94,6 +99,8 @@ export default function CompactSavedPlans({ setViewMode }) {
 
   return (
     <Box>
+      
+      {/* Title */}
       <Typography
         variant="subtitle1"
         sx={{
