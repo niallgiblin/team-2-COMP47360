@@ -45,6 +45,9 @@ services:
       BUSYNESS_SERVICE_URL: http://busyness-service:5000
       LLM_SERVICE_URL: http://llm-service:5000
       APP_JWT_SECRET: ${APP_JWT_SECRET}
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/urban_gala?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: urbanuser
+      SPRING_DATASOURCE_PASSWORD: urbanpass
     networks:
       - app-network
     healthcheck:
@@ -67,7 +70,9 @@ services:
     command: npm run dev
     environment:
       - HOST=0.0.0.0
-      -  VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
+      - VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
+      - VITE_API_BASE_URL=/api
+      - VITE_LLM_API_URL=/api/chat
     depends_on:
       - backend
     networks:
