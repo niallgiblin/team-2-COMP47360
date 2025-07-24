@@ -285,9 +285,7 @@ export default function ProfileForm() {
         <Typography variant="body2" color="gray" sx={{ mt: 0.5 }}>
           {formData.email}
         </Typography>
-        <Typography variant="caption" sx={{ mt: 0.5 }}>
-          Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'N/A'}
-        </Typography>
+        {/* Removed last login display */}
       </Box>
 
       {/* Display error or success message */}

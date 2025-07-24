@@ -129,11 +129,20 @@ export default function FriendsList() {
 
   return (
     <Box>
-      <Typography 
-        variant="h6" 
-        sx={{ 
-          mb: 2, fontWeight: "bold", color: "#fff" }}>
-        Your Friends
+      {/* Add Friend Title */}
+      <Typography
+        variant="h6"
+        sx={{
+          mb: 1,
+          fontWeight: "bold",
+          fontSize: 20,
+          background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          color: '#FFF',
+        }}
+      >
+        Add Friend:
       </Typography>
 
       {/* Friend Add Input */}
@@ -179,73 +188,184 @@ export default function FriendsList() {
       <Typography 
         variant="subtitle1" 
         sx={{ 
-          color: "#fff", 
-          mt: 3 
+          mt: 3,
+          fontWeight: 'bold',
+          fontSize: 18,
+          background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
         }}
       >
-        Accepted Friends
+        Friends
       </Typography>
-        <List>
-          {acceptedFriends.map((f) => (
-            <ListItem 
-              key={f.id} 
-              sx={{ 
-                px: 0 
+      <List>
+        {acceptedFriends.map((f) => (
+          <ListItem key={f.id} sx={{ px: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 'bold',
+                fontSize: 22,
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: '#FFF',
+                mb: 0.5,
               }}
             >
-              <ListItemText primary={`@${f.username}`} primaryTypographyProps={{ color: "#fff" }} />
-            </ListItem>
-          ))}
-        </List>
+              {f.firstName && f.lastName ? `${f.firstName} ${f.lastName}` : f.username}
+            </Typography>
+            <Box
+              sx={{
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                borderRadius: 999,
+                px: 2,
+                py: 0.5,
+                display: 'inline-block',
+                mb: 0.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: '#000',
+                  fontWeight: 'bold',
+                  fontSize: 15,
+                  letterSpacing: 0.5,
+                }}
+              >
+                @{f.username}
+              </Typography>
+            </Box>
+            <Typography sx={{ color: '#aaa', fontSize: 15 }}>
+              {f.email}
+            </Typography>
+          </ListItem>
+        ))}
+      </List>
 
-        <Typography 
-          variant="subtitle1" 
-          sx={{ 
-            color: "#fff", 
-            mt: 3 
-          }}
-          >
-            Requests You've Sent
-        </Typography>
-        <List>
-          {sentRequests.map((f) => (
-            <ListItem key={f.id} sx={{ px: 0 }}>
-              <ListItemText primary={`@${f.username} (Request Sent)`} primaryTypographyProps={{ color: "#BBB" }} />
-            </ListItem>
-          ))}
-        </List>
+      {/* Requests You've Sent Title */}
+      <Typography
+        variant="subtitle1"
+        sx={{
+          mt: 3,
+          fontWeight: 'bold',
+          fontSize: 18,
+          background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}
+      >
+        Requests You've Sent
+      </Typography>
+      <List>
+        {sentRequests.map((f) => (
+          <ListItem key={f.id} sx={{ px: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mb: 2 }}>
+            <Box
+              sx={{
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                borderRadius: 999,
+                px: 2,
+                py: 0.5,
+                display: 'inline-block',
+                mb: 0.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: '#000',
+                  fontWeight: 'bold',
+                  fontSize: 15,
+                  letterSpacing: 0.5,
+                }}
+              >
+                @{f.username}
+              </Typography>
+            </Box>
+          </ListItem>
+        ))}
+      </List>
 
-        <Typography variant="subtitle1" sx={{ color: "#fff", mt: 3 }}>Incoming Friend Requests</Typography>
-        <List>
-          {receivedRequests.map((f) => (
-            <ListItem key={f.id} sx={{ px: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <ListItemText primary={`@${f.username}`} primaryTypographyProps={{ color: "#fff" }} />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button onClick={() => handleAccept(f.id)} 
-                  size="small" 
-                  variant="contained" 
-                  sx={{ 
-                    backgroundColor: "#4CAF50" 
-                  }}>
-                  Approve
-                </Button>
-                <Button onClick={() => handleDecline(f.id)} 
-                  size="small" 
-                  variant="outlined" 
-                  sx={{ 
-                    color: "#FF4E4E", 
-                    borderColor: "#FF4E4E" 
-                  }}
-                >
-                  Reject
-                </Button>
-              </Box>
-            </ListItem>
-          ))}
-        </List>
+      {/* Incoming Friend Requests Title */}
+      <Typography
+        variant="subtitle1"
+        sx={{
+          mt: 3,
+          fontWeight: 'bold',
+          fontSize: 18,
+          background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}
+      >
+        Incoming Friend Requests
+      </Typography>
+      <List>
+        {receivedRequests.map((f) => (
+          <ListItem key={f.id} sx={{ px: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mb: 2 }}>
+            <Box
+              sx={{
+                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                borderRadius: 999,
+                px: 2,
+                py: 0.5,
+                display: 'inline-block',
+                mb: 0.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: '#000',
+                  fontWeight: 'bold',
+                  fontSize: 15,
+                  letterSpacing: 0.5,
+                }}
+              >
+                @{f.username}
+              </Typography>
+            </Box>
+            <Typography sx={{ color: '#aaa', fontSize: 15, mb: 1 }}>
+              {f.email}
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button onClick={() => handleAccept(f.id)} 
+                size="small" 
+                variant="contained" 
+                sx={{ 
+                  background: "linear-gradient(to right, #4CAF50, #3ABEFF)",
+                  color: "#000",
+                  fontWeight: "bold"
+                }}>
+                Approve
+              </Button>
+              <Button onClick={() => handleDecline(f.id)} 
+                size="small" 
+                variant="outlined" 
+                sx={{ 
+                  color: "#FF4E4E", 
+                  borderColor: "#FF4E4E",
+                  fontWeight: "bold"
+                }}
+              >
+                Reject
+              </Button>
+            </Box>
+          </ListItem>
+        ))}
+      </List>
 
       {/* Plans Shared With Me Section */}
-      <Typography variant="h6" sx={{ mt: 4, fontWeight: "bold", color: "#fff" }}>
+      <Typography
+        variant="h6"
+        sx={{
+          mt: 4,
+          fontWeight: "bold",
+          fontSize: 22,
+          background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          color: '#FFF',
+        }}
+      >
         Plans Shared With Me
       </Typography>
       {Object.keys(sharedPlansBySharer).length === 0 ? (
