@@ -10,11 +10,12 @@ public class UserDto {
     private String firstName;
     private String lastName;
     private String phoneNumber;
+    private String avatarUrl;
 
     public UserDto() {
     }
 
-    public UserDto(Integer id, String username, String email, String name, String firstName, String lastName, String phoneNumber) {
+    public UserDto(Integer id, String username, String email, String name, String firstName, String lastName, String phoneNumber, String avatarUrl) {
         this.id = id;
         this.username = username;
         this.email = email;
@@ -22,10 +23,11 @@ public class UserDto {
         this.firstName = firstName;
         this.lastName = lastName;
         this.phoneNumber = phoneNumber;
+        this.avatarUrl = avatarUrl;
     }
 
     public static UserDto fromUser(User user) {
-        return new UserDto(user.getId(), user.getUsername(), user.getEmail(), user.getName(), user.getFirstName(), user.getLastName(), user.getPhoneNumber());
+        return new UserDto(user.getId(), user.getUsername(), user.getEmail(), user.getName(), user.getFirstName(), user.getLastName(), user.getPhoneNumber(), user.getAvatarUrl());
     }
 
     // Getters and Setters
@@ -49,4 +51,7 @@ public class UserDto {
 
     public String getPhoneNumber() { return phoneNumber; }
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 }
