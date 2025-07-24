@@ -5,7 +5,7 @@ const LikeContext = createContext();
 
 export const useLike = () => useContext(LikeContext);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const LikeProvider = ({ children }) => {
     const [likedVenues, setLikedVenues] = useState([]);
@@ -14,23 +14,18 @@ export const LikeProvider = ({ children }) => {
     // Fetch liked venues from the backend when the user is authenticated
     useEffect(() => {
         const fetchLikes = async () => {
-            if (isAuthenticated) {
-                try {
-                    const response = await makeAuthenticatedRequest(`${API_BASE_URL}/favourites`);
-                    const data = await response.json();
-                    // Store only the location objects (LocationDto), not the FavouriteDto wrapper
-                    setLikedVenues((data || []).map(fav => fav.location));
-                } catch (error) {
-                    if (error.message !== "Not authenticated. Please log in.") {
-                        console.error("Failed to fetch liked venues:", error);
-                    }
-                }
-            } else {
-                setLikedVenues([]);
+            if (!isAuthenticated) return;
+            try {
+                const res = await makeAuthenticatedRequest(`${API_BASE_URL}/favourites`);
+                if (!res.ok) throw new Error('Failed to fetch');
+                const data = await res.json();
+                setLikedVenues(data);
+            } catch (err) {
+                console.error('Failed to fetch liked venues:', err);
             }
         };
         fetchLikes();
-    }, [isAuthenticated, makeAuthenticatedRequest]);
+    }, [isAuthenticated]);
 
     // Toggle a like and send the update to the backend
     const handleLike = useCallback(async (venue) => {
@@ -72,8 +67,10 @@ export const LikeProvider = ({ children }) => {
         }
     }, [isAuthenticated, likedVenues, makeAuthenticatedRequest]);
 
+    const clearLikes = () => setLikedVenues([]);
+
     return (
-        <LikeContext.Provider value={{ likedVenues, handleLike }}>
+        <LikeContext.Provider value={{ likedVenues, handleLike, clearLikes }}>
             {children}
         </LikeContext.Provider>
     );

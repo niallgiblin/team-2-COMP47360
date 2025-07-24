@@ -1,3 +1,7 @@
+// component to show a summary of the user's plan, of upto 5 venues
+// allows for viewing the plan on the map, saving, starting a new plan, seeing venue details
+// used on FindMyVibe and Profile pages
+
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
@@ -8,6 +12,8 @@ import VenueCard from './VenueCard';
 export default function PlanSummary({ busynessMap }) {
   const { plan, savePlan, loadPlan, clearPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
+  
+  // authentication state to check if user can save plans
   const { user, isAuthenticated } = useAuth();
 
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
@@ -16,16 +22,18 @@ export default function PlanSummary({ busynessMap }) {
   const [savedDialogOpen, setSavedDialogOpen] = useState(false);
   const [lastSavedPlan, setLastSavedPlan] = useState(null);
 
-
+  // trigger when user clicks 'save plan'
   const handleSave = () => {
     if (isAuthenticated) {
       setTempPlanName('');
       setNameDialogOpen(true);
     } else {
+      // redirect users to login page if not authenticated
       navigate('/login', { state: { message: "Please log in to save your plan." } });
     }
   };
   
+  // save plan after user provides a name
   const confirmSave = async () => {
     if (tempPlanName.trim()) {
       const saved = await savePlan(tempPlanName.trim());
@@ -61,6 +69,7 @@ export default function PlanSummary({ busynessMap }) {
         mb: 2,
       }}
     >
+      {/* Title - user's name and number of added venues */}
       <Box>
         <Typography
           variant="h6"
@@ -85,6 +94,7 @@ export default function PlanSummary({ busynessMap }) {
         </Typography>
       </Box>
 
+      {/* Buttons - only display if plan has items */}
       {plan.length > 0 && (
         <Box
           sx={{
@@ -157,7 +167,7 @@ export default function PlanSummary({ busynessMap }) {
       )}
     </Box>
 
-    {/* Content below actions */}
+    {/* Plan Content */}
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {plan.length === 0 ? (
         <Box
@@ -185,6 +195,7 @@ export default function PlanSummary({ busynessMap }) {
       )}
     </Box>
 
+      {/* Dialogue box to name plan */}
       <Dialog
         open={nameDialogOpen}
         onClose={() => setNameDialogOpen(false)}
@@ -235,7 +246,7 @@ export default function PlanSummary({ busynessMap }) {
         </DialogActions>
       </Dialog>
 
-          
+        {/* Dialogue box confirming plan has been saved and prompting for next action */}  
         <Dialog
           open={savedDialogOpen}
           onClose={() => setSavedDialogOpen(false)}

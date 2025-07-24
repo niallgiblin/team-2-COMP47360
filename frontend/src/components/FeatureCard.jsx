@@ -1,3 +1,5 @@
+// used on the home page
+
 import { Box, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 

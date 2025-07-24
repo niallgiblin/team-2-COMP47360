@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../hooks/useAuth'; // Assuming useAuth provides makeAuthenticatedRequest
 
-const FriendRequestContext = createContext(null); // null default prevents undefined access
+const FriendRequestContext = createContext(null);
 
 export const useFriendRequests = () => {
   const context = useContext(FriendRequestContext);
@@ -13,40 +14,36 @@ export const useFriendRequests = () => {
 export const FriendRequestProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [acceptedFriends, setAcceptedFriends] = useState([]);
+  const { makeAuthenticatedRequest } = useAuth(); // Using the hook
 
-  const fetchFriendRequests = async () => {
-    try {
-      const res = await fetch("http://localhost:8080/api/friends/requests", {
-        credentials: "include",
-      });
-      const data = await res.json();
-      setPendingRequests(data.pending || []);
-    } catch (err) {
-      console.error("Failed to fetch friend requests:", err);
-      setPendingRequests([]); // ensure it's always an array
-    }
-  };
+  const fetchFriendsData = useCallback(async () => {
+    if (!makeAuthenticatedRequest) return; // Guard until the function is ready
 
-  const fetchAcceptedFriends = async () => {
     try {
-      const res = await fetch("http://localhost:8080/api/friends?status=accepted", {
-        credentials: "include",
-      });
-      const data = await res.json();
-      setAcceptedFriends([
-        ...(Array.isArray(data) ? data : []),
-        { id: 'dummy123', username: 'testfriend' }, // TEMP: remove later
-      ]);
+      // Use the centralized request function which handles token and base URL
+      const data = await makeAuthenticatedRequest('/friends/list'); 
+      
+      if (data) {
+        // The backend returns an object with keys: accepted, sent, received
+        setAcceptedFriends(data.accepted || []);
+        setPendingRequests(data.received || []); // Assuming "pending" means "received" by the current user
+      }
     } catch (err) {
-      console.error("Failed to fetch accepted friends:", err);
-      setAcceptedFriends([]); // fallback
+      console.error('Failed to fetch friends data:', err);
+      setAcceptedFriends([]);
+      setPendingRequests([]);
     }
-  };
+  }, [makeAuthenticatedRequest]);
+
+  const clearFriendRequests = () => setPendingRequests([]);
+  const clearAcceptedFriends = () => setAcceptedFriends([]);
 
   useEffect(() => {
-    fetchFriendRequests();
-    fetchAcceptedFriends();
-  }, []);
+    fetchFriendsData();
+  }, [fetchFriendsData]);
+
+  // Expose a function to allow components to manually trigger a refresh
+  const refreshFriendsData = fetchFriendsData;
 
   return (
     <FriendRequestContext.Provider
@@ -55,6 +52,8 @@ export const FriendRequestProvider = ({ children }) => {
         acceptedFriends,
         fetchFriendRequests,
         fetchAcceptedFriends,
+        clearFriendRequests,
+        clearAcceptedFriends,
       }}
     >
       {children}

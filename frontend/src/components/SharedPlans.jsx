@@ -1,12 +1,17 @@
+// displays a list of shared plans, with full details
+// used on Profile page under Shared PLans tab
+
 import { Box, Typography, Stack, Button } from '@mui/material';
 import { usePlan } from '../context/PlanContext';
 import { useNavigate } from 'react-router-dom';
 import PlanDisplay from './PlanDisplay';
 
 export default function SharedPlans() {
+  // access shared plans and load plan from context
   const { sharedPlans, loadPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
 
+  // return message if no plans have been shared yet
   if (!sharedPlans || sharedPlans.length === 0) {
     return (
       <Typography 

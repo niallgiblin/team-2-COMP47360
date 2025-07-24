@@ -1,12 +1,14 @@
+// displays a horizontal time slider to navigate forecast busyness timestamps
+// used in the MapView.jsx page
+
 import { Box, Typography, Slider, Button } from '@mui/material';
-import { useState } from 'react';
-import { DateTime } from "luxon";
+import { DateTime } from "luxon";         // used to format timestamps
 
 export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange, mode }) {
 
-  if (!timestamps.length) return null;
+  if (!timestamps.length) return null;    // if no timestamps available, return null
 
-  const currentIndex = timestamps.findIndex(ts => ts === selectedTimestamp);
+  const currentIndex = timestamps.findIndex(ts => ts === selectedTimestamp);  // determine which index is currently selected
 
   return (
     <Box
@@ -32,6 +34,7 @@ export default function ForecastSlider({ timestamps = [], selectedTimestamp, onC
             Forecast for: {DateTime.fromISO(selectedTimestamp).setZone("America/New_York").toLocaleString(DateTime.DATETIME_MED)}
           </Typography>
 
+          {/* Slider component */}
           <Slider
             value={currentIndex}
             min={0}

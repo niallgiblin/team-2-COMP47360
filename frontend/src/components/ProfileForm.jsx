@@ -1,3 +1,6 @@
+// allows authenticated users to view and edit their account
+// used on the Profile.jsx page
+
 // React hooks and Material UI components
 import { useState, useEffect, useRef } from 'react';
 import {
@@ -356,10 +359,22 @@ export default function ProfileForm() {
           }}
         />
 
-        <Divider sx={{ my: 3, borderColor: '#333' }} />
+        <Divider 
+          sx={{ 
+            my: 3, 
+            borderColor: '#333' 
+          }} 
+        />
 
         {/* Account Info Section */}
-        <Typography variant="h6" sx={{ mb: 2, textTransform: 'uppercase', fontWeight: 'bold' }}>
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            mb: 2, 
+            textTransform: 'uppercase', 
+            fontWeight: 'bold' 
+          }}
+        >
           Account Information
         </Typography>
 
