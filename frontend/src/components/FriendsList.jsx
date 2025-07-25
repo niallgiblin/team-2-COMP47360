@@ -14,6 +14,8 @@ import { usePlan } from '../context/PlanContext';
 import { useNavigate } from 'react-router-dom';
 import { useState as useReactState } from 'react';
 import { useFriendRequests } from '../context/FriendRequestContext';
+import { Tabs, Tab } from '@mui/material';
+
 
 export default function FriendsList() {
   const { token, makeAuthenticatedRequest } = useAuth();
@@ -32,6 +34,7 @@ export default function FriendsList() {
   const { loadPlan, clearPlan, savePlanFromVenues, refreshSavedPlans, savedPlans } = usePlan();
   const navigate = useNavigate();
   const [saveMsg, setSaveMsg] = useReactState('');
+  const [tabIndex, setTabIndex] = useState(0);
 
   // Load sent and received friend requests separately
   const fetchSentAndReceived = useCallback(async () => {
@@ -128,8 +131,64 @@ export default function FriendsList() {
 
 
   return (
-    <Box>
+    <Box
+      sx={{
+        p: 3,
+        display: 'flex',
+        flexDirection: 'row',
+        gap: 3,
+        mt: 4,
+      }}
+    >      
+      <Tabs
+        orientation="vertical"
+        variant="scrollable"
+        value={tabIndex}
+        onChange={(e, newValue) => setTabIndex(newValue)}
+        sx={{
+          borderRight: 1,
+          borderColor: '#333',
+          minWidth: 180,
+          '& .MuiTabs-indicator': {
+            background: 'linear-gradient(to bottom, #3ABEFF, #FF4ECD)',
+            width: '3px',
+          },
+          '& .MuiTab-root': {
+            textTransform: 'uppercase',
+            fontWeight: 'bold',
+            color: '#BBB',
+            alignItems: 'flex-start',
+          },
+          '& .Mui-selected': {
+            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          },
+        }}
+      >
+        <Tab label="Add Friend" />
+        <Tab label="Friends" />
+        <Tab label="Sent Requests" />
+        <Tab label="Incoming Requests" />
+      </Tabs>
+
+       <Box 
+        sx={{ 
+          flex: 1, 
+          pl: 3 
+        }}
+      >
+
+      {/* Alert */}
+      {message.text && (
+        <Alert severity={message.type} sx={{ mb: 2 }}>
+          {message.text}
+        </Alert>
+      )}
+
       {/* Add Friend Title */}
+      <Box 
+        hidden={tabIndex !== 0} sx={{ flex: 1 }}>
       <Typography
         variant="h6"
         sx={{
@@ -176,15 +235,9 @@ export default function FriendsList() {
           Add
         </Button>
       </Box>
+      </Box> {/* End Add Friend Tab */}
 
-      {/* Alert */}
-      {message.text && (
-        <Alert severity={message.type} sx={{ mb: 2 }}>
-          {message.text}
-        </Alert>
-      )}
-
-      {/* Friend List */}
+      <Box hidden={tabIndex !== 1} sx={{ flex: 1 }}>
       <Typography 
         variant="subtitle1" 
         sx={{ 
@@ -242,8 +295,9 @@ export default function FriendsList() {
           </ListItem>
         ))}
       </List>
+      </Box> {/* End Friends Tab */}
 
-      {/* Requests You've Sent Title */}
+      <Box hidden={tabIndex !== 2} sx={{ flex: 1 }}>
       <Typography
         variant="subtitle1"
         sx={{
@@ -284,8 +338,9 @@ export default function FriendsList() {
           </ListItem>
         ))}
       </List>
+      </Box> {/* End Sent Requests Tab */}
 
-      {/* Incoming Friend Requests Title */}
+      <Box hidden={tabIndex !== 3} sx={{ flex: 1 }}>
       <Typography
         variant="subtitle1"
         sx={{
@@ -352,108 +407,10 @@ export default function FriendsList() {
           </ListItem>
         ))}
       </List>
+      </Box> {/* End Incoming Requests Tab */}
 
-      {/* Plans Shared With Me Section */}
-      <Typography
-        variant="h6"
-        sx={{
-          mt: 4,
-          fontWeight: "bold",
-          fontSize: 22,
-          background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          color: '#FFF',
-        }}
-      >
-        Plans Shared With Me
-      </Typography>
-      {Object.keys(sharedPlansBySharer).length === 0 ? (
-        <Typography sx={{ color: '#aaa', mt: 1 }}>No plans have been shared with you yet.</Typography>
-      ) : (
-        Object.entries(sharedPlansBySharer).map(([sharer, plans]) => (
-          <Box key={sharer} sx={{ mt: 2, mb: 2, p: 2, background: '#181828', borderRadius: 2 }}>
-            <Typography variant="subtitle1" sx={{ color: '#3ABEFF', fontWeight: 'bold' }}>
-              Shared by @{sharer}
-            </Typography>
-            {plans.map((plan) => (
-              <Box key={plan.id} sx={{ mt: 1, mb: 1, p: 1, background: '#222', borderRadius: 1 }}>
-                <Typography sx={{ color: '#fff', fontWeight: 'bold' }}>{plan.name}</Typography>
-                <Typography sx={{ color: '#aaa', fontSize: 13 }}>
-                  Saved: {new Date(plan.createdAt).toLocaleDateString()}
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    sx={{ background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)', color: '#000', fontWeight: 'bold' }}
-                    onClick={() => {
-                      clearPlan();
-                      console.log('Loading plan venues:', plan.venues);
-                      if (!Array.isArray(plan.venues) || plan.venues.length === 0) {
-                        setSaveMsg('No venues to load for this plan.');
-                        setTimeout(() => setSaveMsg(''), 2000);
-                        return;
-                      }
-                      loadPlan(plan.venues); // Set plan context to array of venues
-                      navigate('/map', { state: { fromPlan: true } });
-                    }}
-                  >
-                    View on Map
-                  </Button>
-                  {/* Save Plan button logic */}
-                  {(() => {
-                    // Check if this plan is already saved (by name and venues)
-                    const isAlreadySaved = savedPlans.some(saved => {
-                      if (saved.name === plan.name + ' (Copy)' && saved.venues && plan.venues) {
-                        const savedIds = saved.venues.map(v => v.id).sort().join(',');
-                        const planIds = plan.venues.map(v => v.id).sort().join(',');
-                        return savedIds === planIds;
-                      }
-                      return false;
-                    });
-                    return (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        disabled={isAlreadySaved}
-                        sx={{
-                          borderColor: isAlreadySaved ? '#555' : '#3ABEFF',
-                          color: isAlreadySaved ? '#555' : '#3ABEFF',
-                          fontWeight: 'bold',
-                          background: isAlreadySaved ? '#222' : 'none',
-                          cursor: isAlreadySaved ? 'not-allowed' : 'pointer',
-                        }}
-                        onClick={async () => {
-                          if (!plan.venues || plan.venues.length === 0) {
-                            setSaveMsg('No venues to save.');
-                            setTimeout(() => setSaveMsg(''), 2000);
-                            return;
-                          }
-                          const newPlan = await savePlanFromVenues(plan.name + ' (Copy)', plan.venues);
-                          if (newPlan) {
-                            setSaveMsg('Plan saved!');
-                            await refreshSavedPlans();
-                          } else {
-                            setSaveMsg('Failed to save plan.');
-                          }
-                          setTimeout(() => setSaveMsg(''), 2000);
-                        }}
-                      >
-                        {isAlreadySaved ? 'Plan Saved' : 'Save Plan'}
-                      </Button>
-                    );
-                  })()}
-                </Box>
-                {saveMsg && (
-                  <Typography sx={{ color: saveMsg.includes('saved') ? 'green' : 'red', fontSize: 13, mt: 1 }}>{saveMsg}</Typography>
-                )}
-              </Box>
-            ))}
-          </Box>
-        ))
-      )}
-
-    </Box>
+      {/* Plans Shared With Me Section - removed, this info already displays in a separate tab */}
+    </Box> {/* End right panel */}
+  </Box>
   );
 }
