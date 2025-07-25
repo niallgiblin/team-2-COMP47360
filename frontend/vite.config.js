@@ -8,15 +8,15 @@ export default defineConfig({
     host: true, // Allow connections from network
     port: 5173, // Default vite port
     proxy: {
-      // Proxy API requests to the backend service
-      '/api': {
-        target: 'http://backend:8080',
+      // Proxy LLM service requests FIRST
+      '/api/chat': {
+        target: 'http://llm-service:5000',
         changeOrigin: true,
         secure: false,
       },
-      // Proxy LLM service requests
-      '/api/chat': {
-        target: 'http://llm-service:5000',
+      // Proxy all other API requests to backend
+      '/api': {
+        target: 'http://backend:8080',
         changeOrigin: true,
         secure: false,
       },

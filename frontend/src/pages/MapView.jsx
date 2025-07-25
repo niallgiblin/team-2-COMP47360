@@ -73,9 +73,22 @@ const geocodeAddress = async (address) => {
   return null;
 };
 
+// NYC bounding box check
+function isInNYC(lat, lng) {
+  return (
+    lat >= 40.4774 && lat <= 40.9176 &&
+    lng >= -74.2591 && lng <= -73.7004
+  );
+}
+
 
 // main component - renders map, venue cards, forecast slider
 export default function MapView() {
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
+
   // Define tab styles
   const tabStyles = {
     textTransform: "uppercase",
@@ -153,22 +166,34 @@ export default function MapView() {
   }, [location.state, setFromPlan]);
 
 
-  // 1. Try to automatically retrieve user's geolocation
-  useEffect(() => {
-    if (!userLocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.warn("Geolocation failed or was denied:", error);
-        }
-      );
+  // Remove automatic geolocation
+  // useEffect(() => {
+  //   if (!userLocation) {
+  //     navigator.geolocation.getCurrentPosition(
+  //       (position) => {
+  //         setUserLocation({
+  //           lat: position.coords.latitude,
+  //           lng: position.coords.longitude,
+  //         });
+  //       },
+  //       (error) => {
+  //         console.warn("Geolocation failed or was denied:", error);
+  //       }
+  //     );
+  //   }
+  // }, [userLocation]);
+
+  // Handler for setting location on button click
+  const handleSetLocation = async () => {
+    if (manualStart.trim()) {
+      const loc = await geocodeAddress(manualStart);
+      if (loc && isInNYC(loc.lat, loc.lng)) {
+        setUserLocation(loc);
+      } else if (loc) {
+        alert("The selected location is not in New York City. Please enter a valid NYC address.");
+      }
     }
-  }, [userLocation]);
+  };
 
   // 2. Load zone polygons for map coloring
   useEffect(() => {
@@ -190,49 +215,33 @@ export default function MapView() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      
-      // use plan directly if user came from plan route
-      if (location.state?.fromPlan === true && plan.length > 0) {
-        setVenues(plan);
-        console.log('MapView plan:', plan);
-        console.log('MapView venues:', plan);
-        setLoading(false);
-        return;
-      }
       try {
         const res = await fetch(`/api/vibe/map-data`);
         if (!res.ok) throw new Error("Server error on map-data fetch");
-        
         const data = await res.json();
-        
-        // load venues
-        setVenues(data.locations || []);
-        
-        // format live busyness data
+        setVenues(location.state?.fromPlan === true && plan.length > 0 ? plan : data.locations || []);
         const busynessObject = data.busyness || {};
         const busynessArray = Object.entries(busynessObject).map(
           ([locationId, busynessValue]) => ({
-            LocationID: String(locationId).trim(), // normalize to string, trim whitespace
+            LocationID: String(locationId).trim(),
             busyness: busynessValue,
           })
         );
         setBusynessData(busynessArray);
-      
-      
-        // Handle prediction (forecast) data if available
         if (Array.isArray(data.predictions) && data.predictions.length > 0) {
           setPredictionData(data.predictions);
           const first = data.predictions[0]?.predictions?.[0]?.timestamp;
           if (first) setSelectedTimestamp(first);
+          setIsMock(false);
         } else {
           console.warn("No real prediction data returned from backend.");
+          setIsMock(true);
         }
       } catch (err) {
         // Fallback to mock data
         console.warn("Falling back to mock data due to fetch error:", err);
-        setVenues(mockVenues);
+        setVenues(location.state?.fromPlan === true && plan.length > 0 ? plan : mockVenues);
         if (!selectedVenueFromState) setSelectedVenue(mockVenues[0]);
-        console.log("[MapView] setting selectedVenue from mock");
         setIsMock(true);
       } finally {
         setLoading(false);
@@ -240,6 +249,27 @@ export default function MapView() {
     };
     fetchData();
   }, [fromPlan, plan, selectedVenueFromState, location.state?.fromPlan]);
+
+  // Always use dummy busyness and prediction data if isMock is true
+  useEffect(() => {
+    if (!zoneData || !isMock) return;
+    // Dummy busyness: random for each zone
+    const dummyBusyness = zoneData.features.map(f => ({
+      LocationID: f.properties.LocationID,
+      busyness: Math.random(),
+    }));
+    setBusynessData(dummyBusyness);
+    // Dummy predictions: random for each zone and timestamp
+    const manhattanZoneIds = zoneData.features
+      .filter(f => f.properties.borough === "Manhattan")
+      .map(f => f.properties.LocationID);
+    const zonesToUse = manhattanZoneIds.length > 0 ? manhattanZoneIds : zoneData.features.map(f => f.properties.LocationID);
+    const dummyPredictions = zonesToUse.map(zoneId => ({
+      LocationID: zoneId,
+      predictions: forecastTimestamps.map(ts => ({ timestamp: ts, busyness: Math.random() }))
+    }));
+    setPredictionData(dummyPredictions);
+  }, [zoneData, isMock, forecastTimestamps]);
 
   // 4. Enrich venues with zone IDs once all data is loaded
   useEffect(() => {
@@ -354,9 +384,34 @@ export default function MapView() {
       destination = selectedVenue;
     }
 
+    // NYC bounds check
     if (!start || !destination) {
       alert("Start or destination is missing.");
+      console.error("Directions error: start or destination missing", { start, destination });
       return;
+    }
+    // Extra check: ensure lat/lng are numbers
+    const isValidCoord = (obj) => obj && typeof obj.lat === 'number' && typeof obj.lng === 'number' && !isNaN(obj.lat) && !isNaN(obj.lng);
+    if (!isValidCoord(start) || !isValidCoord(destination)) {
+      alert("Start or destination coordinates are invalid. Please check your input or location permissions.");
+      console.error("Directions error: invalid coordinates", { start, destination });
+      return;
+    }
+    if (!isInNYC(start.lat, start.lng) || !isInNYC(destination.lat, destination.lng)) {
+      alert("Start and destination must be within New York City.");
+      console.error("Directions error: out of NYC bounds", { start, destination });
+      return;
+    }
+    // If intermediates exist, check them too
+    let intermediatesToCheck = [];
+    if (hasPlan && planVenues.length > 2) {
+      intermediatesToCheck = planVenues.slice(1, -1);
+    }
+    for (const stop of intermediatesToCheck) {
+      if (!isInNYC(stop.lat, stop.lng)) {
+        alert("All stops must be within New York City.");
+        return;
+      }
     }
 
     try {
@@ -408,18 +463,113 @@ export default function MapView() {
 
           allDirections.push(...steps);
         }
-      } else {
-        // WALK or single route
-        const origin = { location: { latLng: { latitude: start.lat, longitude: start.lng } } };
-        const dest = { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } };
-
-        let intermediates = [];
-        if (travelMode === "WALK" && hasPlan && planVenues.length > 2) {
-          intermediates = planVenues.slice(1, -1).map((v) => ({
+      } else if (travelMode === "WALK" && (hasPlan || manualDestination.trim())) {
+        // WALK mode with multiple locations: chunk into groups of up to 7 (start + 5 intermediates + end)
+        const maxWaypoints = 7;
+        const EPSILON = 1e-5;
+        // Build a full list of stops: start + all plan venues
+        let stops = [
+          { lat: start.lat, lng: start.lng, name: "Start" },
+          ...planVenues.map((v, idx) => ({
+            lat: v.lat,
+            lng: v.lng,
+            name: v.name || `Stop ${idx + 1}`,
+          })),
+        ];
+        // If manualDestination is set and geocoded, ensure it is the last stop
+        if (manualDestination.trim() && destination && destination.lat && destination.lng) {
+          let shouldAdd = true;
+          if (stops.length > 0) {
+            const last = stops[stops.length - 1];
+            if (Math.abs(last.lat - destination.lat) < EPSILON && Math.abs(last.lng - destination.lng) < EPSILON) {
+              shouldAdd = false;
+            }
+          }
+          if (shouldAdd) {
+            stops.push({ lat: destination.lat, lng: destination.lng, name: "Destination" });
+          }
+        }
+        // Chunk the stops for Google Directions API
+        let chunks = [];
+        for (let i = 0; i < stops.length - 1; i += maxWaypoints - 1) {
+          // Each chunk includes up to maxWaypoints points (start + up to 5 intermediates + end)
+          chunks.push(stops.slice(i, i + maxWaypoints));
+        }
+        for (let c = 0; c < chunks.length; c++) {
+          const chunk = chunks[c];
+          const chunkOrigin = { location: { latLng: { latitude: chunk[0].lat, longitude: chunk[0].lng } } };
+          const chunkDest = { location: { latLng: { latitude: chunk[chunk.length - 1].lat, longitude: chunk[chunk.length - 1].lng } } };
+          const intermediates = chunk.slice(1, -1).map((v) => ({
             location: { latLng: { latitude: v.lat, longitude: v.lng } },
           }));
+          const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+            method: "POST",
+            headers: {
+              "X-Goog-Api-Key": GOOGLE_API_KEY,
+              "X-Goog-FieldMask": "routes.legs,routes.polyline.encodedPolyline",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              origin: chunkOrigin,
+              destination: chunkDest,
+              intermediates,
+              travelMode,
+            }),
+          });
+          const data = await response.json();
+          const route = data.routes?.[0];
+          if (!route?.polyline?.encodedPolyline) {
+            console.error("No encoded polyline in response for chunk", c, data);
+            throw new Error("No encoded polyline in response.");
+          }
+          // For all but the first chunk, skip the first point to avoid overlap
+          const decoded = polyline.decode(route.polyline.encodedPolyline);
+          if (c > 0 && decoded.length > 0) {
+            combinedPolyline.push(...decoded.slice(1));
+          } else {
+            combinedPolyline.push(...decoded);
+          }
+          // Build user-friendly summaries for each leg in this chunk
+          const steps = route.legs.flatMap((leg, legIndex) =>
+            leg.steps?.map((step) => ({
+              summary: `${chunk[legIndex].name} → ${chunk[legIndex + 1].name}`,
+              instructions: step.navigationInstruction?.instructions || step.text || "Continue",
+              transitDetails: step.transitDetails || null,
+            })) || []
+          );
+          allDirections.push(...steps);
         }
-
+        setDirectionsPolyline(combinedPolyline);
+        setDirections(allDirections);
+        setShowDirections(true);
+      } else {
+        // WALK or single route
+        const EPSILON = 1e-5;
+        let stops = [
+          { lat: start.lat, lng: start.lng, name: "Start" },
+          ...planVenues.map((v, idx) => ({
+            lat: v.lat,
+            lng: v.lng,
+            name: v.name || `Stop ${idx + 1}`,
+          })),
+        ];
+        if (manualDestination.trim() && destination && destination.lat && destination.lng) {
+          let shouldAdd = true;
+          if (stops.length > 0) {
+            const last = stops[stops.length - 1];
+            if (Math.abs(last.lat - destination.lat) < EPSILON && Math.abs(last.lng - destination.lng) < EPSILON) {
+              shouldAdd = false;
+            }
+          }
+          if (shouldAdd) {
+            stops.push({ lat: destination.lat, lng: destination.lng, name: "Destination" });
+          }
+        }
+        const origin = { location: { latLng: { latitude: stops[0].lat, longitude: stops[0].lng } } };
+        const dest = { location: { latLng: { latitude: stops[stops.length - 1].lat, longitude: stops[stops.length - 1].lng } } };
+        const intermediates = stops.slice(1, -1).map((v) => ({
+          location: { latLng: { latitude: v.lat, longitude: v.lng } },
+        }));
         const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
           method: "POST",
           headers: {
@@ -434,24 +584,20 @@ export default function MapView() {
             travelMode,
           }),
         });
-
         const data = await response.json();
         const route = data.routes?.[0];
-
         if (!route?.polyline?.encodedPolyline) {
           throw new Error("No encoded polyline in response.");
         }
-
         combinedPolyline = polyline.decode(route.polyline.encodedPolyline);
-
+        // Use user-friendly summary for single route
         const steps = route.legs.flatMap((leg, legIndex) =>
-          leg.steps?.map((step, stepIndex) => ({
-            summary: `Leg ${legIndex + 1}, Step ${stepIndex + 1}`,
+          leg.steps?.map((step) => ({
+            summary: `Leg ${legIndex + 1}`,
             instructions: step.navigationInstruction?.instructions || step.text || "Continue",
             transitDetails: step.transitDetails || null,
           })) || []
         );
-
         allDirections = steps;
       }
 
@@ -665,6 +811,24 @@ export default function MapView() {
                 }}
                 InputLabelProps={{ shrink: true }}
               />
+              <Button
+                variant="contained"
+                onClick={handleSetLocation}
+                sx={{
+                  ml: 2,
+                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                  color: '#000',
+                  fontWeight: 'bold',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  height: 40,
+                  alignSelf: 'center',
+                  mt: 1,
+                }}
+              >
+                Set Location
+              </Button>
               <TextField
                 size="small"
                 label="Destination"
@@ -849,24 +1013,6 @@ export default function MapView() {
             position: "relative",
           }}
         >
-          {isMock && (
-            <Box
-              sx={{
-                color: "orange",
-                p: 1,
-                textAlign: "center",
-                position: "absolute",
-                top: 10,
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: 1001,
-                background: "rgba(0,0,0,0.7)",
-                borderRadius: 1,
-              }}
-            >
-              You are viewing mock venue data. Backend not connected.
-            </Box>
-          )}
           <DemoMap
             venues={enrichedVenues}
             selectedVenue={selectedVenue}

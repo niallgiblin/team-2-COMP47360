@@ -68,6 +68,7 @@ public class VibeController {
         result.put("message", "Map data fetched successfully");
         result.put("locations", response.getLocations());
         result.put("busyness", response.getBusyness());
+        result.put("predictions", response.getPredictions());
         result.put("totalResults", response.getLocations().size());
 
         return ResponseEntity.ok(result);

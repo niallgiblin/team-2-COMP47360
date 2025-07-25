@@ -81,7 +81,12 @@ def get_busyness():
     # Check cache first
     if cache:
         logger.info("Returning cached busyness predictions (cached indefinitely).")
-        return jsonify({"success": True, "predictions": cache, "cached": True})
+        # Also return forecast (not cached for now)
+        lat = request.args.get('lat', default=40.7580, type=float)
+        lon = request.args.get('lon', default=-73.9855, type=float)
+        from predictor.busyness import forecast_busyness_for_all_zones
+        forecast = forecast_busyness_for_all_zones(lat, lon)
+        return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
 
     try:
         # Use provided lat/lon or default to a central Manhattan location (Times Square)
@@ -118,9 +123,14 @@ def get_busyness():
         cache = normalized_predictions
         logger.info("Busyness predictions generated and cached.")
 
+        # Also return forecast
+        from predictor.busyness import forecast_busyness_for_all_zones
+        forecast = forecast_busyness_for_all_zones(lat, lon)
+
         return jsonify({
             "success": True,
             "predictions": normalized_predictions,
+            "forecast": forecast,
             "cached": False
         })
 
