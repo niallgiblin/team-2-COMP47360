@@ -128,6 +128,8 @@ public class AuthService {
             user.setPhoneNumber(request.getPhoneNumber().trim());
         }
 
+        // Do NOT update avatarUrl here; only update via avatar upload/delete endpoints
+
         user.setUpdatedAt(LocalDateTime.now());
         user = userRepository.save(user);
 
@@ -138,6 +140,15 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
+        return UserDto.fromUser(user);
+    }
+
+    public UserDto updateUserAvatar(Integer userId, String avatarUrl) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setAvatarUrl(avatarUrl);
+        user.setUpdatedAt(java.time.LocalDateTime.now());
+        user = userRepository.save(user);
         return UserDto.fromUser(user);
     }
 

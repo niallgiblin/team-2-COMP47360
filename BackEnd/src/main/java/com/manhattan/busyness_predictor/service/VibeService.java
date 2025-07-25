@@ -128,14 +128,11 @@ public class VibeService {
         Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("predictions",
                 Collections.emptyMap());
 
-        // The python service returns predictions as a Map, not a List. We must convert it.
-        Object rawPredictions = busynessReport.get("predictions");
+        // Extract forecast (time series) for each zone
+        Object rawForecast = busynessReport.get("forecast");
         List<Object> predictions = new ArrayList<>();
-        if (rawPredictions instanceof Map) {
-            Map<String, Object> predictionsMap = (Map<String, Object>) rawPredictions;
-            predictions = predictionsMap.entrySet().stream()
-                    .map(entry -> Map.of("LocationID", entry.getKey(), "predictions", entry.getValue()))
-                    .collect(Collectors.toList());
+        if (rawForecast instanceof List) {
+            predictions = (List<Object>) rawForecast;
         }
 
         String explanation = "Complete location data for map view.";

@@ -496,10 +496,16 @@ def get_ai_response(query, previous_questions):
     conversation_context = f"The user has already engaged in conversation with you. Here is the previous conversation for context: {history}" if history else ""
 
     system_message = (
-        "You are a helpful assistant for the Urban Gala web app."
-        f"{locs}\n\n{conversation_context}\n\nAnswer the user's question accurately and helpfully."
+        "You are Urban Gala's AI assistant. Greet the user and explain what you can do: "
+        "You help users discover the best real venues and experiences in Manhattan. "
+        "You can recommend bars, restaurants, clubs, and more based on the user's preferences, vibe, or group size. "
+        "You can also help users build a plan for their night out, and provide information about how busy different areas are. "
+        "If a user describes their ideal night out, offer to run a 'Find My Vibe' search for them and suggest a personalized plan. "
+        "If the user's request is unclear, ask follow-up questions to clarify their preferences. "
+        "IMPORTANT: Only recommend venues based on querying the baked in LLM. Do not invent or make up venue names or details. "
+        "If you are unsure, say so and suggest the user try a different query."
+        f"\n\nHere are some relevant venues from the database:\n{locs}\n\n{conversation_context}\n\nAnswer the user's question accurately and helpfully."
     )
-    
     try:
         messages = [{"role": "system", "content": system_message}, {"role": "user", "content": query}]
         response = huggingface_chat_api_call(messages)

@@ -59,6 +59,16 @@ export default function DemoMap({
   const { selectedVenue } = usePlan();
   const [overridePlanMode, setOverridePlanMode] = useState(false);  // disables plan display if zone is manually clicked
 
+  // Force live mode when viewing a plan (fromPlan)
+  const [internalMode, setInternalMode] = useState(mode);
+  useEffect(() => {
+    if (fromPlanProp) {
+      setInternalMode("live");
+    } else {
+      setInternalMode(mode);
+    }
+  }, [fromPlanProp, mode]);
+
   // choropleth styling
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
@@ -71,7 +81,7 @@ export default function DemoMap({
   const locationId = feature.properties.LocationID;
   
   // match current timestamp for forecast mode or use live value
-  const match = mode === "forecast"
+  const match = internalMode === "forecast"
     ? predictionData
         .find((z) => String(z.LocationID) === String(locationId))
         ?.predictions?.find((p) => {
@@ -136,7 +146,7 @@ export default function DemoMap({
     });
 
     const level =
-      mode === "forecast"
+      internalMode === "forecast"
         ? (() => {
           const match = predictionData
             .find((z) => String(z.LocationID) === String(feature.properties.LocationID))
@@ -326,7 +336,8 @@ function FlyToVenue({ venue, showDirections }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
-        <ChoroplethLegend />
+        {/* Only show legend and zones if directions are not being shown */}
+        {!showDirections && <ChoroplethLegend />}
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]}>
             <Tooltip direction="top" offset={[0, -10]} permanent>
@@ -334,9 +345,10 @@ function FlyToVenue({ venue, showDirections }) {
             </Tooltip>
           </Marker>
         )}
-        {zoneData && (
+        {/* Only show zones if directions are not being shown */}
+        {zoneData && !showDirections && (
           <GeoJSON
-            key={`${mode}-${selectedTimestamp}`}
+            key={`${internalMode}-${selectedTimestamp}`}
             data={zoneData}
             style={getZoneStyle}
             onEachFeature={onEachZone}
