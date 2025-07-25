@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,7 +90,7 @@ public class VibeService {
         // 5. Set explanation and confidence for the response
         String explanation;
         double confidence;
-        if (!mlLocations.isEmpty() && mlLocations.get(0).getSimilarity() >= ML_CONFIDENCE_THRESHOLD) {
+        if (!mlLocations.isEmpty() && mlLocations.get(0).getSimilarity() != null && mlLocations.get(0).getSimilarity() >= ML_CONFIDENCE_THRESHOLD) {
             explanation = "Found results based on your vibe, supplemented with keyword matches.";
             confidence = mlLocations.get(0).getSimilarity();
         } else if (!finalLocations.isEmpty()) {
@@ -185,8 +186,29 @@ public class VibeService {
                 logger.info("ML service responded with status {} and body: {}", response.getStatusCode(),
                         response.getBody());
                 List<Location> mlLocations = parseLocationsFromMLResponse(response.getBody());
-                logger.info("Parsed {} locations from ML service response.", mlLocations.size());
-                return mlLocations;
+
+                // ENRICH: Replace each ML location with the full DB version if available
+                List<Location> enriched = new ArrayList<>();
+                for (Location loc : mlLocations) {
+                    Integer locId = loc.getId();
+                    if (locId != null) {
+                        Optional<Location> dbLocOpt = locationRepository.findById(locId);
+                        if (dbLocOpt.isPresent()) {
+                            Location dbLoc = dbLocOpt.get();
+                            // Preserve the ML similarity value
+                            dbLoc.setSimilarity(loc.getSimilarity());
+                            enriched.add(dbLoc);
+                        } else {
+                            logger.warn("ML location with id {} not found in DB. Using ML version.", locId);
+                            enriched.add(loc);
+                        }
+                    } else {
+                        logger.warn("ML location missing id. Using ML version: {}", loc);
+                        enriched.add(loc);
+                    }
+                }
+                logger.info("Enriched ML locations with DB data. Returning {} locations.", enriched.size());
+                return enriched;
             } else {
                 logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}",
                         response.getStatusCode(), response.getBody());

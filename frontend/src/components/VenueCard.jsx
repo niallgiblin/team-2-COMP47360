@@ -65,7 +65,13 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
     }
 
     // Pick fallback image based on category
-    const category = getCategory(description || '');
+    // Prefer flags, fallback to description
+    let category = 'default';
+    if (venue.isRestaurant) category = 'restaurant';
+    else if (venue.isBar) category = 'bar';
+    else if (venue.isClub) category = 'club';
+    else if (venue.isLandmark) category = 'landmark';
+    else category = getCategory(description || '');
     const imageUrlFinal = rawImageUrl || categoryImages[category] || categoryImages.default;
 
     // Handle "Visit Website" click
