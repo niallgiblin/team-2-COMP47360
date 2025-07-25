@@ -37,9 +37,13 @@ export const LikeProvider = ({ children }) => {
             console.error('Venue missing valid integer id:', venue);
             return;
         }
-        const isLiked = likedVenues.some(v => v.id === canonicalId);
+        // Find the liked venue in the backend's favourites list
+        const likedEntry = likedVenues.find(v => v.id === canonicalId || (v.location && v.location.id === canonicalId));
+        // Use the backend's location.id for DELETE if available
+        const backendLocationId = likedEntry && likedEntry.location ? likedEntry.location.id : canonicalId;
+        const isLiked = likedVenues.some(v => (v.id === canonicalId) || (v.location && v.location.id === canonicalId));
         const endpoint = isLiked
-            ? `${API_BASE_URL}/favourites/${canonicalId}` // Endpoint for DELETE
+            ? `${API_BASE_URL}/favourites/${backendLocationId}` // Endpoint for DELETE
             : `${API_BASE_URL}/favourites`;           // Endpoint for POST
         const method = isLiked ? 'DELETE' : 'POST';
 
@@ -47,7 +51,7 @@ export const LikeProvider = ({ children }) => {
 
         try {
             if (isLiked) {
-                setLikedVenues(prev => prev.filter(v => v.id !== canonicalId));
+                setLikedVenues(prev => prev.filter(v => (v.id !== canonicalId) && (!v.location || v.location.id !== canonicalId)));
             } else {
                 setLikedVenues(prev => {
                     const existing = prev.find(v => v.id === canonicalId);

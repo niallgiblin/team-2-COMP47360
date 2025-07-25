@@ -46,9 +46,9 @@ export default function SavedPlans() {
 
   // Sends a POST request to the backend to share a plan with a friend
   const sharePlanWithFriend = async (planId, friendId) => {
-    await makeAuthenticatedRequest(`/api/plans/${planId}/share`, {
+    await makeAuthenticatedRequest(`/api/plans/share`, {
       method: 'POST',
-      body: JSON.stringify({ recipientId: friendId }),
+      body: JSON.stringify({ planId, userIds: [friendId] }),
     });
   };
 

@@ -50,39 +50,6 @@ export function PlanProvider({ children }) {
       const data = await response.json();
       let shared = data.sharedPlans || [];
 
-      // === DEV-ONLY: Inject dummy shared plan for development/testing ===
-      // You can safely delete this block when your backend starts returning real data
-      shared = [
-        ...shared,
-        {
-          sharedBy: {
-            username: "testuser", // Simulated user
-          },
-          plan: {
-            id: "dummy123",       // Unique ID for dummy plan
-            name: "Pizza Crawl",
-            createdAt: new Date().toISOString(), // Current timestamp
-            venues: [
-              {
-                id: "venue1",
-                name: "Joe's Pizza",
-                lat: 40.73061,
-                lng: -73.935242,
-                address: "7 Carmine St, New York, NY",
-              },
-              {
-                id: "venue2",
-                name: "Prince Street Pizza",
-                lat: 40.722216,
-                lng: -73.99479,
-                address: "27 Prince St, New York, NY",
-              },
-            ],
-          },
-        },
-      ];
-      // === END DEV-ONLY BLOCK ===
-
       setSharedPlans(shared);
     } catch (error) {
       console.error("Failed to fetch shared plans:", error);

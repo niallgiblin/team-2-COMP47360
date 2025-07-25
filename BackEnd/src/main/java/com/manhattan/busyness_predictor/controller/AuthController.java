@@ -10,9 +10,15 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.File;
+import java.io.IOException;
+import com.manhattan.busyness_predictor.model.User;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.manhattan.busyness_predictor.dto.AuthResponse;
@@ -71,6 +77,58 @@ public class AuthController {
         response.put("message", "Profile updated successfully");
         response.put("user", updatedUser);
 
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/profile/{userId}/avatar")
+    public ResponseEntity<Map<String, Object>> uploadAvatar(
+            @PathVariable Integer userId,
+            @RequestParam("avatar") MultipartFile avatarFile,
+            @AuthenticationPrincipal UserPrincipal currentUser) throws IOException {
+        if (!currentUser.getId().equals(userId)) {
+            throw new RuntimeException("You are not authorized to update this profile. You can only update your own.");
+        }
+        if (avatarFile.isEmpty()) {
+            throw new RuntimeException("No file uploaded");
+        }
+        // Save file to avatars directory
+        String avatarsDir = System.getProperty("user.dir") + "/backend/avatars/";
+        File dir = new File(avatarsDir);
+        if (!dir.exists()) dir.mkdirs();
+        String extension = avatarFile.getOriginalFilename().substring(avatarFile.getOriginalFilename().lastIndexOf('.'));
+        String filename = "avatar_user_" + userId + System.currentTimeMillis() + extension;
+        File dest = new File(dir, filename);
+        avatarFile.transferTo(dest);
+        // Build public URL (assuming static serving from /avatars/)
+        String avatarUrl = "/avatars/" + filename;
+        // Update user
+        UserDto updatedUser = authService.updateUserAvatar(userId, avatarUrl);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Avatar uploaded successfully");
+        response.put("user", updatedUser);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/profile/{userId}/avatar")
+    public ResponseEntity<Map<String, Object>> deleteAvatar(
+            @PathVariable Integer userId,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (!currentUser.getId().equals(userId)) {
+            throw new RuntimeException("You are not authorized to update this profile. You can only update your own.");
+        }
+        // Remove avatar file if it exists
+        UserDto user = authService.getUserById(userId);
+        if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
+            String filePath = System.getProperty("user.dir") + user.getAvatarUrl();
+            java.io.File file = new java.io.File(filePath);
+            if (file.exists())
+                file.delete();
+        }
+        // Remove avatarUrl from user
+        UserDto updatedUser = authService.updateUserAvatar(userId, null);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Avatar deleted successfully");
+        response.put("user", updatedUser);
         return ResponseEntity.ok(response);
     }
 

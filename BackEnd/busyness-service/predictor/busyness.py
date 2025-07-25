@@ -224,3 +224,81 @@ def predict_busyness_for_all_zones(lat, lon):
     except Exception as e:
         logger.error(f"An error occurred during the prediction pipeline: {e}", exc_info=True)
         return {}
+
+def get_next_12_hours(now=None):
+    """Generates a list of the next 12 hourly datetime objects starting from the next hour."""
+    if now is None:
+        now = datetime.now()
+    current_hour = now.replace(minute=0, second=0, microsecond=0)
+    return [current_hour + timedelta(hours=i+1) for i in range(12)]
+
+def get_next_12_hours_temperature(hours, lat: float, lon: float):
+    """Fetches weather data for the next 12 hours from Open-Meteo."""
+    if not hours:
+        return []
+    sorted_hours = sorted(hours)
+    start_date = sorted_hours[0].strftime('%Y-%m-%d')
+    end_date = sorted_hours[-1].strftime('%Y-%m-%d')
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        'latitude': lat,
+        'longitude': lon,
+        'hourly': 'temperature_2m',
+        'start_date': start_date,
+        'end_date': end_date,
+        'timezone': 'America/New_York',
+        'temperature_unit': 'celsius'
+    }
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        api_times = data['hourly']['time']
+        api_temps = data['hourly']['temperature_2m']
+        results = []
+        for hour in hours:
+            hour_str = hour.strftime('%Y-%m-%dT%H:00')
+            temp = None
+            if hour_str in api_times:
+                idx = api_times.index(hour_str)
+                temp = api_temps[idx]
+            results.append({'temp': temp, 'precip': 0.0, 'day': hour})
+        return results
+    except requests.RequestException as e:
+        logger.error(f"Error fetching forecast weather data: {e}. Using default values.")
+        return [{'temp': 15.0, 'precip': 0.0, 'day': hour} for hour in hours]
+
+def forecast_busyness_for_all_zones(lat, lon):
+    """
+    Generates a 12-hour forecast time series for each zone using the DNN models.
+    Returns a list of dicts: [{LocationID, predictions: [{timestamp, busyness}, ...]}, ...]
+    """
+    if not dnn_models:
+        logger.error("Forecast pipeline cannot run: DNN models are not initialized.")
+        return []
+    try:
+        hours = get_next_12_hours()
+        weather = get_next_12_hours_temperature(hours, lat, lon)
+        df_features = prep_data(weather)
+        if df_features.empty:
+            logger.error("Feature preparation resulted in an empty DataFrame. Aborting forecast.")
+            return []
+        sorted_zones = sorted(dnn_models.keys())
+        results = []
+        for zone_name in sorted_zones:
+            model = dnn_models[zone_name]
+            preds = model.predict(df_features, verbose=0).flatten()
+            zone_preds = []
+            for i, hour in enumerate(hours):
+                zone_preds.append({
+                    'timestamp': hour.isoformat(),
+                    'busyness': float(preds[i]) if i < len(preds) else None
+                })
+            results.append({
+                'LocationID': zone_name,
+                'predictions': zone_preds
+            })
+        return results
+    except Exception as e:
+        logger.error(f"An error occurred during the forecast pipeline: {e}", exc_info=True)
+        return []

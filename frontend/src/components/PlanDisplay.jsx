@@ -56,6 +56,8 @@ export default function PlanDisplay({ planName, venues, busynessMap, disableActi
           display: "flex",
           overflowX: "auto",
           gap: 2,
+          alignItems: 'flex-start', // ensure cards are aligned at the top
+          pt: 2, // add padding to prevent top cutoff
         }}
       >
         {venues.map((venue) => (
@@ -65,7 +67,7 @@ export default function PlanDisplay({ planName, venues, busynessMap, disableActi
             variant="compact" 
             busynessMap={busynessMap} 
             tags={venue.tags}
-            disableActions={disableActions} 
+            disableActions={true} 
             />
         ))}
       </Box>
