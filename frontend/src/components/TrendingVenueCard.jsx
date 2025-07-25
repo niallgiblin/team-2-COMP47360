@@ -14,7 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { usePlan } from "../context/PlanContext";
-import { categoryImages } from "../utils/tagMapping";
+import { categoryImages, getCategory } from "../utils/tagMapping";
 
 // import icons for feedback, tags, price etc
 import {
@@ -69,17 +69,14 @@ export default function TrendingVenueCard({
   const isPlanFull = plan.length >= 5;
 
   // select a category image 
-  const getCategoryFromFlags = (venue) => {
-    if (venue.isRestaurant) return "restaurant";
-    if (venue.isBar) return "bar";
-    if (venue.isClub) return "club";
-    if (venue.isLandmark) return "landmark";
-    return "other";
-  };
-
-  const category = getCategoryFromFlags(venue);
-  const imageUrl =
-    venue.imageUrl || categoryImages[category] || categoryImages.default;
+  // Use the same logic as VenueCard for category and image selection
+  let category = 'default';
+  if (venue.isRestaurant) category = 'restaurant';
+  else if (venue.isBar) category = 'bar';
+  else if (venue.isClub) category = 'club';
+  else if (venue.isLandmark) category = 'landmark';
+  else category = getCategory(venue.description || '');
+  const imageUrl = venue.imageUrl || categoryImages[category] || categoryImages.default;
 
   // event handling for Add to Plan button
   const handleAddToPlan = (e) => {
