@@ -1,6 +1,6 @@
 // Card component to display venue's image, rating, price level and link to website
 // less detail than trending venue card, to give a compact idea of the venue
-// used in PlanSummary, PlanDisplay, FindMyVibe, MapView, Profile 
+// used in PlanSummary, FindMyVibe, MapView, Profile 
 
 import { Box, Typography, Chip, Button, Card, CardMedia, Tooltip } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
@@ -98,7 +98,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
 
         {/* remove from plan x button */}
         {!disableActions && isInPlan && (
-        <Box sx={{ position: 'absolute', top: -12, right: -4, zIndex: 2 }}>
+        <Box sx={{ position: 'absolute', top: 3, right: 3, zIndex: 2 }}>
           <Tooltip title="Remove from Plan" arrow>
             <Button
               onClick={() => removeFromPlan(id)}
