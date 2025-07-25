@@ -18,6 +18,7 @@ export default function CompactPlanSummary() {
 
   // Defensive: ensure plan is always an array
   const planArray = Array.isArray(plan) ? plan : (plan?.venues || []);
+  console.log('CompactPlanSummary planArray:', planArray);
 
   // plan title using the user's first name if available
   const planTitle = user?.firstName
@@ -100,7 +101,7 @@ export default function CompactPlanSummary() {
         ref={scrollRef}
         sx={{
           display: 'flex',
-          overflowX: 'auto',
+          // overflowX: 'auto',
           overflowY: 'visible',
           gap: 2,
           pb: 1,
