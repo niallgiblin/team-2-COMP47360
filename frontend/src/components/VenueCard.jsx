@@ -77,7 +77,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
 
     // Determine if venue is in the current plan and if the plan is full
     const isInPlan = Array.isArray(plan) ? plan.some(v => v.id === id) : false;
-    const isPlanFull = Array.isArray(plan) ? plan.length >= 3 : false;
+    const isPlanFull = Array.isArray(plan) ? plan.length >= 5 : false;
 
     return (
       <Card
@@ -261,7 +261,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           {/* Add to Plan Button: Only shows if the venue is not already in the plan and not a shared plan */}
           {!disableActions && !isInPlan && (
             <Box sx={{ mt: 'auto', pt: 1 }}>
-              <Tooltip title={isPlanFull ? "Your plan is full (max 3 venues)" : ""} arrow>
+              <Tooltip title={isPlanFull ? "Your plan is full (max 5 venues)" : ""} arrow>
                 {/* The Tooltip needs a span wrapper to work when the button is disabled */}
                 <span>
                   <Button

@@ -981,16 +981,41 @@ export default function MapView() {
               fromPlan ? (
                 <CompactPlanSummary />
               ) : (
-                selectedVenue && (
-                  <VenueCard
-                    venue={selectedVenue}
-                    variant="compact"
-                    onAddToPlan={() => addVenueToPlan(selectedVenue)}
-                    onLike={() => handleLike(selectedVenue)}
-                    isLiked={likedVenues.some(
-                      (v) => v.id === selectedVenue.id
-                    )}
-                  />
+                plan && plan.length > 0 && selectedVenue ? (
+                  <Box
+                    sx={{
+                      border: '1px solid #ff00cc',
+                      borderRadius: '16px',
+                      padding: 3,
+                      backgroundColor: '#000',
+                      color: '#fff',
+                      textAlign: 'center',
+                      minHeight: 60,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <VenueCard
+                      venue={selectedVenue}
+                      variant="compact"
+                      onAddToPlan={() => addVenueToPlan(selectedVenue)}
+                      onLike={() => handleLike(selectedVenue)}
+                      isLiked={likedVenues.some(
+                        (v) => v.id === selectedVenue.id
+                      )}
+                    />
+                  </Box>
+                ) : (
+                  <Typography 
+                    sx={{ 
+                      mt: 2, 
+                      color: '#888', 
+                      textAlign: 'center' 
+                    }}
+                  >
+                    You haven't started a current plan yet.
+                  </Typography>
                 )
               )
             )}
