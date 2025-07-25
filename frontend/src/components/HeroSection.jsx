@@ -26,33 +26,33 @@ export default function HeroSection() {
     // Outer container for the entire hero section
     <Box
       sx={{
-        width: '100vw', // Full viewport width
-        height: {xs: '70vw', sm: '60vw', md: '45vw', lg: '40vw'},
-        backgroundColor: '#414141', // fallback background if video doesn't load
-        color: '#FFFFFF', // default text colour
-        textAlign: 'center', // centre all text
+        width: "100vw", // Full viewport width
+        height: { xs: "70vw", sm: "60vw", md: "45vw", lg: "40vw" },
+        backgroundColor: "#414141", // fallback background if video doesn't load
+        color: "#FFFFFF", // default text colour
+        textAlign: "center", // centre all text
         pt: 6, // padding above content
         pb: { xs: 15, sm: 20, md: 30 }, // responsive bottom padding
-        position: 'relative',
-        overflow: 'hidden', // hides anything that spills outside the box
+        position: "relative",
+        overflow: "hidden", // hides anything that spills outside the box
       }}
     >
       {/* Conditionally render video background behind content */}
       {shouldShowVideo && (
         <Box
-          component="video" // lets you style and position a video using MUI, but renders the correct HTML tag, for browsers to play it 
+          component="video" // lets you style and position a video using MUI, but renders the correct HTML tag, for browsers to play it
           autoPlay // automatically starts playing the video when it loads
           muted //mutes the video
           loop
           playsInline
           sx={{
-            position: 'absolute',
+            position: "absolute",
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover', // Ensures video covers area fully
-            objectPosition: 'top', // video stays anchored to top, only bottom is cropped
+            width: "100%",
+            height: "100%",
+            objectFit: "cover", // Ensures video covers area fully
+            objectPosition: "top", // video stays anchored to top, only bottom is cropped
             zIndex: 0,
           }}
         >
@@ -63,12 +63,12 @@ export default function HeroSection() {
       {/* Container for hero text and CTA button */}
       <Box
         sx={{
-          maxWidth: '800px', // limit text width for readability
-          mx: 'auto', // horizontally centre the box
+          maxWidth: "800px", // limit text width for readability
+          mx: "auto", // horizontally centre the box
           px: 2, // horizontal padding
           zIndex: 1, // Ensure this content appears above the video
-          position: 'relative',
-          backgroundColor: 'rgba(0, 0, 0, 0.2)', // semi-transparent black
+          position: "relative",
+          backgroundColor: "rgba(0, 0, 0, 0.2)", // semi-transparent black
           borderRadius: 2,
           p: 4,
           boxShadow: 3,
@@ -79,10 +79,10 @@ export default function HeroSection() {
           variant="h3"
           gutterBottom //adds margin below the text
           sx={{
-            fontWeight: 'bold',
-            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-            WebkitBackgroundClip: 'text', // clips the gradient to text shape
-            WebkitTextFillColor: 'transparent', // makes the text colour transparent, so the gradient shows
+            fontWeight: "bold",
+            background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+            WebkitBackgroundClip: "text", // clips the gradient to text shape
+            WebkitTextFillColor: "transparent", // makes the text colour transparent, so the gradient shows
             mb: 2, // margin bottom
           }}
         >
@@ -93,9 +93,9 @@ export default function HeroSection() {
         <Typography
           variant="h6"
           sx={{
-            color: '#AEEBFF', // light blue clour
-            maxWidth: '600px', // keep subheading narrow
-            mx: 'auto', // centre horizontally
+            color: "#AEEBFF", // light blue clour
+            maxWidth: "600px", // keep subheading narrow
+            mx: "auto", // centre horizontally
             mb: 5, // margin between heading and CTA button
           }}
         >
@@ -108,16 +108,16 @@ export default function HeroSection() {
           to="/vibe"
           variant="contained"
           sx={{
-            background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)', //background colour
-            color: '#121212', // text colour
-            fontWeight: 'bold',
+            background: "linear-gradient(to right, #3ABEFF, #FF4ECD)", //background colour
+            color: "#121212", // text colour
+            fontWeight: "bold",
             px: 4, // horizontal padding inside the button
             py: 1.5, // vertical padding
-            fontSize: '1rem',
-            borderRadius: '8px', // rounded corners
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', //soft shadow
-            '&:hover': {
-              background: 'linear-gradient(to right, #5F3AFF, #FF6EDB)', //brighter gradient on hover
+            fontSize: "1rem",
+            borderRadius: "8px", // rounded corners
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)", //soft shadow
+            "&:hover": {
+              background: "linear-gradient(to right, #5F3AFF, #FF6EDB)", //brighter gradient on hover
             },
           }}
         >

@@ -1,6 +1,6 @@
 // component to show a summary of the user's plan, of upto 5 venues
 // allows for viewing the plan on the map, saving, starting a new plan, seeing venue details
-// used on FindMyVibe and Profile pages
+// used on FindMyVibe
 
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
