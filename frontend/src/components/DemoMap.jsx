@@ -147,7 +147,6 @@ export default function DemoMap({
   // stores latest array of venues in allVenuesRef, enables efficient filtering inside other functions
   useEffect(() => {
     allVenuesRef.current = venues;
-    console.log("[DemoMap] allVenuesRef updated:", venues.length, venues.map(v => v.name || v.id));
   }, [venues]);
 
   // when a zone is clicked - get LocationID from GeoJSON, important for zone exploration
@@ -353,10 +352,6 @@ function FlyToVenue({ venue, showDirections }) {
 
     // Defensive: ensure displayedVenues is always an array
     const safeDisplayedVenues = Array.isArray(displayedVenues) ? displayedVenues : [];
-    if (!Array.isArray(displayedVenues)) {
-      console.warn('[DemoMap] displayedVenues is not an array:', displayedVenues);
-    }
-    console.log('[DemoMap] safeDisplayedVenues:', safeDisplayedVenues);
     const validVenues = safeDisplayedVenues.filter(
       v => v && typeof v.lat === 'number' && typeof v.lng === 'number'
     );
@@ -400,24 +395,7 @@ function FlyToVenue({ venue, showDirections }) {
           />
         )}
 
-        {/*debugging */}
-        {(() => {
-          console.log("Rendering markers:", {
-            isZoneView,
-            fromPlanProp,
-            selectedVenue,
-            activeZoneVenues: activeZoneVenues.length,
-            displayedVenues: Array.isArray(displayedVenues) ? displayedVenues.length : 'not array',
-            fallback: fromPlanProp
-              ? plan
-              : activeZoneVenues.length > 0
-              ? activeZoneVenues
-              : selectedVenue
-              ? [selectedVenue]
-              : [],
-          });
-          return null;
-        })()}
+
         
         {validVenues
           .map((venue) => {

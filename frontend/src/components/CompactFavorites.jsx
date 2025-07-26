@@ -162,7 +162,7 @@ export default function CompactFavorites() {
                             </IconButton>
 
                             {/* Venue content */}
-                            <VenueCard venue={venue} variant="compact" busynessMap={busynessMap} tags={venue.tags} />
+                            <VenueCard venue={venue} variant="compact" disableActions={true} busynessMap={busynessMap} tags={venue.tags} />
                         </Box>
                     ))}
                 </Box>

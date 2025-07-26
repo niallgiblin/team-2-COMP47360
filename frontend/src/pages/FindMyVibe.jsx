@@ -17,6 +17,7 @@ import PageWrapper from "../components/PageWrapper";
 import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
 import PlanSummary from "../components/PlanSummary";
+import { useBusyness } from "../context/BusynessContext";
 // Turf imports for data enrichment
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
@@ -40,6 +41,33 @@ export default function FindMyVibe() {
   // state for zone data
   const [zoneData, setZoneData] = useState(null); // GeoJSON data for zone lookups
 
+  // Get busyness data from context
+  const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
+
+  // Fetch busyness data on mount (only once)
+  useEffect(() => {
+    const loadBusynessData = async () => {
+      try {
+        await fetchBusynessData();
+      } catch (error) {
+        console.error('Failed to load busyness data:', error);
+      }
+    };
+    loadBusynessData();
+  }, []); // Empty dependency array - only run once on mount
+
+  // Handle context data updates separately
+  useEffect(() => {
+    if (contextBusynessData && contextBusynessData.length > 0) {
+      const busynessMapFromContext = {};
+      contextBusynessData.forEach(item => {
+        const zoneId = String(item.LocationID).replace(" NET", "");
+        busynessMapFromContext[zoneId] = item.busyness;
+      });
+      setBusynessMap(busynessMapFromContext);
+    }
+  }, [contextBusynessData]);
+
   // track readiness of busyness data
   const isDataReady = zoneData && Object.keys(busynessMap).length > 0 && allVenues.length > 0;
 
@@ -50,17 +78,15 @@ export default function FindMyVibe() {
  useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [zoneRes, mapDataRes] = await Promise.all([
-          fetch("/manhattanZones.geojson"),
-          fetch(`/api/vibe/map-data`),
-        ]);
-
+        // Fetch zone data
+        const zoneRes = await fetch("/manhattanZones.geojson");
         if (zoneRes.ok) setZoneData(await zoneRes.json());
         else console.error("Failed to load zone data:", zoneRes.statusText);
 
+        // Fetch venues data
+        const mapDataRes = await fetch(`/api/vibe/map-data`);
         if (mapDataRes.ok) {
           const mapData = await mapDataRes.json();
-          setBusynessMap(mapData.busyness || {});
           setAllVenues(mapData.locations || []);
         } else console.error("Failed to fetch map-data:", mapDataRes.statusText);
       } catch (error) {
@@ -68,7 +94,7 @@ export default function FindMyVibe() {
       }
     };
     fetchInitialData();
- }, []);
+ }, []); // Empty dependency array - only run once on mount
 
   // Handle navigation to map page
   const handleGetDirections = (venue) => {
