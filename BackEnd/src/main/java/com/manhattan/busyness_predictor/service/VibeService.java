@@ -124,16 +124,20 @@ public class VibeService {
 
         // Fetch the full report including live and forecast data
         Map<String, Object> busynessReport = fetchBusynessReport();
+        logger.info("🔍 [DEBUG] Raw busyness report: {}", busynessReport);
 
         // Extract live busyness and forecast predictions separately
         Map<String, Double> liveBusyness = (Map<String, Double>) busynessReport.getOrDefault("predictions",
                 Collections.emptyMap());
+        logger.info("🔍 [DEBUG] Extracted live busyness: {}", liveBusyness);
 
         // Extract forecast (time series) for each zone
         Object rawForecast = busynessReport.get("forecast");
+        logger.info("🔍 [DEBUG] Raw forecast data: {}", rawForecast);
         List<Object> predictions = new ArrayList<>();
         if (rawForecast instanceof List) {
             predictions = (List<Object>) rawForecast;
+            logger.info("🔍 [DEBUG] Processed predictions list: {}", predictions);
         }
 
         String explanation = "Complete location data for map view.";
@@ -385,7 +389,18 @@ public class VibeService {
         } catch (RestClientException e) {
             logger.error("Error calling busyness service: {}", e.getMessage(), e);
         }
-        return Collections.emptyMap();
+        
+        // TEMPORARY: Return dummy data for testing
+        logger.warn("🔍 [DEBUG] Returning dummy busyness data for testing");
+        Map<String, Object> dummyData = new HashMap<>();
+        Map<String, Double> dummyPredictions = new HashMap<>();
+        for (int i = 1; i <= 10; i++) {
+            dummyPredictions.put(String.valueOf(i), Math.random());
+        }
+        dummyData.put("success", true);
+        dummyData.put("predictions", dummyPredictions);
+        dummyData.put("forecast", new ArrayList<>());
+        return dummyData;
     }
     
     // Helper to build VibeSearchResponse DTO
