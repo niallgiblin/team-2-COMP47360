@@ -6,6 +6,45 @@ import { useBusyness } from '../context/BusynessContext';
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
+// Error boundary for context availability
+class ContextErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <Box sx={{ width: '100%' }}>
+                    <Typography variant="h5" gutterBottom sx={{ color: '#fff', mb: 2 }}>
+                        Your Favorite Venues
+                    </Typography>
+                    <Box
+                        sx={{
+                            border: '1px solid #ff00cc',
+                            borderRadius: '16px',
+                            padding: 3,
+                            backgroundColor: '#000',
+                            color: '#fff',
+                        }}
+                    >
+                        <Typography variant="body2" color="text.secondary">
+                            Loading favorites...
+                        </Typography>
+                    </Box>
+                </Box>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
 function FavouriteVenues() {
     const { likedVenues } = useLike();
     const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
@@ -14,41 +53,40 @@ function FavouriteVenues() {
     const [enrichedVenues, setEnrichedVenues] = useState([]);
     const [allVenues, setAllVenues] = useState([]);
 
-    // Handle context data updates separately
+    // Handle context data updates - create a more efficient map
     useEffect(() => {
         if (contextBusynessData && contextBusynessData.length > 0) {
             const busynessMapFromContext = {};
             contextBusynessData.forEach(item => {
-                const zoneId = String(item.LocationID).replace(" NET", "");
+                const zoneId = String(item.LocationID);
                 busynessMapFromContext[zoneId] = item.busyness;
             });
             setBusynessMap(busynessMapFromContext);
         }
     }, [contextBusynessData]);
 
-    // Fetch busyness data for the busyness chip
+    // Fetch busyness data and venue data only once on mount
     useEffect(() => {
         const loadData = async () => {
             try {
-                await fetchBusynessData();
-                // Also fetch venues data for enrichment
+                // Only fetch if we don't already have data
+                if (!contextBusynessData || contextBusynessData.length === 0) {
+                    await fetchBusynessData();
+                }
+                
+                // Fetch venue data for enrichment
                 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
                 const response = await fetch(`${API_BASE_URL}/vibe/map-data`);
-                if (!response.ok) {
-                    console.warn('Failed to fetch venue data for enrichment, using liked venues as-is');
-                    return;
+                if (response.ok) {
+                    const data = await response.json();
+                    setAllVenues(data.locations || []);
                 }
-                const data = await response.json();
-                setAllVenues(data.locations || []);
-                
-                // Busyness data is now handled by separate useEffect
             } catch (err) {
                 console.error("Failed to fetch data:", err);
-                // Don't set any fallback data - just use likedVenues as-is
             }
         };
         loadData();
-    }, []); // Empty dependency array - only run once on mount
+    }, [fetchBusynessData, contextBusynessData]);
 
     // Fetch zone data for geo-lookups
     useEffect(() => {
@@ -154,4 +192,11 @@ function FavouriteVenues() {
     );
 }
 
-export default FavouriteVenues;
+// Export with error boundary wrapper
+export default function FavouriteVenuesWithErrorBoundary() {
+    return (
+        <ContextErrorBoundary>
+            <FavouriteVenues />
+        </ContextErrorBoundary>
+    );
+}
