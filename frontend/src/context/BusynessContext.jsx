@@ -13,58 +13,67 @@ export const useBusyness = () => {
 export const BusynessProvider = ({ children }) => {
   const [busynessData, setBusynessData] = useState(null);
   const [predictionData, setPredictionData] = useState(null);
+  const [venueData, setVenueData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFetchTime, setLastFetchTime] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Load cached data on mount
   useEffect(() => {
     try {
-      const cached = sessionStorage.getItem('busynessCache');
+      const cached = sessionStorage.getItem('venueBusynessCache');
       if (cached) {
-        const { busynessData: cachedBusyness, predictionData: cachedPrediction, lastFetchTime: cachedTime } = JSON.parse(cached);
-        if (cachedTime && Date.now() - cachedTime < 10 * 60 * 1000) {
+        const { busynessData: cachedBusyness, predictionData: cachedPrediction, venueData: cachedVenues, lastFetchTime: cachedTime } = JSON.parse(cached);
+        if (cachedTime && Date.now() - cachedTime < 30 * 60 * 1000) { // 30 minute cache
           setBusynessData(cachedBusyness);
           setPredictionData(cachedPrediction);
+          setVenueData(cachedVenues);
           setLastFetchTime(cachedTime);
+          setIsInitialized(true);
+          return;
         }
       }
     } catch (err) {
-      console.warn('Failed to load cached busyness data:', err);
+      console.warn('Failed to load cached data:', err);
     }
+    
+    // If no cache or expired, fetch fresh data
+    fetchAllData();
   }, []);
 
   // Save data to sessionStorage whenever it changes
   useEffect(() => {
-    if (busynessData && predictionData) {
+    if (busynessData && predictionData && venueData) {
       try {
         const cacheData = {
           busynessData,
           predictionData,
+          venueData,
           lastFetchTime: Date.now()
         };
-        sessionStorage.setItem('busynessCache', JSON.stringify(cacheData));
+        sessionStorage.setItem('venueBusynessCache', JSON.stringify(cacheData));
       } catch (err) {
-        console.warn('Failed to save busyness data to cache:', err);
+        console.warn('Failed to save data to cache:', err);
       }
     }
-  }, [busynessData, predictionData]);
+  }, [busynessData, predictionData, venueData]);
 
-  const fetchBusynessData = async () => {
-    // If we have recent data (less than 10 minutes old), use cached data
-    if (lastFetchTime && Date.now() - lastFetchTime < 10 * 60 * 1000) {
-      return { busynessData, predictionData };
+  const fetchAllData = async () => {
+    // If we have recent data (less than 30 minutes old), use cached data
+    if (lastFetchTime && Date.now() - lastFetchTime < 30 * 60 * 1000) {
+      return { busynessData, predictionData, venueData };
     }
 
     // If we're already loading, don't start another request
     if (isLoading) {
-      return { busynessData, predictionData };
+      return { busynessData, predictionData, venueData };
     }
 
     // Check if there's already a pending request
-    if (window.busynessFetchPromise) {
+    if (window.venueBusynessFetchPromise) {
       try {
-        const result = await window.busynessFetchPromise;
+        const result = await window.venueBusynessFetchPromise;
         return result;
       } catch (error) {
         console.error('Error waiting for existing fetch:', error);
@@ -77,65 +86,145 @@ export const BusynessProvider = ({ children }) => {
     // Create a promise for this fetch and store it globally
     const fetchPromise = (async () => {
       try {
-        const response = await fetch('/api/vibe/map-data');
+        // Fetch both busyness and venue data in parallel
+        const [busynessResponse, venueResponse] = await Promise.all([
+          fetch('/api/vibe/map-data'),
+          fetch('/api/vibe/trending')
+        ]);
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!busynessResponse.ok || !venueResponse.ok) {
+          throw new Error(`HTTP error! busyness: ${busynessResponse.status}, venue: ${venueResponse.status}`);
         }
         
-        const data = await response.json();
+        const [busynessData, venueData] = await Promise.all([
+          busynessResponse.json(),
+          venueResponse.json()
+        ]);
         
-        // The backend returns busyness data in the 'busyness' field
-        if (data.busyness) {
-          // Convert busyness object to array format for consistency
-          const busynessArray = Object.entries(data.busyness).map(([locationId, busynessValue]) => ({
+        // Process busyness data
+        let processedBusynessData = [];
+        if (busynessData.busyness) {
+          processedBusynessData = Object.entries(busynessData.busyness).map(([locationId, busynessValue]) => ({
             LocationID: String(locationId),
             busyness: busynessValue,
           }));
-          
-          setBusynessData(busynessArray);
-          setPredictionData(data.predictions || []);
-          setLastFetchTime(Date.now());
-          return { busynessData: busynessArray, predictionData: data.predictions || [] };
-        } else {
-          console.warn('No busyness data found in response:', data);
-          setBusynessData([]);
-          setPredictionData([]);
-          return { busynessData: [], predictionData: [] };
         }
+        
+        // Process venue data
+        const venues = venueData.locations || venueData;
+        
+        // Import turf functions for geo-lookup
+        const booleanPointInPolygon = (await import('@turf/boolean-point-in-polygon')).default;
+        const { point: turfPoint } = await import('@turf/helpers');
+        
+        // Load zone data for geo-lookup
+        let zoneData = null;
+        try {
+          const zoneResponse = await fetch("/manhattanZones.geojson");
+          zoneData = await zoneResponse.json();
+        } catch (err) {
+          console.warn('[CONTEXT DEBUG] Failed to load zone data for geo-lookup:', err);
+        }
+        
+        const processedVenueData = venues.map(venue => {
+          const processed = {
+            ...venue,
+            id: venue.id || venue.placeId,
+            latitude: venue.latitude || venue.lat,
+            longitude: venue.longitude || venue.lng,
+            address: venue.address || 'No address provided',
+            zone: venue.zone || venue.Zone || 'Unknown',
+          };
+          
+                     // Add zoneId using geo-lookup if not present
+           if (!processed.zoneId && processed.latitude && processed.longitude && zoneData) {
+             try {
+               const venuePoint = turfPoint([processed.longitude, processed.latitude]);
+               const matchingZone = zoneData.features.find(feature => 
+                 booleanPointInPolygon(venuePoint, feature.geometry)
+               );
+                               if (matchingZone) {
+                  processed.zoneId = String(matchingZone.properties.LocationID);
+                }
+              } catch (err) {
+                console.warn(`[CONTEXT DEBUG] Geo-lookup failed for venue '${processed.name}':`, err);
+              }
+           }
+          
+          return processed;
+        });
+        
+        // Enrich venues with busyness data
+        const enrichedVenues = processedVenueData.map(venue => {
+          const zoneKey = venue.zoneId ? String(venue.zoneId) : venue.zone;
+          const busynessEntry = processedBusynessData.find(item => 
+            String(item.LocationID) === zoneKey
+          );
+          
+          return {
+            ...venue,
+            busynessValue: busynessEntry ? busynessEntry.busyness : null,
+            busynessLabel: busynessEntry ? getBusynessLabel(busynessEntry.busyness) : 'No Data'
+          };
+        });
+        
+        setBusynessData(processedBusynessData);
+        setPredictionData(busynessData.predictions || []);
+        setVenueData(enrichedVenues);
+        setLastFetchTime(Date.now());
+        setIsInitialized(true);
+        
+        return { 
+          busynessData: processedBusynessData, 
+          predictionData: busynessData.predictions || [],
+          venueData: enrichedVenues
+        };
       } catch (err) {
-        console.error('Error fetching busyness data:', err);
+        console.error('Error fetching data:', err);
         setError(err.message);
         throw err;
       } finally {
         setIsLoading(false);
         // Clear the global promise
-        window.busynessFetchPromise = null;
+        window.venueBusynessFetchPromise = null;
       }
     })();
 
     // Store the promise globally so other components can wait for it
-    window.busynessFetchPromise = fetchPromise;
+    window.venueBusynessFetchPromise = fetchPromise;
 
     return fetchPromise;
+  };
+
+  const getBusynessLabel = (value) => {
+    if (typeof value !== "number") return "No Data";
+    const percent = value * 100;
+    if (percent >= 75) return "Very Busy";
+    if (percent >= 50) return "Busy";
+    if (percent >= 25) return "Moderate";
+    return "Quiet";
   };
 
   const clearCache = () => {
     setBusynessData(null);
     setPredictionData(null);
+    setVenueData(null);
     setLastFetchTime(null);
-    sessionStorage.removeItem('busynessCache');
-    console.log('🔍 [CACHE] Cleared busyness cache');
+    setIsInitialized(false);
+    sessionStorage.removeItem('venueBusynessCache');
   };
 
   const value = {
     busynessData,
     predictionData,
+    venueData,
     isLoading,
     error,
     lastFetchTime,
-    fetchBusynessData,
-    clearCache
+    isInitialized,
+    fetchAllData,
+    clearCache,
+    getBusynessLabel
   };
 
   return (

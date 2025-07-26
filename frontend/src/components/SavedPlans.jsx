@@ -59,16 +59,13 @@ export default function SavedPlans() {
   };
 
   // If there are no saved plans, render a friendly message
-  if (!savedPlans || savedPlans.length === 0) {
+  if (savedPlans.length === 0) {
     return (
-      <Typography sx={{ mt: 4, textAlign: "center", color: "#888" }}>
+      <Typography variant="body2" color="text.secondary">
         You haven't saved any plans yet.
       </Typography>
     );
   }
-
-  // Debug: View the friends list passed to the modal
-  console.log("Friends list:", friends);
 
   return (
     <Box>

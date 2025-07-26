@@ -9,7 +9,6 @@ import {
   Paper,
   Alert,
   TextField,
-  Grid,
   Divider,
   CircularProgress,
   Accordion,
@@ -170,35 +169,29 @@ export default function APITester() {
             <Typography variant="h6">Test Parameters</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="User ID"
-                  value={testInputs.userId}
-                  onChange={(e) => handleInputChange('userId', e.target.value)}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Search Query"
-                  value={testInputs.searchQuery}
-                  onChange={(e) => handleInputChange('searchQuery', e.target.value)}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Friend Username"
-                  value={testInputs.friendUsername}
-                  onChange={(e) => handleInputChange('friendUsername', e.target.value)}
-                  fullWidth
-                  size="small"
-                />
-              </Grid>
-            </Grid>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <TextField
+                label="User ID"
+                value={testInputs.userId}
+                onChange={(e) => handleInputChange('userId', e.target.value)}
+                fullWidth
+                size="small"
+              />
+              <TextField
+                label="Search Query"
+                value={testInputs.searchQuery}
+                onChange={(e) => handleInputChange('searchQuery', e.target.value)}
+                fullWidth
+                size="small"
+              />
+              <TextField
+                label="Friend Username"
+                value={testInputs.friendUsername}
+                onChange={(e) => handleInputChange('friendUsername', e.target.value)}
+                fullWidth
+                size="small"
+              />
+            </Box>
           </AccordionDetails>
         </Accordion>
 
@@ -207,20 +200,16 @@ export default function APITester() {
           Complete Test Suites
         </Typography>
         
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ textAlign: 'center' }}>
-              {renderTestButton('completeAuthTest', 'Test Authentication System', runCompleteAuthTest)}
-              {renderResult('completeAuthTest')}
-            </Box>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ textAlign: 'center' }}>
-              {renderTestButton('completeFriendsTest', 'Test Friends System', runCompleteFriendsTest)}
-              {renderResult('completeFriendsTest')}
-            </Box>
-          </Grid>
-        </Grid>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 4 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            {renderTestButton('completeAuthTest', 'Test Authentication System', runCompleteAuthTest)}
+            {renderResult('completeAuthTest')}
+          </Box>
+          <Box sx={{ textAlign: 'center' }}>
+            {renderTestButton('completeFriendsTest', 'Test Friends System', runCompleteFriendsTest)}
+            {renderResult('completeFriendsTest')}
+          </Box>
+        </Box>
 
         <Divider sx={{ my: 3 }} />
 
@@ -235,17 +224,15 @@ export default function APITester() {
             <Typography variant="subtitle1">Authentication APIs</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    GET /api/auth/profile
-                  </Typography>
-                  {renderTestButton('getProfile', 'Get User Profile', testGetProfile)}
-                  {renderResult('getProfile')}
-                </Box>
-              </Grid>
-            </Grid>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  GET /api/auth/profile
+                </Typography>
+                {renderTestButton('getProfile', 'Get User Profile', testGetProfile)}
+                {renderResult('getProfile')}
+              </Box>
+            </Box>
           </AccordionDetails>
         </Accordion>
 
@@ -255,35 +242,29 @@ export default function APITester() {
             <Typography variant="subtitle1">Friends APIs</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    GET /api/friends/list
-                  </Typography>
-                  {renderTestButton('getFriends', 'Get Friends List', testGetFriends)}
-                  {renderResult('getFriends')}
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    GET /api/friends/search
-                  </Typography>
-                  {renderTestButton('searchUsers', 'Search Users', testSearchUsers)}
-                  {renderResult('searchUsers')}
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    POST /api/friends/add
-                  </Typography>
-                  {renderTestButton('addFriend', 'Add Friend', testAddFriend)}
-                  {renderResult('addFriend')}
-                </Box>
-              </Grid>
-            </Grid>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  GET /api/friends/search
+                </Typography>
+                {renderTestButton('searchUsers', 'Search Users', testSearchUsers)}
+                {renderResult('searchUsers')}
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  GET /api/friends/list
+                </Typography>
+                {renderTestButton('getFriends', 'Get Friends List', testGetFriends)}
+                {renderResult('getFriends')}
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  POST /api/friends/add
+                </Typography>
+                {renderTestButton('addFriend', 'Add Friend', testAddFriend)}
+                {renderResult('addFriend')}
+              </Box>
+            </Box>
           </AccordionDetails>
         </Accordion>
 

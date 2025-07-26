@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Grid } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import TrendingVenueCard from './TrendingVenueCard'; 
 import { useLike } from '../context/LikeContext'; 
 import { useBusyness } from '../context/BusynessContext';
@@ -47,48 +47,15 @@ class ContextErrorBoundary extends React.Component {
 
 function FavouriteVenues() {
     const { likedVenues } = useLike();
-    const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
-    const [busynessMap, setBusynessMap] = useState({});
+    const { busynessData: contextBusynessData, venueData: cachedVenues, isInitialized, getBusynessLabel } = useBusyness();
     const [zoneData, setZoneData] = useState(null);
     const [enrichedVenues, setEnrichedVenues] = useState([]);
-    const [allVenues, setAllVenues] = useState([]);
 
-    // Handle context data updates - create a more efficient map
-    useEffect(() => {
-        if (contextBusynessData && contextBusynessData.length > 0) {
-            const busynessMapFromContext = {};
-            contextBusynessData.forEach(item => {
-                const zoneId = String(item.LocationID);
-                busynessMapFromContext[zoneId] = item.busyness;
-            });
-            setBusynessMap(busynessMapFromContext);
-        }
-    }, [contextBusynessData]);
 
-    // Fetch busyness data and venue data only once on mount
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                // Only fetch if we don't already have data
-                if (!contextBusynessData || contextBusynessData.length === 0) {
-                    await fetchBusynessData();
-                }
-                
-                // Fetch venue data for enrichment
-                const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-                const response = await fetch(`${API_BASE_URL}/vibe/map-data`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setAllVenues(data.locations || []);
-                }
-            } catch (err) {
-                console.error("Failed to fetch data:", err);
-            }
-        };
-        loadData();
-    }, [fetchBusynessData, contextBusynessData]);
 
-    // Fetch zone data for geo-lookups
+
+
+    // Fetch zone data for geo-lookups (only once)
     useEffect(() => {
         fetch("/manhattanZones.geojson")
             .then((res) => res.json())
@@ -96,18 +63,19 @@ function FavouriteVenues() {
             .catch((err) => console.error("Failed to load zone data:", err));
     }, []);
 
-    // Enrich liked venues with zoneId and full data once zoneData and allVenues are available
+    // Enrich liked venues with full data from context
     useEffect(() => {
-        if (!zoneData || likedVenues.length === 0) {
+        if (likedVenues.length === 0) {
             setEnrichedVenues(likedVenues);
             return;
         }
-        // Merge with allVenues for full data
+        
+        // Use enriched venue data from context if available
         const merged = likedVenues.map(liked => {
             // Try to find a match by id, then lat/lng
-            let full = allVenues.find(v => v.id === liked.id);
+            let full = cachedVenues.find(v => v.id === liked.id);
             if (!full && liked.lat && liked.lng) {
-                full = allVenues.find(v => v.latitude === liked.lat && v.longitude === liked.lng);
+                full = cachedVenues.find(v => v.latitude === liked.lat && v.longitude === liked.lng);
             }
             
             // If no enrichment data found, just return the liked venue as-is
@@ -115,12 +83,39 @@ function FavouriteVenues() {
                 return liked;
             }
             
+            // Merge data, but preserve busyness data from liked venue if it exists
             let enriched = { ...full, ...liked };
+            
+
+            
+
+            
+            // Preserve busyness data from liked venue if it exists
+            if (liked.busynessLabel && liked.busynessLabel !== 'No Data') {
+                enriched.busynessLabel = liked.busynessLabel;
+            }
+            if (liked.busynessValue !== null && liked.busynessValue !== undefined) {
+                enriched.busynessValue = liked.busynessValue;
+            }
+            
+            // If no busyness data from liked venue, try to compute it from context
+            if (!enriched.busynessLabel && enriched.zoneId && contextBusynessData && contextBusynessData.length > 0) {
+                const busynessEntry = contextBusynessData.find(item => 
+                    String(item.LocationID) === String(enriched.zoneId)
+                );
+                if (busynessEntry) {
+                    enriched.busynessValue = busynessEntry.busyness;
+                    enriched.busynessLabel = getBusynessLabel(busynessEntry.busyness);
+                }
+            }
+            
+
+            
             // Always ensure a canonical id
             enriched.id = enriched.id || liked.id;
             
-            // Add zoneId if missing
-            if (!enriched.zoneId && enriched.lat && enriched.lng) {
+            // Add zoneId if missing (fallback to geo lookup)
+            if (!enriched.zoneId && enriched.lat && enriched.lng && zoneData) {
                 const venuePoint = turfPoint([enriched.lng, enriched.lat]);
                 const matchingZone = zoneData.features.find(feature => booleanPointInPolygon(venuePoint, feature.geometry));
                 enriched.zoneId = matchingZone ? matchingZone.properties.LocationID : undefined;
@@ -143,7 +138,7 @@ function FavouriteVenues() {
             return enriched;
         });
         setEnrichedVenues(merged);
-    }, [likedVenues, zoneData, allVenues]);
+    }, [likedVenues, cachedVenues, zoneData]);
 
     // Defensive: filter out invalid venues
     const filteredVenues = enrichedVenues.filter(
@@ -172,20 +167,18 @@ function FavouriteVenues() {
                         You haven't liked any venues yet.
                     </Typography>
                 ) : (
-                    <Grid container spacing={2} justifyContent="center" display="flex">
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {filteredVenues.map((venue) => (
-                            <Grid item xs={12} sm={6} md={4} key={venue.id}>
-                                <TrendingVenueCard 
-                                    venue={venue} 
-                                    busynessMap={busynessMap} 
-                                    showLikeButton={true} 
-                                    unlikeOnlyFromFavorites={true} 
-                                    tags={venue.tags}
-                                    hidePlanButtons={false}
-                                />
-                            </Grid>
+                            <TrendingVenueCard 
+                                key={venue.id}
+                                venue={venue} 
+                                showLikeButton={true} 
+                                unlikeOnlyFromFavorites={true} 
+                                tags={venue.tags}
+                                hidePlanButtons={false}
+                            />
                         ))}
-                    </Grid>
+                    </Box>
                 )}
             </Box>
         </Box>

@@ -9,8 +9,7 @@ import {
   Container,
   Paper,
   Alert,
-  CircularProgress,
-  Grid
+  CircularProgress
 } from '@mui/material';
 
 export default function Signup() {
@@ -128,32 +127,28 @@ export default function Signup() {
             Personal Information
           </Typography>
           
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="First Name"
-                name="firstName"
-                required
-                fullWidth
-                value={formData.firstName}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Enter your first name"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Last Name"
-                name="lastName"
-                required
-                fullWidth
-                value={formData.lastName}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Enter your last name"
-              />
-            </Grid>
-          </Grid>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <TextField
+              label="First Name"
+              name="firstName"
+              required
+              fullWidth
+              value={formData.firstName}
+              onChange={handleChange}
+              disabled={loading}
+              placeholder="Enter your first name"
+            />
+            <TextField
+              label="Last Name"
+              name="lastName"
+              required
+              fullWidth
+              value={formData.lastName}
+              onChange={handleChange}
+              disabled={loading}
+              placeholder="Enter your last name"
+            />
+          </Box>
 
           <TextField
             label="Phone Number (Optional)"

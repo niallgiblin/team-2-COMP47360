@@ -40,6 +40,7 @@ export default function TrendingVenueCard({
   tags,
   hidePlanButtons = false,
 }) {
+
   const { setSelectedVenue, setFromPlan } = usePlan();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -102,10 +103,38 @@ export default function TrendingVenueCard({
   // event handling for Like button
   const handleLikeClick = (e) => {
     e.stopPropagation(); // Prevent event bubbling
+    
+    // Create enriched venue data with busyness information
+    const enrichedVenue = {
+      ...venue,
+      busynessLabel: busynessLabel,
+      busynessValue: venue.busynessValue || (() => {
+        // Compute busyness value if not already present
+        if (!venue.zone || venue.zone === "nan") return null;
+        const zoneKey = venue.zoneId ? String(venue.zoneId) : venue.zone;
+        if (!zoneKey) return null;
+        
+        if (contextBusynessData && contextBusynessData.length > 0) {
+          const contextEntry = contextBusynessData.find(item => 
+            String(item.LocationID) === zoneKey
+          );
+          return contextEntry ? contextEntry.busyness : null;
+        }
+        
+        if (busynessMap) {
+          return busynessMap[zoneKey];
+        }
+        
+        return null;
+      })()
+    };
+    
+
+    
     if (unlikeOnlyFromFavorites && isLiked) {
-      handleLike(venue);
+      handleLike(enrichedVenue);
     } else if (!unlikeOnlyFromFavorites) {
-      handleLike(venue);
+      handleLike(enrichedVenue);
     }
   };
 
@@ -125,6 +154,12 @@ export default function TrendingVenueCard({
   };
 
   const busynessLabel = useMemo(() => {
+    // If venue already has pre-computed busyness data, use it
+    if (venue.busynessLabel) {
+      return venue.busynessLabel;
+    }
+    
+    // Fallback to the old computation method for backward compatibility
     if (!venue.zone || venue.zone === "nan") return null;
     
     // Get zone key - prefer zoneId if available, otherwise use zone name
@@ -158,7 +193,7 @@ export default function TrendingVenueCard({
     if (percent >= 50) return "Busy";
     if (percent >= 25) return "Moderate";
     return "Quiet";
-  }, [venue.zoneId, venue.zone, contextBusynessData, busynessMap]);
+  }, [venue.busynessLabel, venue.zoneId, venue.zone, contextBusynessData, busynessMap]);
 
   // Render tags as chips if present
   const tagList = tags || venue.tags || [];
@@ -400,21 +435,19 @@ export default function TrendingVenueCard({
           }}
         >
           {/* Busyness chip, rating, and price */}
-          {busynessLabel && (
-            <Chip
-              icon={<WhatshotIcon sx={{ color: "#fff" }} />}
-              label={busynessLabel}
-              size="small"
-              sx={{
-                background: busynessLabel === 'No Data'
-                  ? 'linear-gradient(to right, #888, #bbb)'
-                  : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                color: "#fff",
-                fontWeight: 600,
-                height: 24,
-              }}
-            />
-          )}
+          <Chip
+            icon={<WhatshotIcon sx={{ color: "#fff" }} />}
+            label={busynessLabel || 'No Data'}
+            size="small"
+            sx={{
+              background: (busynessLabel || 'No Data') === 'No Data'
+                ? 'linear-gradient(to right, #888, #bbb)'
+                : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+              color: "#fff",
+              fontWeight: 600,
+              height: 24,
+            }}
+          />
           {/* Rating */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 1 }}>
             {(() => {
