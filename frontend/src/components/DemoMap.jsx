@@ -83,19 +83,56 @@ export default function DemoMap({
   // match current timestamp for forecast mode or use live value
   const match = internalMode === "forecast"
     ? predictionData
-        .find((z) => String(z.LocationID) === String(locationId))
+        .find((z) => {
+          // Handle LocationID format mismatch: prediction data has " NET" suffix, GeoJSON doesn't
+          const predictionId = String(z.LocationID).replace(" NET", "");
+          const zoneId = String(locationId);
+          return predictionId === zoneId;
+        })
         ?.predictions?.find((p) => {
           const pTime = DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true });
           const sTime = DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true });
           if (String(locationId) === "140") {
-            console.log("Comparing:", { locationId, pTime, sTime });
+            console.log("🔍 [DEBUG] Forecast matching:", { locationId, pTime, sTime, match: pTime === sTime });
           }
           return pTime === sTime;
         })
     : busynessData.find((z) => String(z.LocationID) === String(locationId));
 
+    // Debug logging for forecast mode
+    if (internalMode === "forecast" && String(locationId) === "140") {
+      console.log("🔍 [DEBUG] Forecast data for zone 140:", {
+        predictionDataLength: predictionData.length,
+        zoneData: predictionData.find((z) => String(z.LocationID).replace(" NET", "") === String(locationId)),
+        selectedTimestamp,
+        match
+      });
+    }
+
     // fallback to grey if no match
-    const fillColor = match ? getColorForBusyness((match.busyness || 0) * 100) : "#CCCCCC";
+    let fillColor;
+    if (match) {
+      if (internalMode === "forecast") {
+        // For forecast data, normalize the raw values (-100 to +100) to 0-100%
+        const normalizedBusyness = Math.max(0, Math.min(100, (match.busyness + 100) / 2));
+        fillColor = getColorForBusyness(normalizedBusyness);
+      } else {
+        // For live data, the values are already normalized (0-1)
+        fillColor = getColorForBusyness((match.busyness || 0) * 100);
+      }
+    } else {
+      fillColor = "#CCCCCC";
+    }
+    
+    // Debug logging for forecast mode to see the actual values
+    if (internalMode === "forecast" && String(locationId) === "140") {
+      console.log("🔍 [DEBUG] Forecast busyness value for zone 140:", {
+        rawBusyness: match?.busyness,
+        normalizedValue: match ? Math.max(0, Math.min(100, (match.busyness + 100) / 2)) : 0,
+        color: fillColor
+      });
+    }
+    
     return {
       fillColor,
       weight: 2,
@@ -149,12 +186,20 @@ export default function DemoMap({
       internalMode === "forecast"
         ? (() => {
           const match = predictionData
-            .find((z) => String(z.LocationID) === String(feature.properties.LocationID))
+            .find((z) => {
+              // Handle LocationID format mismatch: prediction data has " NET" suffix, GeoJSON doesn't
+              const predictionId = String(z.LocationID).replace(" NET", "");
+              const zoneId = String(feature.properties.LocationID);
+              return predictionId === zoneId;
+            })
             ?.predictions?.find((p) =>
               DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true }) ===
               DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true })
             );
-            return match ? `${(match.busyness * 100).toFixed(0)}% busy` : "No forecast data";
+            // For forecast data, the busyness values are raw and need to be normalized
+            // The values range from roughly -100 to +100, so we normalize to 0-100%
+            const normalizedBusyness = match ? Math.max(0, Math.min(100, (match.busyness + 100) / 2)) : 0;
+            return match ? `${normalizedBusyness.toFixed(0)}% busy` : "No forecast data";
           })()
         : (() => {
             const match = busynessData.find(
