@@ -33,6 +33,7 @@ import CompactSharedPlans from "../components/CompactSharedPlans";
 import mockVenues from "../data/mockVenues";
 import { usePlan } from "../context/PlanContext";
 import { useLike } from "../context/LikeContext";
+import { useBusyness } from "../context/BusynessContext";
 
 // External libraries, utilities for directions and geo-calculations
 import polyline from "@mapbox/polyline";
@@ -119,6 +120,7 @@ export default function MapView() {
   const { plan, addVenueToPlan } = usePlan();
   const { likedVenues, handleLike } = useLike();
   const { setFromPlan } = usePlan();
+  const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchBusynessData, isLoading: busynessLoading } = useBusyness();
   const mapSectionRef = useRef(null);
 
   // --- state ---
@@ -146,13 +148,11 @@ export default function MapView() {
   const [venues, setVenues] = useState([]);
   const [enrichedVenues, setEnrichedVenues] = useState([]);
   const [zoneData, setZoneData] = useState(null);
-  const [busynessData, setBusynessData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isMock, setIsMock] = useState(false);
 
   // State for map mode (live vs. forecast)
   const [mode, setMode] = useState("live");
-  const [predictionData, setPredictionData] = useState([]);
 
   // State for route directions
   const [travelMode, setTravelMode] = useState("WALK");
@@ -198,6 +198,18 @@ export default function MapView() {
     }
   };
 
+  // 1. Fetch busyness data from context on mount
+  useEffect(() => {
+    const loadBusynessData = async () => {
+      try {
+        await fetchBusynessData();
+      } catch (err) {
+        console.error("Failed to load busyness data:", err);
+      }
+    };
+    loadBusynessData();
+  }, []); // Empty dependency array - only run once on mount
+
   // 2. Load zone polygons for map coloring
   useEffect(() => {
     const fetchZoneData = async () => {
@@ -214,50 +226,16 @@ export default function MapView() {
     fetchZoneData();
   }, []);
 
-  // 3. Fetch combined venues and busyness data from the backend
+  // 3. Fetch venues data and use busyness data from context
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchVenuesData = async () => {
       setLoading(true);
       try {
-        console.log("🔍 [DEBUG] Fetching map data from /api/vibe/map-data");
         const res = await fetch(`/api/vibe/map-data`);
         if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
-        console.log("🔍 [DEBUG] Map data response:", data);
-        console.log("🔍 [DEBUG] Busyness data:", data.busyness);
-        console.log("🔍 [DEBUG] Predictions data:", data.predictions);
-        console.log("🔍 [DEBUG] Predictions data: (67)", data.predictions);
-        console.log("🔍 [DEBUG] First prediction entry:", data.predictions[0]);
-        console.log("🔍 [DEBUG] Prediction data structure:", {
-          hasPredictions: !!data.predictions,
-          length: data.predictions?.length,
-          firstEntry: data.predictions?.[0],
-          firstEntryKeys: data.predictions?.[0] ? Object.keys(data.predictions[0]) : null
-        });
         
         setVenues(location.state?.fromPlan === true && plan.length > 0 ? plan : data.locations || []);
-        const busynessObject = data.busyness || {};
-        console.log("🔍 [DEBUG] Processed busyness object:", busynessObject);
-        
-        const busynessArray = Object.entries(busynessObject).map(
-          ([locationId, busynessValue]) => ({
-            LocationID: String(locationId).trim(),
-            busyness: busynessValue,
-          })
-        );
-        console.log("🔍 [DEBUG] Final busyness array:", busynessArray);
-        setBusynessData(busynessArray);
-        
-        if (Array.isArray(data.predictions) && data.predictions.length > 0) {
-          console.log("🔍 [DEBUG] Setting real prediction data:", data.predictions);
-          setPredictionData(data.predictions);
-          const first = data.predictions[0]?.predictions?.[0]?.timestamp;
-          if (first) setSelectedTimestamp(first);
-          setIsMock(false);
-        } else {
-          console.warn("No real prediction data returned from backend.");
-          setIsMock(true);
-        }
       } catch (err) {
         // Fallback to mock data
         console.warn("Falling back to mock data due to fetch error:", err);
@@ -268,8 +246,25 @@ export default function MapView() {
         setLoading(false);
       }
     };
-    fetchData();
-  }, [fromPlan, plan, selectedVenueFromState, location.state?.fromPlan]);
+    fetchVenuesData();
+  }, [fromPlan, plan, selectedVenueFromState, location.state?.fromPlan]); // Removed context dependencies
+
+  // Handle context data updates separately
+  useEffect(() => {
+    if (contextBusynessData && contextBusynessData.length > 0) {
+      setIsMock(false);
+    } else {
+      setIsMock(true);
+    }
+    
+    if (contextPredictionData && contextPredictionData.length > 0) {
+      const first = contextPredictionData[0]?.predictions?.[0]?.timestamp;
+      if (first) setSelectedTimestamp(first);
+      setIsMock(false);
+    } else {
+      setIsMock(true);
+    }
+  }, [contextBusynessData, contextPredictionData]);
 
   // Always use dummy busyness and prediction data if isMock is true
   useEffect(() => {
@@ -280,10 +275,6 @@ export default function MapView() {
       LocationID: f.properties.LocationID,
       busyness: Math.random(),
     }));
-    setBusynessData(dummyBusyness);
-    
-    // REMOVED: No more dummy predictions - only use real data
-    console.log("🔍 [DEBUG] isMock=true but skipping dummy predictions - only using real data");
   }, [zoneData, isMock]);
 
   // 4. Enrich venues with zone IDs once all data is loaded
@@ -864,7 +855,7 @@ export default function MapView() {
             )}
             
           {/* Forecast Slider */}
-          {mode === "forecast" && predictionData.length > 0 && (
+          {mode === "forecast" && contextPredictionData && contextPredictionData.length > 0 && (
             <Box
               sx={{
                 width: "100%",
@@ -1029,11 +1020,11 @@ export default function MapView() {
             selectedVenue={selectedVenue}
             onSelectVenue={setSelectedVenue}
             fromPlan={fromPlan}
-            busynessData={busynessData}
+            busynessData={contextBusynessData || []}
             zoneData={zoneData}
             userLocation={userLocation}
             mode={mode}
-            predictionData={predictionData}
+            predictionData={contextPredictionData || []}
             selectedTimestamp={selectedTimestamp}
             plan={plan}
             routeCoords={directionsPolyline}

@@ -2,27 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Grid } from '@mui/material';
 import TrendingVenueCard from './TrendingVenueCard'; 
 import { useLike } from '../context/LikeContext'; 
+import { useBusyness } from '../context/BusynessContext';
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 
 function FavouriteVenues() {
     const { likedVenues } = useLike();
+    const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
     const [busynessMap, setBusynessMap] = useState({});
     const [zoneData, setZoneData] = useState(null);
     const [enrichedVenues, setEnrichedVenues] = useState([]);
     const [allVenues, setAllVenues] = useState([]);
 
+    // Handle context data updates separately
+    useEffect(() => {
+        if (contextBusynessData && contextBusynessData.length > 0) {
+            const busynessMapFromContext = {};
+            contextBusynessData.forEach(item => {
+                const zoneId = String(item.LocationID).replace(" NET", "");
+                busynessMapFromContext[zoneId] = item.busyness;
+            });
+            setBusynessMap(busynessMapFromContext);
+        }
+    }, [contextBusynessData]);
+
     // Fetch busyness data for the busyness chip
     useEffect(() => {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-        fetch(`${API_BASE_URL}/vibe/map-data`)
-            .then((res) => res.json())
-            .then((data) => {
-                setBusynessMap(data.busyness || {});
+        const loadData = async () => {
+            try {
+                await fetchBusynessData();
+                // Also fetch venues data for enrichment
+                const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+                const response = await fetch(`${API_BASE_URL}/vibe/map-data`);
+                const data = await response.json();
                 setAllVenues(data.locations || []);
-            })
-            .catch((err) => console.error("Failed to fetch busyness data:", err));
-    }, []);
+                
+                // Busyness data is now handled by separate useEffect
+            } catch (err) {
+                console.error("Failed to fetch data:", err);
+            }
+        };
+        loadData();
+    }, []); // Empty dependency array - only run once on mount
 
     // Fetch zone data for geo-lookups
     useEffect(() => {
@@ -99,7 +120,7 @@ function FavouriteVenues() {
                         You haven’t liked any venues yet.
                     </Typography>
                 ) : (
-                    <Grid container spacing={2}>
+                    <Grid container spacing={2} justifyContent="center" display="flex">
                         {filteredVenues.map((venue) => (
                             <Grid item xs={12} sm={6} md={4} key={venue.id}>
                                 <TrendingVenueCard 
