@@ -90,12 +90,14 @@ export default function DemoMap({
           return predictionId === zoneId;
         })
         ?.predictions?.find((p) => {
-          const pTime = DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true });
-          const sTime = DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true });
+          // Use Luxon's DateTime to compare timestamps in a timezone-agnostic way
+          const pTime = DateTime.fromISO(p.timestamp);
+          const sTime = DateTime.fromISO(selectedTimestamp);
+          const isMatch = pTime.equals(sTime);
           if (String(locationId) === "140") {
-            console.log("🔍 [DEBUG] Forecast matching:", { locationId, pTime, sTime, match: pTime === sTime });
+            console.log("🔍 [DEBUG] Forecast matching:", { locationId, pTime: pTime.toISO(), sTime: sTime.toISO(), match: isMatch });
           }
-          return pTime === sTime;
+          return isMatch;
         })
     : busynessData.find((z) => String(z.LocationID) === String(locationId));
 
@@ -191,10 +193,10 @@ export default function DemoMap({
               const zoneId = String(feature.properties.LocationID);
               return predictionId === zoneId;
             })
-            ?.predictions?.find((p) =>
-              DateTime.fromISO(p.timestamp).toISO({ suppressMilliseconds: true }) ===
-              DateTime.fromISO(selectedTimestamp).toISO({ suppressMilliseconds: true })
-            );
+            ?.predictions?.find((p) => {
+              // Use Luxon's DateTime to compare timestamps in a timezone-agnostic way
+              return DateTime.fromISO(p.timestamp).equals(DateTime.fromISO(selectedTimestamp));
+            });
             // For forecast data, the busyness values are raw and need to be normalized
             // The values range from roughly -100 to +100, so we normalize to 0-100%
             const normalizedBusyness = match ? Math.max(0, Math.min(100, (match.busyness + 100) / 2)) : 0;

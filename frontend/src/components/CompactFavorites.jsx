@@ -1,15 +1,17 @@
 // component to show a hroizontally scrollable list of liked venues
 // uses VenueCard component to display favourite venues
 
-import { Box, Typography, IconButton } from "@mui/material";
+import { Box, Typography, IconButton, Button } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "@mui/icons-material";
 import { useLike } from "../context/LikeContext";
+import { usePlan } from "../context/PlanContext";
 import VenueCard from "./VenueCard";
 import { useEffect, useState, useRef } from "react";
 import { Favorite as FavoriteIcon } from "@mui/icons-material";
 
 export default function CompactFavorites() {
     const { likedVenues, handleLike } = useLike();
+    const { plan, addToPlan, removeFromPlan, isInPlan } = usePlan();
     const scrollRef = useRef(null);
     const [busynessMap, setBusynessMap] = useState({});
     const [enrichedVenues, setEnrichedVenues] = useState([]);
@@ -60,7 +62,7 @@ export default function CompactFavorites() {
                     textAlign: "center",
                 }}
             >
-                You haven’t added any favourites yet.
+                You haven't added any favourites yet.
             </Typography>
         );
     }
@@ -124,47 +126,74 @@ export default function CompactFavorites() {
                         px: 2,
                     }}
                 >
-                    {enrichedVenues.map((venue) => (
-                        <Box
-                            key={venue.id}
-                            sx={{
-                                position: "relative",
-                                minWidth: 180,
-                                maxWidth: 250,
-                                backgroundColor: "#111",
-                                border: "1px solid #900B6A",
-                                borderRadius: 2,
-                                p: 2,
-                                flexShrink: 0,
-                            }}
-                        >
-                            {/* Updated Like Button */}
-                            <IconButton
-                                onClick={() => handleLike(venue)}
+                    {enrichedVenues.map((venue) => {
+                        const isInCurrentPlan = isInPlan(venue);
+                        return (
+                            <Box
+                                key={venue.id}
                                 sx={{
-                                    position: "absolute",
-                                    top: 8,
-                                    right: 8,
-                                    zIndex: 10,
-                                    background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                                    color: "#fff",
-                                    width: 32,
-                                    height: 32,
-                                    padding: 0,
-                                    borderRadius: "50%",
-                                    boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
-                                    "&:hover": {
-                                        background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
-                                    },
+                                    position: "relative",
+                                    minWidth: 180,
+                                    maxWidth: 250,
+                                    backgroundColor: "#111",
+                                    border: "1px solid #900B6A",
+                                    borderRadius: 2,
+                                    p: 2,
+                                    flexShrink: 0,
                                 }}
                             >
-                                <FavoriteIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
+                                {/* Like Button */}
+                                <IconButton
+                                    onClick={() => handleLike(venue)}
+                                    sx={{
+                                        position: "absolute",
+                                        top: 8,
+                                        right: 8,
+                                        zIndex: 10,
+                                        background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+                                        color: "#fff",
+                                        width: 32,
+                                        height: 32,
+                                        padding: 0,
+                                        borderRadius: "50%",
+                                        boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                                        "&:hover": {
+                                            background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
+                                        },
+                                    }}
+                                >
+                                    <FavoriteIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
 
-                            {/* Venue content */}
-                            <VenueCard venue={venue} variant="compact" disableActions={true} busynessMap={busynessMap} tags={venue.tags} />
-                        </Box>
-                    ))}
+                                {/* Venue content */}
+                                <VenueCard venue={venue} variant="compact" disableActions={true} busynessMap={busynessMap} tags={venue.tags} />
+                                
+                                {/* Add to Plan Button */}
+                                <Button
+                                    onClick={() => isInCurrentPlan ? removeFromPlan(venue.id) : addToPlan(venue)}
+                                    sx={{
+                                        width: "100%",
+                                        mt: 1,
+                                        background: isInCurrentPlan 
+                                            ? "linear-gradient(to right, #FF4ECD, #3ABEFF)"
+                                            : "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+                                        color: "#000",
+                                        fontWeight: "bold",
+                                        fontSize: "0.75rem",
+                                        py: 0.5,
+                                        borderRadius: 1,
+                                        "&:hover": {
+                                            background: isInCurrentPlan 
+                                                ? "linear-gradient(to right, #3ABEFF, #FF4ECD)"
+                                                : "linear-gradient(to right, #FF4ECD, #3ABEFF)",
+                                        },
+                                    }}
+                                >
+                                    {isInCurrentPlan ? "Remove from Plan" : "Add to Plan"}
+                                </Button>
+                            </Box>
+                        );
+                    })}
                 </Box>
             </Box>
         </Box>
