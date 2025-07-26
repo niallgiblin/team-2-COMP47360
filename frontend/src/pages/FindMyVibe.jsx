@@ -1,7 +1,7 @@
 // interactive search page for Find My Vibe
 // Displays results using TrendingVenueCard and PlanSummary (which uses VenueCard) 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   Box,
   Typography,
@@ -21,6 +21,10 @@ import { useBusyness } from "../context/BusynessContext";
 // Turf imports for data enrichment
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
+
+// Cache for search results
+const searchCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // main page component
 export default function FindMyVibe() {
@@ -43,6 +47,22 @@ export default function FindMyVibe() {
 
   // Get busyness data from context
   const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
+
+  // Memoized search key for caching
+  const searchKey = useMemo(() => {
+    const filters = [input, vibe, venueType, cuisine].filter(Boolean).join('|');
+    return filters || 'empty';
+  }, [input, vibe, venueType, cuisine]);
+
+  // Check if we have cached results
+  const getCachedResults = useCallback(() => {
+    const cached = searchCache.get(searchKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log('🔍 [CACHE] Using cached search results for:', searchKey);
+      return cached.results;
+    }
+    return null;
+  }, [searchKey]);
 
   // Fetch busyness data on mount (only once)
   useEffect(() => {
@@ -75,26 +95,35 @@ export default function FindMyVibe() {
   const [pendingSearch, setPendingSearch] = useState(false);
 
   // data fetching on mount
- useEffect(() => {
+  useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        // Fetch zone data
-        const zoneRes = await fetch("/manhattanZones.geojson");
-        if (zoneRes.ok) setZoneData(await zoneRes.json());
-        else console.error("Failed to load zone data:", zoneRes.statusText);
+        // Fetch data in parallel
+        const [zoneRes, mapDataRes] = await Promise.all([
+          fetch("/manhattanZones.geojson"),
+          fetch(`/api/vibe/map-data`)
+        ]);
 
-        // Fetch venues data
-        const mapDataRes = await fetch(`/api/vibe/map-data`);
+        if (zoneRes.ok) {
+          const zoneData = await zoneRes.json();
+          setZoneData(zoneData);
+        } else {
+          console.error("Failed to load zone data:", zoneRes.statusText);
+        }
+
         if (mapDataRes.ok) {
           const mapData = await mapDataRes.json();
-          setAllVenues(mapData.locations || []);
-        } else console.error("Failed to fetch map-data:", mapDataRes.statusText);
+          const venues = mapData.locations || [];
+          setAllVenues(venues);
+        } else {
+          console.error("Failed to fetch map-data:", mapDataRes.statusText);
+        }
       } catch (error) {
         console.error("Error fetching initial data for FindMyVibe:", error);
       }
     };
     fetchInitialData();
- }, []); // Empty dependency array - only run once on mount
+  }, []); // Empty dependency array - only run once on mount
 
   // Handle navigation to map page
   const handleGetDirections = (venue) => {
@@ -109,6 +138,15 @@ export default function FindMyVibe() {
       setHasSearched(true);
       return;
     }
+
+    // Check cache first
+    const cachedResults = getCachedResults();
+    if (cachedResults) {
+      setAllResults(cachedResults);
+      setHasSearched(true);
+      return;
+    }
+
     // avoid searching before the data is ready
     if (!isDataReady) {
       console.warn("Data still loading. Will retry when ready.");
@@ -221,15 +259,14 @@ export default function FindMyVibe() {
         }
         return enriched;
       });
+      
+      // Cache the results
+      searchCache.set(searchKey, {
+        results: transformed,
+        timestamp: Date.now()
+      });
+      
       setAllResults(transformed);
-      // Remove: updating busynessMap from search response
-      // if (data.busyness) {
-      //   const normalizedBusyness = {};
-      //   Object.entries(data.busyness).forEach(([k, v]) => {
-      //     normalizedBusyness[String(k)] = v;
-      //   });
-      //   setBusynessMap(normalizedBusyness);
-      // }
     } catch (err) {
       console.error("Error fetching search results:", err);
       setAllResults([]);
@@ -237,7 +274,7 @@ export default function FindMyVibe() {
       setIsLoading(false);
       setPendingSearch(false);
     }
-  }, [input, vibe, venueType, cuisine, zoneData, allVenues]);
+  }, [input, vibe, venueType, cuisine, zoneData, allVenues, searchKey, getCachedResults, isDataReady, busynessMap]);
 
   // retry search automaticaly when data is ready
   useEffect(() => {
@@ -246,7 +283,6 @@ export default function FindMyVibe() {
       performSearch(); // Re-run the search
     }
   }, [pendingSearch, isDataReady, performSearch]);
-
 
   // Form submission handler
   const handleFormSubmit = (e) => {

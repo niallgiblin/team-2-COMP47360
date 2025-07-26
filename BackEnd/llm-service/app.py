@@ -11,6 +11,8 @@ import threading
 from typing import Optional
 import sys
 import requests
+import hashlib
+import pickle
 
 # Helper function for safe type conversion
 def _safe_to_int(value, default=0):
@@ -50,9 +52,37 @@ initialized = False
 initialization_error = None
 initialization_lock = threading.Lock()
 
-# Cache for search results
+# Enhanced cache for search results with better key generation
 search_cache = {}
 SEARCH_CACHE_DURATION = 300  # 5 minutes
+MAX_CACHE_SIZE = 1000  # Maximum number of cached results
+
+def generate_cache_key(vibe_desc, max_results, location_filter=None, price_range=None):
+    """Generate a unique cache key for search parameters"""
+    key_parts = [
+        vibe_desc.lower().strip(),
+        str(max_results),
+        str(location_filter).lower() if location_filter else '',
+        str(price_range).lower() if price_range else ''
+    ]
+    key_string = '|'.join(key_parts)
+    return hashlib.md5(key_string.encode()).hexdigest()
+
+def cleanup_cache():
+    """Remove expired entries from cache"""
+    current_time = time.time()
+    expired_keys = [
+        key for key, value in search_cache.items()
+        if current_time - value['timestamp'] > SEARCH_CACHE_DURATION
+    ]
+    for key in expired_keys:
+        del search_cache[key]
+    
+    # If cache is still too large, remove oldest entries
+    if len(search_cache) > MAX_CACHE_SIZE:
+        sorted_items = sorted(search_cache.items(), key=lambda x: x[1]['timestamp'])
+        for key, _ in sorted_items[:len(sorted_items) - MAX_CACHE_SIZE]:
+            del search_cache[key]
 
 def verify_file_paths():
     """Verify that all required files exist before attempting to load them"""
@@ -109,47 +139,28 @@ def load_model():
             return False
 
 def load_data():
-    """Load the locations data and embeddings"""
+    """Load location data and pre-computed embeddings"""
     global df, location_embeddings
     try:
         data_path = os.getenv('DATA_PATH', '/app/data/locations.csv')
         embeddings_path = os.getenv('EMBEDDINGS_PATH', '/app/data/location_embeddings.npy')
-
-        logger.info(f"Loading raw data from {data_path}")
-        df_raw = pd.read_csv(data_path)
-        logger.info(f"Original data loaded. Shape: {df_raw.shape}")
-
-        logger.info(f"Loading raw embeddings from {embeddings_path}")
-        embeddings_raw = np.load(embeddings_path)
-        logger.info(f"Original embeddings loaded. Shape: {embeddings_raw.shape}")
-
-        # --- Data Validation and Filtering ---
-        # Filter out any locations that do not have a valid zone.
-        # This ensures we only work with Manhattan locations and prevents errors.
-        initial_rows = len(df_raw)
-        valid_indices = df_raw['zone'].notna() & (df_raw['zone'].str.strip() != '')
         
-        num_removed = initial_rows - valid_indices.sum()
-        if num_removed > 0:
-            logger.warning(f"FILTERED: Removed {num_removed} locations with missing or empty zones.")
-
-        # Apply the filter to both the DataFrame and the embeddings to keep them in sync
-        df_filtered = df_raw[valid_indices].copy()
-        embeddings_filtered = embeddings_raw[valid_indices]
+        logger.info(f"Loading data from {data_path}")
+        df = pd.read_csv(data_path)
+        logger.info(f"Loaded {len(df)} locations")
         
-        # Reset the DataFrame index to be sequential from 0, which is crucial for lookups
-        df_filtered.reset_index(drop=True, inplace=True)
+        logger.info(f"Loading embeddings from {embeddings_path}")
+        location_embeddings = np.load(embeddings_path)
+        location_embeddings = torch.tensor(location_embeddings, dtype=torch.float32)
+        logger.info(f"Loaded embeddings with shape {location_embeddings.shape}")
         
-        df = df_filtered
-        location_embeddings = torch.tensor(embeddings_filtered)
-        logger.info(f"Data and embeddings successfully filtered. Final shape: {df.shape}")
         return True
     except Exception as e:
-        logger.error(f"Failed to load data: {str(e)}", exc_info=True)
+        logger.error(f"Data loading failed: {str(e)}", exc_info=True)
         return False
 
 def initialize_service():
-    """Initialize the ML service with proper error handling"""
+    """Initialize the ML service with model and data"""
     global initialized, initialization_error
     
     with initialization_lock:
@@ -157,130 +168,80 @@ def initialize_service():
             return True
             
         logger.info("Starting service initialization...")
-        initialization_error = None
         
-        try:
-            # First verify all files exist
-            files_ok, missing_files = verify_file_paths()
-            if not files_ok:
-                initialization_error = f"Missing files: {', '.join(missing_files)}"
-                logger.error(initialization_error)
-                return False
-            
-            # Load model and data
-            if not load_model():
-                initialization_error = "Failed to load model"
-                return False
-                
-            if not load_data():
-                initialization_error = "Failed to load data"
-                return False
-
-            # --- Start of refactored validation block ---
-            # Validate that all data components are loaded and consistent
-            if df is None:
-                initialization_error = "Dataframe (df) is None after loading."
-                logger.error(initialization_error)
-                return False
-            
-            if location_embeddings is None:
-                initialization_error = "Embeddings tensor is None after loading."
-                logger.error(initialization_error)
-                return False
-
-            if 'id' not in df.columns:
-                error_msg = "CRITICAL: The 'locations.csv' file is missing the required 'id' column header."
-                initialization_error = error_msg
-                logger.error(error_msg)
-                return False
-
-            if len(df) != len(location_embeddings):
-                error_msg = f"Data mismatch: locations.csv has {len(df)} rows, but embeddings file has {len(location_embeddings)} entries."
-                initialization_error = error_msg
-                logger.error(error_msg)
-                return False
-            
+        # Verify files first
+        files_ok, missing_files = verify_file_paths()
+        if not files_ok:
+            initialization_error = f"Missing files: {missing_files}"
+            return False
+        
+        # Load model and data
+        model_ok = load_model()
+        data_ok = load_data()
+        
+        if model_ok and data_ok:
             initialized = True
-            logger.info("Service initialization complete")
+            logger.info("Service initialization completed successfully")
             return True
-            
-        except Exception as e:
-            initialization_error = f"Initialization failed: {str(e)}"
-            logger.error(initialization_error, exc_info=True)
+        else:
+            initialization_error = "Failed to load model or data"
             return False
 
 @app.route("/health")
 def health():
-    """Health check endpoint with detailed status"""
-    try:
-        if initialized:
-            return jsonify({
-                "status": "healthy", 
-                "success": True,
-                "model_loaded": model is not None,
-                "data_loaded": df is not None,
-                "embeddings_loaded": location_embeddings is not None,
-                "data_shape": df.shape if df is not None else None,
-                "embeddings_shape": list(location_embeddings.shape) if location_embeddings is not None else None
-            }), 200
-        else:
-            return jsonify({
-                "status": "unhealthy", 
-                "success": False,
-                "error": initialization_error or "Service not initialized",
-                "model_loaded": model is not None,
-                "data_loaded": df is not None,
-                "embeddings_loaded": location_embeddings is not None
-            }), 503
-    except Exception as e:
-        logger.error(f"Health check error: {str(e)}", exc_info=True)
+    """Health check endpoint"""
+    if not initialized:
         return jsonify({
-            "status": "error",
-            "success": False,
-            "error": str(e)
-        }), 500
+            'status': 'unhealthy',
+            'initialized': False,
+            'error': initialization_error
+        }), 503
+    
+    # Check if all components are loaded
+    if model is None or df is None or location_embeddings is None:
+        return jsonify({
+            'status': 'unhealthy',
+            'initialized': False,
+            'error': 'Service components not properly loaded'
+        }), 503
+    
+    return jsonify({
+        'status': 'healthy',
+        'initialized': True,
+        'model_loaded': model is not None,
+        'data_loaded': df is not None,
+        'embeddings_loaded': location_embeddings is not None,
+        'total_locations': len(df) if df is not None else 0
+    })
 
 def _create_location_dto(loc_series, similarity_score=None):
-    """Creates a location data transfer object from a pandas Series."""
-    price_str = str(loc_series.get('price', 'moderate')).lower().strip()
-    price_int = PRICE_MAP.get(price_str, 3)
-    name = str(loc_series['name']) if pd.notna(loc_series['name']) else "Unnamed Location"
-
-    dto = {
-        'id': _safe_to_int(loc_series['id']),
-        'name': name,
-        'address': str(loc_series['addr']),
-        'type': str(loc_series['loc_type']),
-        'description': str(loc_series.get('description', '')),
-        'price': price_int,
-        'lat': float(loc_series['lat']),
-        'lng': float(loc_series['long']),
-        'uri': str(loc_series.get('uri', '')),
-        'review': str(loc_series.get('reviews', '')),
-        'numReviews': _safe_to_int(loc_series.get('num_reviews')),
-        'zone': str(loc_series.get('zone') or '')
+    """Create a location DTO from a pandas series"""
+    return {
+        'id': _safe_to_int(loc_series.get('id', 0)),
+        'name': str(loc_series.get('name', '')),
+        'address': str(loc_series.get('address', '')),
+        'latitude': float(loc_series.get('latitude', 0)),
+        'longitude': float(loc_series.get('longitude', 0)),
+        'type': str(loc_series.get('type', '')),
+        'price': str(loc_series.get('price', '')),
+        'rating': float(loc_series.get('rating', 0)),
+        'zone': str(loc_series.get('zone', '')),
+        'zoneId': _safe_to_int(loc_series.get('zoneId', 0)),
+        'similarity': float(similarity_score) if similarity_score is not None else None
     }
-    if similarity_score is not None:
-        dto['similarity'] = float(similarity_score)
-    
-    return dto
 
 @app.route('/locations/all', methods=['GET'])
 def get_all_locations():
-    """Returns all locations from the dataframe"""
-    if not initialized or df is None:
-        return jsonify({'success': False, 'error': 'Service not initialized or data not loaded'}), 503
+    """Get all locations (for debugging)"""
+    if not initialized:
+        return jsonify({'error': 'Service not initialized'}), 503
     
-    try:
-        results = [_create_location_dto(loc) for _, loc in df.iterrows()]
-        return jsonify({'success': True, 'results': results})
-    except Exception as e:
-        logger.error(f"Error in /locations/all: {str(e)}", exc_info=True)
-        return jsonify({'success': False, 'error': 'Internal server error', 'message': str(e)}), 500
+    locations = [df.iloc[i].to_dict() for i in range(len(df))]
+    return jsonify({'locations': locations})
 
 @app.route('/search', methods=['POST'])
 def vibe_search():
-    """Main search endpoint"""
+    """Main search endpoint with enhanced caching"""
     if not initialized:
         return jsonify({
             'success': False, 
@@ -310,13 +271,18 @@ def vibe_search():
         location_filter = data.get('location', None)
         price_range = data.get('priceRange', None)
 
-        # --- Caching Logic ---
-        # Only cache simple, generic queries like the one for the main map view
-        cache_key = vibe_desc.lower()
-        if cache_key == "new york":
-            if cache_key in search_cache and (time.time() - search_cache[cache_key]['timestamp'] < SEARCH_CACHE_DURATION):
+        # --- Enhanced Caching Logic ---
+        cache_key = generate_cache_key(vibe_desc, max_results, location_filter, price_range)
+        
+        # Clean up expired cache entries
+        cleanup_cache()
+        
+        # Check cache
+        if cache_key in search_cache:
+            cached_result = search_cache[cache_key]
+            if time.time() - cached_result['timestamp'] < SEARCH_CACHE_DURATION:
                 logger.info(f"Returning cached result for query: '{vibe_desc}'")
-                return jsonify(search_cache[cache_key]['response'])
+                return jsonify(cached_result['response'])
 
         if not vibe_desc:
             return jsonify({
@@ -360,13 +326,21 @@ def vibe_search():
         logger.info(f"Filtered to {len(filtered_indices)} locations")
 
         if not filtered_indices:
-            return jsonify({
+            response = {
                 'success': True,
                 'query': vibe_desc,
                 'results': [],
                 'explanation': "No locations found matching the specified filters.",
                 'confidence': None
-            })
+            }
+            
+            # Cache empty results too
+            search_cache[cache_key] = {
+                'timestamp': time.time(),
+                'response': response
+            }
+            
+            return jsonify(response)
 
         # Get similarity scores for filtered indices
         filtered_scores = [(idx, similarity_scores[idx]) for idx in filtered_indices]
@@ -393,14 +367,12 @@ def vibe_search():
         }
 
         # --- Cache Update ---
-        if cache_key == "new york":
-            logger.info(f"Caching result for query: '{vibe_desc}'")
-            search_cache[cache_key] = {
-                'timestamp': time.time(),
-                'response': response
-            }
+        search_cache[cache_key] = {
+            'timestamp': time.time(),
+            'response': response
+        }
 
-        logger.info(f"ML Service: Returning {len(results)} results for query '{vibe_desc}'")
+        logger.info(f"ML Service: Returning {len(results)} results for query '{vibe_desc}' (cached)")
         return jsonify(response)
 
     except Exception as e:
@@ -477,51 +449,59 @@ def most_similar_locs_for_chat(query):
         
         loc_info_parts = []
         for _, idx in zip(top_results.values, top_results.indices):
-            loc = df.iloc[int(idx.item())]
-            info = (
-                f"Name: {loc.get('name', 'N/A')}. "
-                f"Type: {loc.get('loc_type', 'N/A')}. "
-                f"Description: {loc.get('description', 'No description available.')}"
-            )
-            loc_info_parts.append(info)
+            loc = df.iloc[idx.item()]
+            loc_info_parts.append(f"- {loc['name']} ({loc['zone']}): {loc['type']}")
         
-        return "\n".join(loc_info_parts)
+        return "Here are some similar locations:\n" + "\n".join(loc_info_parts)
     except Exception as e:
-        logger.error(f"Error during internal location search for chat: {e}", exc_info=True)
-        return "I am having trouble accessing location information right now."
+        logger.error(f"Error in most_similar_locs_for_chat: {e}")
+        return "I'm having trouble finding similar locations right now."
 
 def get_ai_response(query, previous_questions):
-    locs = most_similar_locs_for_chat(query)
-    history = " ".join([msg['text'] for msg in previous_questions]) if previous_questions else ""
-    conversation_context = f"The user has already engaged in conversation with you. Here is the previous conversation for context: {history}" if history else ""
-
-    system_message = (
-        "You are Urban Gala's AI assistant. Greet the user and explain what you can do: "
-        "You help users discover the best real venues and experiences in Manhattan. "
-        "You can recommend bars, restaurants, clubs, and more based on the user's preferences, vibe, or group size. "
-        "You can also help users build a plan for their night out, and provide information about how busy different areas are. "
-        "If a user describes their ideal night out, offer to run a 'Find My Vibe' search for them and suggest a personalized plan. "
-        "If the user's request is unclear, ask follow-up questions to clarify their preferences. "
-        "IMPORTANT: Only recommend venues based on querying the baked in LLM. Do not invent or make up venue names or details. "
-        "If you are unsure, say so and suggest the user try a different query."
-        f"\n\nHere are some relevant venues from the database:\n{locs}\n\n{conversation_context}\n\nAnswer the user's question accurately and helpfully."
-    )
+    """Get AI response using Hugging Face API"""
     try:
-        messages = [{"role": "system", "content": system_message}, {"role": "user", "content": query}]
+        # Build context from previous questions and current query
+        context_parts = []
+        if previous_questions:
+            context_parts.append("Previous conversation:")
+            for q in previous_questions[-3:]:  # Last 3 questions for context
+                context_parts.append(f"- User: {q}")
+        
+        context_parts.append(f"Current query: {query}")
+        
+        # Get similar locations for context
+        similar_locs = most_similar_locs_for_chat(query)
+        
+        messages = [
+            {"role": "system", "content": f"You are a helpful AI assistant for a Manhattan nightlife app. You have access to information about venues in Manhattan. Here's what you know about similar locations:\n{similar_locs}\n\nProvide helpful, concise responses about Manhattan nightlife and venues."},
+            {"role": "user", "content": "\n".join(context_parts)}
+        ]
+        
         response = huggingface_chat_api_call(messages)
-        return response["choices"][0]["message"]["content"]
+        return response['choices'][0]['message']['content']
     except Exception as e:
-        logger.error(f"Failed to get AI response from Hugging Face: {e}", exc_info=True)
-        return "I'm sorry, but I'm having trouble contacting my AI brain right now. Please try again in a moment."
+        logger.error(f"Error getting AI response: {e}")
+        return "I'm having trouble processing your request right now. Please try again later."
 
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
-    data = request.get_json()
-    logger.info(f"Chat endpoint received request: {data.get('message')}")
-    user_message = data.get('message', '')
-    previous_questions = data.get('history', []) 
-    bot_response = get_ai_response(user_message, previous_questions)
-    return jsonify({'response': bot_response})
+    """Chat endpoint for AI interactions"""
+    if not request.is_json:
+        return jsonify({'error': 'Content-Type must be application/json'}), 415
+    
+    try:
+        data = request.get_json()
+        query = data.get('message', '').strip()
+        previous_questions = data.get('previous_questions', [])
+        
+        if not query:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        response = get_ai_response(query, previous_questions)
+        return jsonify({'response': response})
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     # Development server
