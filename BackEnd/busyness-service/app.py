@@ -86,6 +86,7 @@ def get_busyness():
         lon = request.args.get('lon', default=-73.9855, type=float)
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
+        logger.info("🔍 [DEBUG] Returning cached response with forecast: {}", forecast)
         return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
 
     try:
@@ -95,6 +96,7 @@ def get_busyness():
         
         logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
         predictions = predict_busyness_for_all_zones(lat, lon)
+        logger.info("🔍 [DEBUG] Raw predictions from model: {}", predictions)
 
         # Normalize the raw scores to a 0-1 range for frontend display.
         valid_scores = [score for score in predictions.values() if score is not None]
@@ -119,6 +121,8 @@ def get_busyness():
                     # All scores are the same, so they can be considered neutral (0.5)
                     normalized_predictions[location_id] = 0.5
 
+        logger.info("🔍 [DEBUG] Normalized predictions: {}", normalized_predictions)
+
         # Update cache
         cache = normalized_predictions
         logger.info("Busyness predictions generated and cached.")
@@ -126,13 +130,16 @@ def get_busyness():
         # Also return forecast
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
+        logger.info("🔍 [DEBUG] Generated forecast: {}", forecast)
 
-        return jsonify({
+        response = {
             "success": True,
             "predictions": normalized_predictions,
             "forecast": forecast,
             "cached": False
-        })
+        }
+        logger.info("🔍 [DEBUG] Final response: {}", response)
+        return jsonify(response)
 
     except Exception as e:
         logger.error(f"Error in /busyness endpoint: {str(e)}", exc_info=True)

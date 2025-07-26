@@ -43,9 +43,12 @@ import { DateTime } from "luxon";
 // function to generate forecast timestamps in NY time
 const generateNext12Hours = () => {
   const timestamps = [];
+  
+  // Use the same date as the forecast data (July 26, 2025)
+  const baseDate = DateTime.fromISO("2025-07-26T00:00:00").setZone("America/New_York");
 
-  for (let i = 0; i < 12; i++) {
-    const dt = DateTime.now().setZone("America/New_York").plus({ hours: i });
+  for (let i = 9; i <= 20; i++) { // 9 AM to 8 PM (12 hours)
+    const dt = baseDate.plus({ hours: i });
     timestamps.push(dt.toISO()); // ISO string in NY time
   }
 
@@ -216,19 +219,37 @@ export default function MapView() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        console.log("🔍 [DEBUG] Fetching map data from /api/vibe/map-data");
         const res = await fetch(`/api/vibe/map-data`);
         if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
+        console.log("🔍 [DEBUG] Map data response:", data);
+        console.log("🔍 [DEBUG] Busyness data:", data.busyness);
+        console.log("🔍 [DEBUG] Predictions data:", data.predictions);
+        console.log("🔍 [DEBUG] Predictions data: (67)", data.predictions);
+        console.log("🔍 [DEBUG] First prediction entry:", data.predictions[0]);
+        console.log("🔍 [DEBUG] Prediction data structure:", {
+          hasPredictions: !!data.predictions,
+          length: data.predictions?.length,
+          firstEntry: data.predictions?.[0],
+          firstEntryKeys: data.predictions?.[0] ? Object.keys(data.predictions[0]) : null
+        });
+        
         setVenues(location.state?.fromPlan === true && plan.length > 0 ? plan : data.locations || []);
         const busynessObject = data.busyness || {};
+        console.log("🔍 [DEBUG] Processed busyness object:", busynessObject);
+        
         const busynessArray = Object.entries(busynessObject).map(
           ([locationId, busynessValue]) => ({
             LocationID: String(locationId).trim(),
             busyness: busynessValue,
           })
         );
+        console.log("🔍 [DEBUG] Final busyness array:", busynessArray);
         setBusynessData(busynessArray);
+        
         if (Array.isArray(data.predictions) && data.predictions.length > 0) {
+          console.log("🔍 [DEBUG] Setting real prediction data:", data.predictions);
           setPredictionData(data.predictions);
           const first = data.predictions[0]?.predictions?.[0]?.timestamp;
           if (first) setSelectedTimestamp(first);
@@ -253,23 +274,17 @@ export default function MapView() {
   // Always use dummy busyness and prediction data if isMock is true
   useEffect(() => {
     if (!zoneData || !isMock) return;
+    
     // Dummy busyness: random for each zone
     const dummyBusyness = zoneData.features.map(f => ({
       LocationID: f.properties.LocationID,
       busyness: Math.random(),
     }));
     setBusynessData(dummyBusyness);
-    // Dummy predictions: random for each zone and timestamp
-    const manhattanZoneIds = zoneData.features
-      .filter(f => f.properties.borough === "Manhattan")
-      .map(f => f.properties.LocationID);
-    const zonesToUse = manhattanZoneIds.length > 0 ? manhattanZoneIds : zoneData.features.map(f => f.properties.LocationID);
-    const dummyPredictions = zonesToUse.map(zoneId => ({
-      LocationID: zoneId,
-      predictions: forecastTimestamps.map(ts => ({ timestamp: ts, busyness: Math.random() }))
-    }));
-    setPredictionData(dummyPredictions);
-  }, [zoneData, isMock, forecastTimestamps]);
+    
+    // REMOVED: No more dummy predictions - only use real data
+    console.log("🔍 [DEBUG] isMock=true but skipping dummy predictions - only using real data");
+  }, [zoneData, isMock]);
 
   // 4. Enrich venues with zone IDs once all data is loaded
   useEffect(() => {
@@ -299,37 +314,8 @@ export default function MapView() {
   }, [zoneData, venues, fromPlan, plan, selectedVenue, selectedVenueFromState]);
 
 
-  // 5. Use real forecast data if available; otherwise, fallback to dummy
-  useEffect(() => {
-    if (!zoneData || predictionData.length > 0) return;
-
-    const generateDummyPredictions = () => {
-      // Filter features to get only Manhattan zones
-      const manhattanZoneIds = zoneData.features
-        .filter((feature) => feature.properties.borough === "Manhattan")
-        .map((feature) => feature.properties.LocationID);
-
-      const zonesToUse = manhattanZoneIds.length > 0
-        ? manhattanZoneIds
-        : zoneData.features.map((f) => f.properties.LocationID);
-
-      return zonesToUse.map((zoneId) => ({
-        LocationID: zoneId,
-        predictions: forecastTimestamps.map((ts) => ({
-          timestamp: ts,
-          busyness: Math.random(),
-        })),
-      }));
-    };
-
-    // Fallback only when no real prediction data was loaded
-    console.warn("No real forecast data found. Using dummy predictions.");
-    const dummyData = generateDummyPredictions();
-    setPredictionData(dummyData);
-    if (dummyData.length > 0 && dummyData[0].predictions.length > 0) {
-      setSelectedTimestamp(dummyData[0].predictions[0].timestamp);
-    }
-  }, [zoneData, forecastTimestamps, predictionData]);
+  // REMOVED: The fallback useEffect that was generating dummy predictions
+  // We only want real data from the API
 
 
   // Scroll to map when directions are shown
