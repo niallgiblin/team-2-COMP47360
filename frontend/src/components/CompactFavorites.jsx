@@ -99,7 +99,7 @@ export default function CompactFavorites() {
                     sx={{
                         position: "absolute",
                         right: -10,
-                        top: "50%",
+                        top: "52%",
                         transform: "translateY(-50%)",
                         zIndex: 2,
                         color: "#FF4ECD",

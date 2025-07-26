@@ -58,58 +58,63 @@ export default function CompactPlanSummary() {
         {planTitle}
       </Typography>
 
-      {/* Chevron Buttons */}
-      <IconButton
-        onClick={scrollLeft}
-        sx={{
-          position: 'absolute',
-          left: -10,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: 2,
-          color: '#FF4ECD',
-          backgroundColor: '#000',
-          '&:hover': {
-            backgroundColor: '#111',
-          },
-        }}
-      >
-        <ChevronLeftIcon />
-      </IconButton>
+      {/* Carousel Container (chevrons + cards) */}
+      <Box sx={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
+        {/* Chevron Buttons */}
+        <IconButton
+          onClick={scrollLeft}
+          sx={{
+            position: 'absolute',
+            left: -10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 2,
+            color: '#FF4ECD',
+            backgroundColor: '#000',
+            '&:hover': {
+              backgroundColor: '#111',
+            },
+          }}
+        >
+          <ChevronLeftIcon />
+        </IconButton>
 
-      <IconButton
-        onClick={scrollRight}
-        sx={{
-          position: 'absolute',
-          right: -10,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: 2,
-          color: '#FF4ECD',
-          backgroundColor: '#000',
-          '&:hover': {
-            backgroundColor: '#111',
-          },
-        }}
-      >
-        <ChevronRightIcon />
-      </IconButton>
-      
-      {/* Venue cards (horizontal scroll) */}
-      <Box
-        ref={scrollRef}
-        sx={{
-          display: 'flex',
-          overflowX: 'auto',
-          overflowY: 'visible',
-          gap: 2,
-          pb: 1,
-          scrollBehavior: 'smooth',
-        }}
-      >
-        {planArray.map((venue) => (
-          <VenueCard key={venue.id} venue={venue} variant="compact" /> // No handlers needed here anymore as they are global now
-        ))}
+        <IconButton
+          onClick={scrollRight}
+          sx={{
+            position: 'absolute',
+            right: -10,
+            top: '52%',
+            transform: 'translateY(-50%)',
+            zIndex: 2,
+            color: '#FF4ECD',
+            backgroundColor: '#000',
+            '&:hover': {
+              backgroundColor: '#111',
+            },
+          }}
+        >
+          <ChevronRightIcon />
+        </IconButton>
+        
+        {/* Venue cards (horizontal scroll) */}
+        <Box
+          ref={scrollRef}
+          sx={{
+            display: 'flex',
+            position: 'relative',
+            overflowX: 'auto',
+            overflowY: 'visible',
+            gap: 2,
+            pb: 1,
+            px: 2,
+            scrollBehavior: 'smooth',
+          }}
+        >
+          {planArray.map((venue) => (
+            <VenueCard key={venue.id} venue={venue} variant="compact" />
+          ))}
+        </Box>
       </Box>
     </Box>
   );
