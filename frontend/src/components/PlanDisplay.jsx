@@ -2,7 +2,7 @@
 import { Box, Typography } from "@mui/material";
 import VenueCard from "./VenueCard";
 
-export default function PlanDisplay({ planName, venues, disableActions }) {
+export default function PlanDisplay({ planName, venues, disableActions, hideTitle = false }) {
   // Handle case where venues might be undefined or empty
   if (!venues || venues.length === 0) {
     return (
@@ -12,7 +12,7 @@ export default function PlanDisplay({ planName, venues, disableActions }) {
           backgroundColor: "#000",
         }}
       >
-        {planName && (
+        {planName && !hideTitle && (
           <Typography
             variant="subtitle1"
             sx={{
@@ -38,7 +38,7 @@ export default function PlanDisplay({ planName, venues, disableActions }) {
         backgroundColor: "#000",
       }}
     >
-      {planName && (
+      {planName && !hideTitle && (
         <Typography
           variant="subtitle1"
           sx={{
