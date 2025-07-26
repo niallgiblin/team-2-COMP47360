@@ -17,9 +17,8 @@ import { usePlan } from '../context/PlanContext';
 // Functional component that displays information about a venue and handles actions
 export default function VenueCard({ venue, variant = 'default', disableActions = false }) {
   const { plan, addToPlan, removeFromPlan } = usePlan();
-  try {
-    console.log('VenueCard venue:', venue);
-    if (!venue) return null; // Defensive: render nothing if venue is missing
+  
+  if (!venue) return null; // Defensive: render nothing if venue is missing
 
     // Destructure venue object with fallbacks to prevent crashes
     const {
@@ -298,12 +297,4 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           </Box>
       </Card>
     );
-  } catch (err) {
-    console.error('VenueCard render error:', err, venue);
-    return (
-      <div style={{ color: 'red', padding: 8 }}>
-        Error rendering venue card. See console for details.
-      </div>
-    );
   }
-}

@@ -13,54 +13,23 @@ import { Favorite as FavoriteIcon } from "@mui/icons-material";
 export default function CompactFavorites() {
     const { likedVenues, handleLike } = useLike();
     const { plan, addToPlan, removeFromPlan, isInPlan } = usePlan();
-    const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
+    const { busynessData: contextBusynessData, venueData: cachedVenues, fetchAllData } = useBusyness();
     const scrollRef = useRef(null);
-    const [busynessMap, setBusynessMap] = useState({});
     const [enrichedVenues, setEnrichedVenues] = useState([]);
-    const [allVenues, setAllVenues] = useState([]);
 
-    // fetch busyness and location data using context
+    // Use cached venue data if available
     useEffect(() => {
-        const loadData = async () => {
-            try {
-                // Use context for busyness data
-                if (!contextBusynessData || contextBusynessData.length === 0) {
-                    await fetchBusynessData();
-                }
-                
-                // Convert context busyness data to map format
-                if (contextBusynessData && contextBusynessData.length > 0) {
-                    const busynessMapFromContext = {};
-                    contextBusynessData.forEach(item => {
-                        busynessMapFromContext[item.LocationID] = item.busyness;
-                    });
-                    setBusynessMap(busynessMapFromContext);
-                }
-
-                // Fetch venues data
-                const response = await fetch("/api/vibe/map-data");
-                const data = await response.json();
-                setAllVenues(data.locations || []);
-            } catch (err) {
-                console.error("Failed to fetch data:", err);
-            }
-        };
-        
-        loadData();
-    }, [contextBusynessData, fetchBusynessData]);
-
-    // Enrich likedVenues with full data from allVenues
-    useEffect(() => {
-        if (allVenues.length === 0) {
+        if (cachedVenues && cachedVenues.length > 0) {
+            // Enrich liked venues with cached data
+            const merged = likedVenues.map(liked => {
+                const full = cachedVenues.find(v => v.id === liked.id);
+                return { ...full, ...liked };
+            });
+            setEnrichedVenues(merged);
+        } else {
             setEnrichedVenues(likedVenues);
-            return;
         }
-        const merged = likedVenues.map(liked => {
-            const full = allVenues.find(v => v.id === liked.id);
-            return { ...full, ...liked };
-        });
-        setEnrichedVenues(merged);
-    }, [likedVenues, allVenues]);
+    }, [likedVenues, cachedVenues]);
 
     // handler for left/right chevrons
     const handleScroll = (direction) => {
@@ -187,7 +156,7 @@ export default function CompactFavorites() {
                                 </IconButton>
 
                                 {/* Venue content */}
-                                <VenueCard venue={venue} variant="compact" disableActions={true} busynessMap={busynessMap} tags={venue.tags} />
+                                <VenueCard venue={venue} variant="compact" disableActions={true} tags={venue.tags} />
                                 
                                 {/* Add to Plan Button */}
                                 <Button

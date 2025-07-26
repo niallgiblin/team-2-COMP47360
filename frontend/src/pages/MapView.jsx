@@ -142,7 +142,7 @@ export default function MapView() {
   const mapSectionRef = useRef(null);
 
   // Context data
-  const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchBusynessData } = useBusyness();
+  const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchAllData } = useBusyness();
   // const { plan: currentPlan } = usePlan();
 
   // Get state from navigation
@@ -182,7 +182,7 @@ export default function MapView() {
       // Only fetch if we don't have recent data
       if (!contextBusynessData || contextBusynessData.length === 0) {
         try {
-          await fetchBusynessData();
+          await fetchAllData();
         } catch (err) {
           console.error("Failed to load busyness data:", err);
         }
