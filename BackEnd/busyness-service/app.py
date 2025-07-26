@@ -86,7 +86,7 @@ def get_busyness():
         lon = request.args.get('lon', default=-73.9855, type=float)
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Returning cached response with forecast: {}", forecast)
+        logger.info("🔍 [DEBUG] Returning cached response with forecast: %s", forecast)
         return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
 
     try:
@@ -96,7 +96,7 @@ def get_busyness():
         
         logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
         predictions = predict_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Raw predictions from model: {}", predictions)
+        logger.info("🔍 [DEBUG] Raw predictions from model: %s", predictions)
 
         # Normalize the raw scores to a 0-1 range for frontend display.
         valid_scores = [score for score in predictions.values() if score is not None]
@@ -121,7 +121,7 @@ def get_busyness():
                     # All scores are the same, so they can be considered neutral (0.5)
                     normalized_predictions[location_id] = 0.5
 
-        logger.info("🔍 [DEBUG] Normalized predictions: {}", normalized_predictions)
+        logger.info("🔍 [DEBUG] Normalized predictions: %s", normalized_predictions)
 
         # Update cache
         cache = normalized_predictions
@@ -130,7 +130,7 @@ def get_busyness():
         # Also return forecast
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Generated forecast: {}", forecast)
+        logger.info("🔍 [DEBUG] Generated forecast: %s", forecast)
 
         response = {
             "success": True,
@@ -138,7 +138,7 @@ def get_busyness():
             "forecast": forecast,
             "cached": False
         }
-        logger.info("🔍 [DEBUG] Final response: {}", response)
+        logger.info("🔍 [DEBUG] Final response: %s", response)
         return jsonify(response)
 
     except Exception as e:

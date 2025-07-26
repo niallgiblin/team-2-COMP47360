@@ -14,7 +14,9 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { usePlan } from "../context/PlanContext";
+import { useBusyness } from "../context/BusynessContext";
 import { categoryImages, getCategory } from "../utils/tagMapping";
+import { useMemo } from "react";
 
 // import icons for feedback, tags, price etc
 import {
@@ -42,6 +44,7 @@ export default function TrendingVenueCard({
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { likedVenues, handleLike } = useLike();
+  const { busynessData: contextBusynessData } = useBusyness();
 
   // check if current venue is in favourites
   const isLiked = likedVenues.some((v) => v.id === venue.id);
@@ -121,17 +124,37 @@ export default function TrendingVenueCard({
     navigate("/map");
   };
 
-  const getBusynessLabel = () => {
+  const busynessLabel = useMemo(() => {
     if (!venue.zone || venue.zone === "nan") return null;
+    
+    // Try to get busyness from context first, then fallback to prop
     const zoneKey = String(venue.zoneId);
-    const value = busynessMap[zoneKey];
-    if (typeof value !== "number") return "No Data";
+    let value = null;
+    
+    // Check context data first
+    if (contextBusynessData && contextBusynessData.length > 0) {
+      const contextEntry = contextBusynessData.find(item => 
+        String(item.LocationID).replace(" NET", "") === zoneKey
+      );
+      if (contextEntry) {
+        value = contextEntry.busyness;
+      }
+    }
+    
+    // Fallback to prop if not found in context
+    if (value === null) {
+      value = busynessMap[zoneKey];
+    }
+    
+    if (typeof value !== "number") {
+      return "No Data";
+    }
     const percent = value * 100;
     if (percent >= 75) return "Very Busy";
     if (percent >= 50) return "Busy";
     if (percent >= 25) return "Moderate";
     return "Quiet";
-  };
+  }, [venue.zoneId, contextBusynessData, busynessMap]);
 
   // Render tags as chips if present
   const tagList = tags || venue.tags || [];
@@ -370,13 +393,13 @@ export default function TrendingVenueCard({
           }}
         >
           {/* Busyness chip, rating, and price */}
-          {getBusynessLabel() && (
+          {busynessLabel && (
             <Chip
               icon={<WhatshotIcon sx={{ color: "#fff" }} />}
-              label={getBusynessLabel()}
+              label={busynessLabel}
               size="small"
               sx={{
-                background: getBusynessLabel() === 'No Data'
+                background: busynessLabel === 'No Data'
                   ? 'linear-gradient(to right, #888, #bbb)'
                   : 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                 color: "#fff",

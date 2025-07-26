@@ -24,6 +24,7 @@ import Profile from "./pages/Profile";
 
 import { LikeProvider } from "./context/LikeContext";
 import { PlanProvider } from "./context/PlanContext";
+import { BusynessProvider } from "./context/BusynessContext";
 
 // import APITester from './components/APITester'; // Uncomment if you want to use API testing tool
 
@@ -168,13 +169,15 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <PlanProvider>
-        <LikeProvider>
-          <FriendRequestProvider>
-            <AppContent />
-          </FriendRequestProvider>
-        </LikeProvider>
-      </PlanProvider>
+      <BusynessProvider>
+        <PlanProvider>
+          <LikeProvider>
+            <FriendRequestProvider>
+              <AppContent />
+            </FriendRequestProvider>
+          </LikeProvider>
+        </PlanProvider>
+      </BusynessProvider>
     </AuthProvider>
   );
 }
