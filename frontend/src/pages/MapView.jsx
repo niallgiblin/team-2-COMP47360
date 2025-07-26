@@ -246,8 +246,7 @@ export default function MapView() {
         const res = await fetch(`/api/vibe/map-data`);
         if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
-        
-        setVenues(location.state?.fromPlan === true && plan.length > 0 ? plan : data.locations || []);
+        setVenues(data.locations || []);
       } catch (err) {
         // Fallback to mock data
         console.warn("Falling back to mock data due to fetch error:", err);
@@ -259,7 +258,7 @@ export default function MapView() {
       }
     };
     fetchVenuesData();
-  }, [fromPlan, plan, selectedVenueFromState, location.state?.fromPlan]); // Removed context dependencies
+  }, []); // Only run on mount
 
   // Handle context data updates separately
   useEffect(() => {
