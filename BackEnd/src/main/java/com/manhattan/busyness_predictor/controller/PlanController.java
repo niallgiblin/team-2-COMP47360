@@ -4,10 +4,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +21,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.context.request.RequestAttributes;
 
 import com.manhattan.busyness_predictor.dto.CreatePlanRequest;
 import com.manhattan.busyness_predictor.dto.PlanResponse;
@@ -23,9 +32,6 @@ import com.manhattan.busyness_predictor.dto.SharedPlanResponse;
 import com.manhattan.busyness_predictor.security.UserPrincipal;
 import com.manhattan.busyness_predictor.service.PlanService;
 
-/**
- * REST controller for handling plan-related endpoints called by the frontend.
- */
 @RestController
 @RequestMapping("/api/plans")
 public class PlanController {
@@ -34,100 +40,94 @@ public class PlanController {
     private PlanService planService;
 
     /**
-     * Creates a new plan for the authenticated user.
-     *
-     * @param request       the payload containing plan name and location IDs
-     * @param currentUser   the authenticated user from the request context
-     * @return a ResponseEntity with a success message and the created plan, or an error message on failure
+     * Retrieves the currently authenticated user.
+     * First tries SecurityContextHolder, then falls back to the HTTP session if necessary.
      */
+    private UserPrincipal getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            // Fallback to session-based SecurityContext
+            RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof ServletRequestAttributes) {
+                HttpServletRequest req = ((ServletRequestAttributes) attrs).getRequest();
+                HttpSession session = req.getSession(false);
+                if (session != null) {
+                    Object contextObj = session.getAttribute(
+                        HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY
+                    );
+                    if (contextObj instanceof SecurityContext) {
+                        auth = ((SecurityContext) contextObj).getAuthentication();
+                    }
+                }
+            }
+        }
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new IllegalStateException("Unable to retrieve current user. Please ensure you are logged in.");
+        }
+        return (UserPrincipal) auth.getPrincipal();
+    }
+
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createPlan(
-            @RequestBody CreatePlanRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
+    public ResponseEntity<Map<String, Object>> createPlan(@RequestBody CreatePlanRequest request) {
+        UserPrincipal currentUser = getCurrentUser();
         PlanResponse planResponse = planService.createPlan(request, currentUser.getId());
 
-        Map<String, Object> responseBody = new HashMap<>();
-        responseBody.put("message", "Plan created successfully");
-        responseBody.put("plan", planResponse);
-        return ResponseEntity.status(HttpStatus.CREATED).body(responseBody);
+        Map<String, Object> body = new HashMap<>();
+        body.put("message", "Plan created successfully");
+        body.put("plan", planResponse);
+        return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
-    /**
-     * Retrieves all plans belonging to the authenticated user.
-     *
-     * @param currentUser the authenticated user from the request context
-     * @return a ResponseEntity with a list of plans and a count, or an error message on failure
-     */
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getAllPlans(
-            @AuthenticationPrincipal UserPrincipal currentUser) {
+    public ResponseEntity<Map<String, Object>> getAllPlans() {
+        UserPrincipal currentUser = getCurrentUser();
         List<PlanResponse> plans = planService.getAllPlansForUser(currentUser.getId());
 
-        Map<String, Object> responseBody = new HashMap<>();
-        responseBody.put("plans", plans);
-        responseBody.put("count", plans.size());
-        return ResponseEntity.ok(responseBody);
+        Map<String, Object> body = new HashMap<>();
+        body.put("plans", plans);
+        body.put("count", plans.size());
+        return ResponseEntity.ok(body);
     }
 
-    /**
-     * Retrieves a specific plan by its ID for the authenticated user.
-     *
-     * @param id          the ID of the plan to retrieve
-     * @param currentUser the authenticated user from the request context
-     * @return a ResponseEntity with the requested plan, or an error message if not found or unauthorized
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getPlanById(
-            @PathVariable Integer id,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
+    public ResponseEntity<Map<String, Object>> getPlanById(@PathVariable Integer id) {
+        UserPrincipal currentUser = getCurrentUser();
         PlanResponse planResponse = planService.getPlanById(id, currentUser.getId());
 
-        Map<String, Object> responseBody = new HashMap<>();
-        responseBody.put("plan", planResponse);
-        return ResponseEntity.ok(responseBody);
+        Map<String, Object> body = new HashMap<>();
+        body.put("plan", planResponse);
+        return ResponseEntity.ok(body);
     }
 
-    /**
-     * Deletes a plan by its ID for the authenticated user.
-     *
-     * @param id          the ID of the plan to delete
-     * @param currentUser the authenticated user from the request context
-     * @return a ResponseEntity with a success message or an error message on failure
-     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> deletePlan(
-            @PathVariable Integer id,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
+    public ResponseEntity<Map<String, Object>> deletePlan(@PathVariable Integer id) {
+        UserPrincipal currentUser = getCurrentUser();
         planService.deletePlan(id, currentUser.getId());
 
-        Map<String, Object> responseBody = new HashMap<>();
-        responseBody.put("message", "Plan deleted successfully");
-        return ResponseEntity.ok(responseBody);
+        Map<String, Object> body = new HashMap<>();
+        body.put("message", "Plan deleted successfully");
+        return ResponseEntity.ok(body);
     }
 
-    /**
-     * Shares a plan with selected friends.
-     */
     @PostMapping("/share")
-    public ResponseEntity<Map<String, Object>> sharePlan(
-            @RequestBody SharePlanRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
+    public ResponseEntity<Map<String, Object>> sharePlan(@RequestBody SharePlanRequest request) {
+        UserPrincipal currentUser = getCurrentUser();
         planService.sharePlan(request.getPlanId(), currentUser.getId(), request.getUserIds());
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Plan shared successfully");
-        return ResponseEntity.ok(response);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("message", "Plan shared successfully");
+        return ResponseEntity.ok(body);
     }
 
-    /**
-     * Gets all plans shared with the current user, including who shared them.
-     */
     @GetMapping("/shared-with-me")
-    public ResponseEntity<Map<String, Object>> getPlansSharedWithMe(
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        List<SharedPlanResponse> sharedPlans = planService.getPlansSharedWithUser(currentUser.getId());
-        Map<String, Object> response = new HashMap<>();
-        response.put("sharedPlans", sharedPlans);
-        response.put("count", sharedPlans.size());
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, Object>> getPlansSharedWithMe() {
+        UserPrincipal currentUser = getCurrentUser();
+        List<SharedPlanResponse> sharedPlans =
+            planService.getPlansSharedWithUser(currentUser.getId());
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("sharedPlans", sharedPlans);
+        body.put("count", sharedPlans.size());
+        return ResponseEntity.ok(body);
     }
 }
