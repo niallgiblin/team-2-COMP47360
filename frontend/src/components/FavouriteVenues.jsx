@@ -34,12 +34,17 @@ function FavouriteVenues() {
                 // Also fetch venues data for enrichment
                 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
                 const response = await fetch(`${API_BASE_URL}/vibe/map-data`);
+                if (!response.ok) {
+                    console.warn('Failed to fetch venue data for enrichment, using liked venues as-is');
+                    return;
+                }
                 const data = await response.json();
                 setAllVenues(data.locations || []);
                 
                 // Busyness data is now handled by separate useEffect
             } catch (err) {
                 console.error("Failed to fetch data:", err);
+                // Don't set any fallback data - just use likedVenues as-is
             }
         };
         loadData();
@@ -61,19 +66,28 @@ function FavouriteVenues() {
         }
         // Merge with allVenues for full data
         const merged = likedVenues.map(liked => {
-            // Try to find a match by id, then placeId, then lat/lng
-            let full = allVenues.find(v => v.id === liked.id || v.placeId === liked.id || v.id === liked.placeId || v.placeId === liked.placeId);
-            if (!full && liked.latitude && liked.longitude) {
-                full = allVenues.find(v => v.latitude === liked.latitude && v.longitude === liked.longitude);
+            // Try to find a match by id, then lat/lng
+            let full = allVenues.find(v => v.id === liked.id);
+            if (!full && liked.lat && liked.lng) {
+                full = allVenues.find(v => v.latitude === liked.lat && v.longitude === liked.lng);
             }
+            
+            // If no enrichment data found, just return the liked venue as-is
+            if (!full) {
+                return liked;
+            }
+            
             let enriched = { ...full, ...liked };
             // Always ensure a canonical id
-            enriched.id = enriched.id || enriched.placeId || (full && (full.id || full.placeId)) || (liked && (liked.id || liked.placeId));
-            if (!enriched.zoneId && enriched.latitude && enriched.longitude) {
-                const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
+            enriched.id = enriched.id || liked.id;
+            
+            // Add zoneId if missing
+            if (!enriched.zoneId && enriched.lat && enriched.lng) {
+                const venuePoint = turfPoint([enriched.lng, enriched.lat]);
                 const matchingZone = zoneData.features.find(feature => booleanPointInPolygon(venuePoint, feature.geometry));
                 enriched.zoneId = matchingZone ? matchingZone.properties.LocationID : undefined;
             }
+            
             // Add tags if missing
             if (!enriched.tags || enriched.tags.length === 0) {
                 let tags = [];
@@ -117,7 +131,7 @@ function FavouriteVenues() {
             >
                 {filteredVenues.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">
-                        You haven’t liked any venues yet.
+                        You haven't liked any venues yet.
                     </Typography>
                 ) : (
                     <Grid container spacing={2} justifyContent="center" display="flex">
@@ -129,7 +143,7 @@ function FavouriteVenues() {
                                     showLikeButton={true} 
                                     unlikeOnlyFromFavorites={true} 
                                     tags={venue.tags}
-                                    hidePlanButtons={true}
+                                    hidePlanButtons={false}
                                 />
                             </Grid>
                         ))}

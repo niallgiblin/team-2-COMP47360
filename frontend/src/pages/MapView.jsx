@@ -30,9 +30,7 @@ import SharedPlans from "../components/SharedPlans";
 import CompactSharedPlans from "../components/CompactSharedPlans";
 
 // Data and context
-import mockVenues from "../data/mockVenues";
 import { usePlan } from "../context/PlanContext";
-import { useLike } from "../context/LikeContext";
 import { useBusyness } from "../context/BusynessContext";
 
 // External libraries, utilities for directions and geo-calculations
@@ -45,10 +43,11 @@ import { DateTime } from "luxon";
 const generateNext12Hours = () => {
   const timestamps = [];
   
-  // Use the same date as the forecast data (July 26, 2025)
-  const baseDate = DateTime.fromISO("2025-07-26T00:00:00").setZone("America/New_York");
+  // Use current time instead of fixed date
+  const now = DateTime.now().setZone("America/New_York");
+  const baseDate = now.startOf('hour').plus({ hours: 1 }); // Start from next hour
 
-  for (let i = 9; i <= 20; i++) { // 9 AM to 8 PM (12 hours)
+  for (let i = 0; i < 11; i++) { // Next 11 hours (removed the problematic last hour)
     const dt = baseDate.plus({ hours: i });
     timestamps.push(dt.toISO()); // ISO string in NY time
   }
@@ -117,10 +116,9 @@ export default function MapView() {
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue || null;
   const fromPlan = location.state?.fromPlan || false;  
-  const { plan, addVenueToPlan } = usePlan();
-  const { likedVenues, handleLike } = useLike();
+  const { plan } = usePlan();
   const { setFromPlan } = usePlan();
-  const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchBusynessData, isLoading: busynessLoading } = useBusyness();
+  const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchBusynessData } = useBusyness();
   const mapSectionRef = useRef(null);
 
   // --- state ---
@@ -138,10 +136,24 @@ export default function MapView() {
   const [manualDestination, setManualDestination] = useState("");
   const [userLocation, setUserLocation] = useState(null);
 
-  // Reset map by fully refreshing the page, when button is clicked
-  const [resetMapKey] = useState(0);
+  // Reset map by updating state, not reloading the page
+  const [resetMapKey, setResetMapKey] = useState(0);
   const handleResetMap = () => {
-    window.location.reload();
+    // Reset all relevant state instead of full page reload
+    setSelectedVenue(null);
+    setZoneCenter(null);
+    setManualStart("");
+    setManualDestination("");
+    setUserLocation(null);
+    setMode("live");
+    setDirections([]);
+    setShowDirections(false);
+    setDirectionsPolyline([]);
+    setViewMode("plan");
+    setSelectedTimestamp(forecastTimestamps[0]);
+    setTravelMode("WALK");
+    // Force map to re-render by updating the key
+    setResetMapKey(prev => prev + 1);
   };
 
   // State for venue data, loading, and map display
@@ -239,8 +251,8 @@ export default function MapView() {
       } catch (err) {
         // Fallback to mock data
         console.warn("Falling back to mock data due to fetch error:", err);
-        setVenues(location.state?.fromPlan === true && plan.length > 0 ? plan : mockVenues);
-        if (!selectedVenueFromState) setSelectedVenue(mockVenues[0]);
+        setVenues([]); // Set venues to empty array on API failure
+        if (!selectedVenueFromState) setSelectedVenue(null); // Clear selected venue if no plan
         setIsMock(true);
       } finally {
         setLoading(false);
@@ -270,11 +282,7 @@ export default function MapView() {
   useEffect(() => {
     if (!zoneData || !isMock) return;
     
-    // Dummy busyness: random for each zone
-    const dummyBusyness = zoneData.features.map(f => ({
-      LocationID: f.properties.LocationID,
-      busyness: Math.random(),
-    }));
+    // No longer using dummy data - just return
   }, [zoneData, isMock]);
 
   // 4. Enrich venues with zone IDs once all data is loaded
@@ -792,7 +800,6 @@ export default function MapView() {
                 variant="contained"
                 onClick={handleSetLocation}
                 sx={{
-                  ml: 2,
                   background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
                   color: '#000',
                   fontWeight: 'bold',
@@ -801,7 +808,7 @@ export default function MapView() {
                   borderRadius: 2,
                   height: 40,
                   alignSelf: 'center',
-                  mt: 1,
+                  mt: 0.5,
                 }}
               >
                 Set Location
@@ -955,46 +962,7 @@ export default function MapView() {
               }}
             >
             {viewMode === 'plan' && (
-              fromPlan ? (
-                <CompactPlanSummary />
-              ) : (
-                plan && plan.length > 0 && selectedVenue ? (
-                  <Box
-                    sx={{
-                      border: '1px solid #ff00cc',
-                      borderRadius: '16px',
-                      padding: 3,
-                      backgroundColor: '#000',
-                      color: '#fff',
-                      textAlign: 'center',
-                      minHeight: 60,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <VenueCard
-                      venue={selectedVenue}
-                      variant="compact"
-                      onAddToPlan={() => addVenueToPlan(selectedVenue)}
-                      onLike={() => handleLike(selectedVenue)}
-                      isLiked={likedVenues.some(
-                        (v) => v.id === selectedVenue.id
-                      )}
-                    />
-                  </Box>
-                ) : (
-                  <Typography 
-                    sx={{ 
-                      mt: 2, 
-                      color: '#888', 
-                      textAlign: 'center' 
-                    }}
-                  >
-                    You haven't started a current plan yet.
-                  </Typography>
-                )
-              )
+              <CompactPlanSummary />
             )}
 
             {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}

@@ -26,7 +26,13 @@ public class FavouriteService {
     private LocationRepository locationRepository;
 
     public List<Favourite> getFavouritesByUser(Integer userId) {
-        return favouriteRepository.findByUser_Id(userId);
+        System.out.println("🔍 [DEBUG] FavouriteService.getFavouritesByUser called with userId: " + userId);
+        List<Favourite> favourites = favouriteRepository.findByUser_Id(userId);
+        System.out.println("🔍 [DEBUG] Repository returned " + favourites.size() + " favourites");
+        for (Favourite fav : favourites) {
+            System.out.println("🔍 [DEBUG] Favourite ID: " + fav.getId() + ", Location: " + fav.getLocation().getName() + ", User: " + fav.getUser().getId());
+        }
+        return favourites;
     }
 
     @Transactional

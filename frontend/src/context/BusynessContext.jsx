@@ -17,7 +17,7 @@ export const BusynessProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [lastFetchTime, setLastFetchTime] = useState(null);
 
-  // Load cached data from sessionStorage on mount
+  // Load cached data from sessionStorage on mount and fetch fresh data if needed
   useEffect(() => {
     try {
       const cached = sessionStorage.getItem('busynessCache');
@@ -26,10 +26,14 @@ export const BusynessProvider = ({ children }) => {
         setBusynessData(parsed.busynessData);
         setPredictionData(parsed.predictionData);
         setLastFetchTime(parsed.lastFetchTime);
+        console.log('🔍 [CACHE] Loaded busyness data from sessionStorage');
       }
     } catch (err) {
       console.warn('Failed to load cached busyness data:', err);
     }
+    
+    // Always try to fetch fresh data on mount (will use cache if recent)
+    fetchBusynessData();
   }, []);
 
   // Save data to sessionStorage whenever it changes
@@ -49,13 +53,15 @@ export const BusynessProvider = ({ children }) => {
   }, [busynessData, predictionData]);
 
   const fetchBusynessData = async () => {
-    // If we have recent data (less than 5 minutes old), use cached data
-    if (lastFetchTime && Date.now() - lastFetchTime < 5 * 60 * 1000) {
+    // If we have recent data (less than 10 minutes old), use cached data
+    if (lastFetchTime && Date.now() - lastFetchTime < 10 * 60 * 1000) {
+      console.log('🔍 [CACHE] Using cached busyness data (age:', Math.round((Date.now() - lastFetchTime) / 1000), 'seconds)');
       return { busynessData, predictionData };
     }
 
     // If we're already loading, don't start another request
     if (isLoading) {
+      console.log('🔍 [CACHE] Busyness data already loading, returning cached data');
       return { busynessData, predictionData };
     }
 
