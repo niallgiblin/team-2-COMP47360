@@ -98,6 +98,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
           display: 'flex',
           flexDirection: 'column',
           height: variant === 'compact' ? 300 : 'auto', // Increased height for compact
+          border: variant === 'compact' ? "1px solid #900B6A" : "none", // Add thin pink border for compact variant
       }}
       >
 
