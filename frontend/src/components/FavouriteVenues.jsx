@@ -147,17 +147,17 @@ function FavouriteVenues() {
 
     return (
         <Box sx={{ width: '100%' }}>
-            {/* Title outside the border */}
-            <Typography variant="h5" gutterBottom sx={{ color: '#fff', mb: 2 }}>
+            {/* Page Heading */}
+            <Typography variant="h6" sx={{ mb: 3, fontWeight: "bold" }}>
                 Your Favorite Venues
             </Typography>
 
             {/* Bordered container */}
             <Box
                 sx={{
-                    border: '1px solid #ff00cc',
-                    borderRadius: '16px',
-                    padding: 3,
+                    border: "1px solid #900B6A",
+                    borderRadius: 3,
+                    p: 3,
                     backgroundColor: '#000',
                     color: '#fff',
                 }}

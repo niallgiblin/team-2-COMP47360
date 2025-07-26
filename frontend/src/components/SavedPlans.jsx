@@ -104,7 +104,7 @@ export default function SavedPlans() {
             </Box>
 
             {/* Display venues in the saved plan */}
-            <PlanDisplay planName={plan.name} venues={plan.venues} />
+            <PlanDisplay planName={plan.name} venues={plan.venues} hideTitle={true} />
 
             {/* Action buttons for each saved plan */}
             <Stack direction="row" spacing={2} sx={{ mt: 3 }}>

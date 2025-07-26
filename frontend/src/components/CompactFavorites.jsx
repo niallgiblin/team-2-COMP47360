@@ -126,7 +126,6 @@ export default function CompactFavorites() {
                                     minWidth: 180,
                                     maxWidth: 250,
                                     backgroundColor: "#111",
-                                    border: "1px solid #900B6A",
                                     borderRadius: 2,
                                     p: 2,
                                     flexShrink: 0,

@@ -42,7 +42,6 @@ export const LikeProvider = ({ children }) => {
                         
                         // Skip if we've already processed this venue
                         if (processedVenues.has(venue.id)) {
-                            console.log('[LIKE DEBUG] Skipping duplicate venue:', venue.name, 'ID:', venue.id);
                             return null;
                         }
                         processedVenues.add(venue.id);
@@ -62,20 +61,7 @@ export const LikeProvider = ({ children }) => {
                                 venue.busynessValue = matchingVenue.busynessValue;
                                 venue.busynessLabel = matchingVenue.busynessLabel;
                                 venue.zoneId = matchingVenue.zoneId;
-                                console.log('[LIKE DEBUG] Found matching cached venue for:', venue.name, 'busyness:', venue.busynessLabel);
-                            } else {
-                                console.log('[LIKE DEBUG] No matching cached venue for:', venue.name, 'ID:', venue.id);
-                                // Debug: log available cached venues for comparison
-                                if (cachedVenues.length > 0) {
-                                    console.log('[LIKE DEBUG] Available cached venues:', cachedVenues.map(v => ({ id: v.id, name: v.name, zoneId: v.zoneId })));
-                                }
-                                // Check if venue already has busyness data from when it was liked
-                                if (venue.busynessLabel) {
-                                    console.log('[LIKE DEBUG] Venue already has busyness data:', venue.name, venue.busynessLabel);
-                                }
                             }
-                        } else {
-                            console.log('[LIKE DEBUG] No cached venues available for:', venue.name);
                         }
                         
                         // If we still don't have busyness data, try to compute it from context data
@@ -103,12 +89,7 @@ export const LikeProvider = ({ children }) => {
                                     venue.busynessValue = busynessEntry.busyness;
                                     venue.busynessLabel = getBusynessLabel(busynessEntry.busyness);
                                     venue.zoneId = zoneId; // Store the zoneId for future use
-                                    console.log('[LIKE DEBUG] Computed busyness from context for:', venue.name, 'busyness:', venue.busynessLabel);
-                                } else {
-                                    console.log('[LIKE DEBUG] No busyness data found for zoneId:', zoneId, 'venue:', venue.name);
                                 }
-                            } else {
-                                console.log('[LIKE DEBUG] No zoneId found for venue:', venue.name);
                             }
                         }
                         
