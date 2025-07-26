@@ -18,6 +18,8 @@ export default function CompactPlanSummary() {
 
   // Defensive: ensure plan is always an array
   const planArray = Array.isArray(plan) ? plan : (plan?.venues || []);
+  
+
 
   // plan title using the user's first name if available
   const planTitle = user?.firstName

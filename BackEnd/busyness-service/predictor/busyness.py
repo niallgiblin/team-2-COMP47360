@@ -226,9 +226,13 @@ def predict_busyness_for_all_zones(lat, lon):
         return {}
 
 def get_next_12_hours(now=None):
-    """Generates a list of the next 12 hourly datetime objects starting from the next hour."""
+    """Generates a list of the next 12 hourly datetime objects starting from the next hour, in America/New_York timezone."""
+    import pytz
+    ny_tz = pytz.timezone('America/New_York')
     if now is None:
-        now = datetime.now()
+        now = datetime.now(ny_tz)
+    else:
+        now = now.astimezone(ny_tz)
     current_hour = now.replace(minute=0, second=0, microsecond=0)
     return [current_hour + timedelta(hours=i+1) for i in range(12)]
 
@@ -272,6 +276,7 @@ def forecast_busyness_for_all_zones(lat, lon):
     """
     Generates a 12-hour forecast time series for each zone using the DNN models.
     Returns a list of dicts: [{LocationID, predictions: [{timestamp, busyness}, ...]}, ...]
+    Ensures every zone has exactly 12 hourly predictions, with timestamps in America/New_York timezone.
     """
     if not dnn_models:
         logger.error("Forecast pipeline cannot run: DNN models are not initialized.")
@@ -290,10 +295,16 @@ def forecast_busyness_for_all_zones(lat, lon):
             preds = model.predict(df_features, verbose=0).flatten()
             zone_preds = []
             for i, hour in enumerate(hours):
+                # Always produce 12 predictions, one for each hour
+                busyness_val = float(preds[i]) if i < len(preds) else None
                 zone_preds.append({
                     'timestamp': hour.isoformat(),
-                    'busyness': float(preds[i]) if i < len(preds) else None
+                    'busyness': busyness_val
                 })
+            # If for any reason zone_preds is not 12, pad with None
+            while len(zone_preds) < 12:
+                next_hour = hours[0] + timedelta(hours=len(zone_preds))
+                zone_preds.append({'timestamp': next_hour.isoformat(), 'busyness': None})
             results.append({
                 'LocationID': zone_name,
                 'predictions': zone_preds
