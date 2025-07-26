@@ -39,14 +39,13 @@ export default function FindMyVibe() {
 
   // state for venue and metadata
   const [allResults, setAllResults] = useState([]);
-  const [busynessMap, setBusynessMap] = useState({});
   const [allVenues, setAllVenues] = useState([]);
 
   // state for zone data
   const [zoneData, setZoneData] = useState(null); // GeoJSON data for zone lookups
 
   // Get busyness data from context
-  const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
+  const { busynessData: contextBusynessData, venueData: cachedVenues, isInitialized, fetchAllData, getBusynessLabel } = useBusyness();
 
   // Memoized search key for caching
   const searchKey = useMemo(() => {
@@ -68,62 +67,36 @@ export default function FindMyVibe() {
   useEffect(() => {
     const loadBusynessData = async () => {
       try {
-        await fetchBusynessData();
+        await fetchAllData();
       } catch (error) {
         console.error('Failed to load busyness data:', error);
       }
     };
     loadBusynessData();
-  }, []); // Empty dependency array - only run once on mount
+  }, [fetchAllData]); // Add fetchAllData to dependencies
 
-  // Handle context data updates separately
-  useEffect(() => {
-    if (contextBusynessData && contextBusynessData.length > 0) {
-      const busynessMapFromContext = {};
-      contextBusynessData.forEach(item => {
-        const zoneId = String(item.LocationID).replace(" NET", "");
-        busynessMapFromContext[zoneId] = item.busyness;
-      });
-      setBusynessMap(busynessMapFromContext);
-    }
-  }, [contextBusynessData]);
+
 
   // track readiness of busyness data
-  const isDataReady = zoneData && Object.keys(busynessMap).length > 0 && allVenues.length > 0;
+  const isDataReady = zoneData && allVenues.length > 0;
 
   // state to track if a search was initiated
   const [pendingSearch, setPendingSearch] = useState(false);
 
-  // data fetching on mount
+  // Use cached venue data if available
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        // Fetch data in parallel
-        const [zoneRes, mapDataRes] = await Promise.all([
-          fetch("/manhattanZones.geojson"),
-          fetch(`/api/vibe/map-data`)
-        ]);
+    if (cachedVenues && cachedVenues.length > 0) {
+      setAllVenues(cachedVenues);
+    }
+  }, [cachedVenues]);
 
-        if (zoneRes.ok) {
-          const zoneData = await zoneRes.json();
-          setZoneData(zoneData);
-        } else {
-          console.error("Failed to load zone data:", zoneRes.statusText);
-        }
-
-        if (mapDataRes.ok) {
-          const mapData = await mapDataRes.json();
-          const venues = mapData.locations || [];
-          setAllVenues(venues);
-        } else {
-          console.error("Failed to fetch map-data:", mapDataRes.statusText);
-        }
-      } catch (error) {
-        console.error("Error fetching initial data for FindMyVibe:", error);
-      }
-    };
-    fetchInitialData();
-  }, []); // Empty dependency array - only run once on mount
+  // Fetch zone data for geo-lookups (only once)
+  useEffect(() => {
+    fetch("/manhattanZones.geojson")
+      .then((res) => res.json())
+      .then((data) => setZoneData(data))
+      .catch((err) => console.error("Failed to load zone data:", err));
+  }, []);
 
   // Handle navigation to map page
   const handleGetDirections = (venue) => {
@@ -233,14 +206,7 @@ export default function FindMyVibe() {
             enriched.zoneId = String(possible.zoneId);
           }
         }
-        // Log detailed info for debugging
-        const busynessValue = enriched.zoneId ? busynessMap[enriched.zoneId] : undefined;
-        console.log(
-          `[VIBE DEBUG] Venue: '${enriched.name}' | Zone: '${enriched.zone}' | zoneId (polygon): ${zoneIdFromPolygon} | zoneId (mapping): ${zoneIdFromMapping} | Final zoneId: ${enriched.zoneId} | Busyness: ${busynessValue}`
-        );
-        if (!enriched.zoneId) {
-          console.warn(`[VIBE DEBUG] No zoneId could be assigned for venue '${enriched.name}' (zone: '${enriched.zone}')`);
-        }
+
         // Add tags if missing
         if (!enriched.tags || enriched.tags.length === 0) {
           let tags = [];
@@ -257,6 +223,18 @@ export default function FindMyVibe() {
           }
           enriched.tags = tags;
         }
+        
+        // Add busyness data if available
+        if (enriched.zoneId && contextBusynessData && contextBusynessData.length > 0) {
+          const busynessEntry = contextBusynessData.find(item => 
+            String(item.LocationID) === String(enriched.zoneId)
+          );
+          if (busynessEntry) {
+            enriched.busynessValue = busynessEntry.busyness;
+            enriched.busynessLabel = getBusynessLabel(busynessEntry.busyness);
+          }
+        }
+        
         return enriched;
       });
       
@@ -274,7 +252,7 @@ export default function FindMyVibe() {
       setIsLoading(false);
       setPendingSearch(false);
     }
-  }, [input, vibe, venueType, cuisine, zoneData, allVenues, searchKey, getCachedResults, isDataReady, busynessMap]);
+  }, [input, vibe, venueType, cuisine, zoneData, allVenues, searchKey, getCachedResults, isDataReady, contextBusynessData, getBusynessLabel]);
 
   // retry search automaticaly when data is ready
   useEffect(() => {
@@ -450,7 +428,7 @@ export default function FindMyVibe() {
               minHeight: 200 
             }}
           >
-            <PlanSummary busynessMap={busynessMap} />
+                            <PlanSummary />
           </Box>
 
           <Box 
@@ -463,7 +441,6 @@ export default function FindMyVibe() {
               <TrendingVenueCard
                 key={venue.id || index}
                 venue={venue}
-                busynessMap={busynessMap}
                 rank={index + 1}
                 onGetDirections={handleGetDirections}
                 tags={venue.tags}

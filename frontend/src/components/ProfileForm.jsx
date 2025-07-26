@@ -11,7 +11,6 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Grid,
   Divider,
   Chip,
 } from '@mui/material';
@@ -300,44 +299,40 @@ export default function ProfileForm() {
           Personal Information
         </Typography>
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="First Name"
-              name="firstName"
-              required
-              fullWidth
-              value={formData.firstName}
-              onChange={handleChange}
-              disabled={updating}
-              InputLabelProps={{ sx: { color: '#BBB' } }}
-              InputProps={{
-                sx: {
-                  color: '#FFF',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
-                },
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Last Name"
-              name="lastName"
-              required
-              fullWidth
-              value={formData.lastName}
-              onChange={handleChange}
-              disabled={updating}
-              InputLabelProps={{ sx: { color: '#BBB' } }}
-              InputProps={{
-                sx: {
-                  color: '#FFF',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
-                },
-              }}
-            />
-          </Grid>
-        </Grid>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
+          <TextField
+            label="First Name"
+            name="firstName"
+            required
+            fullWidth
+            value={formData.firstName}
+            onChange={handleChange}
+            disabled={updating}
+            InputLabelProps={{ sx: { color: '#BBB' } }}
+            InputProps={{
+              sx: {
+                color: '#FFF',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
+              },
+            }}
+          />
+          <TextField
+            label="Last Name"
+            name="lastName"
+            required
+            fullWidth
+            value={formData.lastName}
+            onChange={handleChange}
+            disabled={updating}
+            InputLabelProps={{ sx: { color: '#BBB' } }}
+            InputProps={{
+              sx: {
+                color: '#FFF',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
+              },
+            }}
+          />
+        </Box>
 
         <TextField
           label="Phone Number (optional)"
@@ -439,45 +434,41 @@ export default function ProfileForm() {
           }}
         />
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="New Password"
-              name="newPassword"
-              type="password"
-              fullWidth
-              value={formData.newPassword}
-              onChange={handleChange}
-              disabled={updating}
-              helperText="Minimum 6 characters"
-              InputLabelProps={{ sx: { color: '#BBB' } }}
-              InputProps={{
-                sx: {
-                  color: '#FFF',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
-                },
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Confirm New Password"
-              name="confirmNewPassword"
-              type="password"
-              fullWidth
-              value={formData.confirmNewPassword}
-              onChange={handleChange}
-              disabled={updating}
-              InputLabelProps={{ sx: { color: '#BBB' } }}
-              InputProps={{
-                sx: {
-                  color: '#FFF',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
-                },
-              }}
-            />
-          </Grid>
-        </Grid>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
+          <TextField
+            label="New Password"
+            name="newPassword"
+            type="password"
+            fullWidth
+            value={formData.newPassword}
+            onChange={handleChange}
+            disabled={updating}
+            helperText="Minimum 6 characters"
+            InputLabelProps={{ sx: { color: '#BBB' } }}
+            InputProps={{
+              sx: {
+                color: '#FFF',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
+              },
+            }}
+          />
+          <TextField
+            label="Confirm New Password"
+            name="confirmNewPassword"
+            type="password"
+            fullWidth
+            value={formData.confirmNewPassword}
+            onChange={handleChange}
+            disabled={updating}
+            InputLabelProps={{ sx: { color: '#BBB' } }}
+            InputProps={{
+              sx: {
+                color: '#FFF',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3ABEFF' },
+              },
+            }}
+          />
+        </Box>
 
         {/* Action buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>

@@ -7,9 +7,10 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { usePlan } from '../context/PlanContext';
 import { useAuth } from '../hooks/useAuth';
+import { useBusyness } from '../context/BusynessContext';
 import VenueCard from './VenueCard';
 
-export default function PlanSummary({ busynessMap }) {
+export default function PlanSummary() {
   const { plan, savePlan, loadPlan, clearPlan, setFromPlan } = usePlan();
   const navigate = useNavigate();
   
@@ -191,7 +192,7 @@ export default function PlanSummary({ busynessMap }) {
           </Typography>
         </Box>
       ) : (
-        plan.map((venue) => <VenueCard key={venue.id} venue={venue} busynessMap={busynessMap} tags={venue.tags} />)
+                        plan.map((venue) => <VenueCard key={venue.id} venue={venue} tags={venue.tags} />)
       )}
     </Box>
 
