@@ -101,7 +101,7 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
       />
 
       {/* Steps */}
-      {directions.length === 0 ? (
+      {!directions || directions.length === 0 ? (
         <Typography 
           sx={{ 
             color: '#888' 

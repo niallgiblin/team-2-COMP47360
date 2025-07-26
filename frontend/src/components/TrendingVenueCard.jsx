@@ -127,14 +127,17 @@ export default function TrendingVenueCard({
   const busynessLabel = useMemo(() => {
     if (!venue.zone || venue.zone === "nan") return null;
     
-    // Try to get busyness from context first, then fallback to prop
-    const zoneKey = String(venue.zoneId);
+    // Get zone key - prefer zoneId if available, otherwise use zone name
+    const zoneKey = venue.zoneId ? String(venue.zoneId) : venue.zone;
+    
+    if (!zoneKey) return "No Data";
+    
     let value = null;
     
-    // Check context data first
+    // Check context data first (most efficient)
     if (contextBusynessData && contextBusynessData.length > 0) {
       const contextEntry = contextBusynessData.find(item => 
-        String(item.LocationID).replace(" NET", "") === zoneKey
+        String(item.LocationID) === zoneKey
       );
       if (contextEntry) {
         value = contextEntry.busyness;
@@ -142,19 +145,20 @@ export default function TrendingVenueCard({
     }
     
     // Fallback to prop if not found in context
-    if (value === null) {
+    if (value === null && busynessMap) {
       value = busynessMap[zoneKey];
     }
     
     if (typeof value !== "number") {
       return "No Data";
     }
+    
     const percent = value * 100;
     if (percent >= 75) return "Very Busy";
     if (percent >= 50) return "Busy";
     if (percent >= 25) return "Moderate";
     return "Quiet";
-  }, [venue.zoneId, contextBusynessData, busynessMap]);
+  }, [venue.zoneId, venue.zone, contextBusynessData, busynessMap]);
 
   // Render tags as chips if present
   const tagList = tags || venue.tags || [];
@@ -166,42 +170,10 @@ export default function TrendingVenueCard({
         display: "flex",
         justifyContent: "center",
         mt: 4,
+        overflow: "visible", // Allow heart to extend outside
+        pb: 2, // Add bottom padding to prevent heart from being cut off
       }}
     >
-      {/* Like button */}
-      {showLikeButton && (
-        <IconButton
-          onClick={handleLikeClick} // event handler
-          sx={{
-            position: "absolute",
-            top: -12,
-            right: 12,
-            zIndex: 10, // ensure it's above other elements
-            background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-            color: "#fff",
-            width: 32,
-            height: 32,
-            padding: 0,
-            borderRadius: "50%",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
-            "&:hover": {
-              background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
-              transform: "scale(1.05)", // Subtle hover effect
-            },
-            "&:active": {
-              transform: "scale(0.95)", // Click feedback
-            },
-            transition: "all 0.2s ease", // Smooth transitions
-          }}
-        >
-          {isLiked ? (
-            <FavoriteIcon sx={{ fontSize: 18 }} />
-          ) : (
-            <FavoriteBorderIcon sx={{ fontSize: 18 }} />
-          )}
-        </IconButton>
-      )}
-
       {/* Venue card layout */}
       <Card
         sx={{
@@ -219,8 +191,43 @@ export default function TrendingVenueCard({
           maxWidth: 600,
           minHeight: 120,
           position: "relative",
+          overflow: "visible", // Allow heart to extend outside the card
         }}
       >
+        {/* Like button - positioned to float over the top-right corner */}
+        {showLikeButton && (
+          <IconButton
+            onClick={handleLikeClick}
+            sx={{
+              position: "absolute",
+              top: -8,
+              right: -8,
+              zIndex: 10,
+              background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+              color: "#fff",
+              width: 32,
+              height: 32,
+              padding: 0,
+              borderRadius: "50%",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+              "&:hover": {
+                background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
+                transform: "scale(1.05)",
+              },
+              "&:active": {
+                transform: "scale(0.95)",
+              },
+              transition: "all 0.2s ease",
+            }}
+          >
+            {isLiked ? (
+              <FavoriteIcon sx={{ fontSize: 18 }} />
+            ) : (
+              <FavoriteBorderIcon sx={{ fontSize: 18 }} />
+            )}
+          </IconButton>
+        )}
+
         {/* Image and info section */}
         <Box 
           sx={{ 
@@ -309,14 +316,14 @@ export default function TrendingVenueCard({
               <Button
                 variant="text"
                 size="small"
-                onClick={handleMapNavigation} // event handler
+                onClick={handleMapNavigation}
                 sx={{
                   color: "#3ABEFF",
                   textTransform: "none",
                   fontWeight: 600,
                   px: 0,
                   "&:hover": {
-                    backgroundColor: "rgba(58, 190, 255, 0.1)", // hover effect
+                    backgroundColor: "rgba(58, 190, 255, 0.1)",
                   },
                 }}
               >
@@ -327,7 +334,7 @@ export default function TrendingVenueCard({
                 <Button
                   variant="text"
                   size="small"
-                  onClick={handleWebsiteClick} // event handler
+                  onClick={handleWebsiteClick}
                   startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
                   sx={{
                     color: "#FF4ECD",
@@ -335,7 +342,7 @@ export default function TrendingVenueCard({
                     fontWeight: 600,
                     px: 0,
                     "&:hover": {
-                      backgroundColor: "rgba(255, 78, 205, 0.1)", // Hover effect
+                      backgroundColor: "rgba(255, 78, 205, 0.1)",
                     },
                   }}
                 >

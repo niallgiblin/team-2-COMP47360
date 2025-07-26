@@ -17,23 +17,21 @@ export const BusynessProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [lastFetchTime, setLastFetchTime] = useState(null);
 
-  // Load cached data from sessionStorage on mount and fetch fresh data if needed
+  // Load cached data on mount
   useEffect(() => {
     try {
       const cached = sessionStorage.getItem('busynessCache');
       if (cached) {
-        const parsed = JSON.parse(cached);
-        setBusynessData(parsed.busynessData);
-        setPredictionData(parsed.predictionData);
-        setLastFetchTime(parsed.lastFetchTime);
-        console.log('🔍 [CACHE] Loaded busyness data from sessionStorage');
+        const { busynessData: cachedBusyness, predictionData: cachedPrediction, lastFetchTime: cachedTime } = JSON.parse(cached);
+        if (cachedTime && Date.now() - cachedTime < 10 * 60 * 1000) {
+          setBusynessData(cachedBusyness);
+          setPredictionData(cachedPrediction);
+          setLastFetchTime(cachedTime);
+        }
       }
     } catch (err) {
       console.warn('Failed to load cached busyness data:', err);
     }
-    
-    // Always try to fetch fresh data on mount (will use cache if recent)
-    fetchBusynessData();
   }, []);
 
   // Save data to sessionStorage whenever it changes
@@ -55,50 +53,71 @@ export const BusynessProvider = ({ children }) => {
   const fetchBusynessData = async () => {
     // If we have recent data (less than 10 minutes old), use cached data
     if (lastFetchTime && Date.now() - lastFetchTime < 10 * 60 * 1000) {
-      console.log('🔍 [CACHE] Using cached busyness data (age:', Math.round((Date.now() - lastFetchTime) / 1000), 'seconds)');
       return { busynessData, predictionData };
     }
 
     // If we're already loading, don't start another request
     if (isLoading) {
-      console.log('🔍 [CACHE] Busyness data already loading, returning cached data');
       return { busynessData, predictionData };
+    }
+
+    // Check if there's already a pending request
+    if (window.busynessFetchPromise) {
+      try {
+        const result = await window.busynessFetchPromise;
+        return result;
+      } catch (error) {
+        console.error('Error waiting for existing fetch:', error);
+      }
     }
 
     setIsLoading(true);
     setError(null);
 
-    try {
-      const response = await fetch('/api/vibe/map-data');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.busyness && data.predictions) {
-        // Convert busyness object to array format for consistency
-        const busynessArray = Object.entries(data.busyness).map(([locationId, busynessValue]) => ({
-          LocationID: String(locationId),
-          busyness: busynessValue,
-        }));
+    // Create a promise for this fetch and store it globally
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch('/api/vibe/map-data');
         
-        setBusynessData(busynessArray);
-        setPredictionData(data.predictions);
-        setLastFetchTime(Date.now());
-        console.log('🔍 [CACHE] Successfully fetched and cached new busyness data');
-        return { busynessData: busynessArray, predictionData: data.predictions };
-      } else {
-        throw new Error('Invalid data structure received from API');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // The backend returns busyness data in the 'busyness' field
+        if (data.busyness) {
+          // Convert busyness object to array format for consistency
+          const busynessArray = Object.entries(data.busyness).map(([locationId, busynessValue]) => ({
+            LocationID: String(locationId),
+            busyness: busynessValue,
+          }));
+          
+          setBusynessData(busynessArray);
+          setPredictionData(data.predictions || []);
+          setLastFetchTime(Date.now());
+          return { busynessData: busynessArray, predictionData: data.predictions || [] };
+        } else {
+          console.warn('No busyness data found in response:', data);
+          setBusynessData([]);
+          setPredictionData([]);
+          return { busynessData: [], predictionData: [] };
+        }
+      } catch (err) {
+        console.error('Error fetching busyness data:', err);
+        setError(err.message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+        // Clear the global promise
+        window.busynessFetchPromise = null;
       }
-    } catch (err) {
-      console.error('🔍 [CACHE] Error fetching busyness data:', err);
-      setError(err.message);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
+    })();
+
+    // Store the promise globally so other components can wait for it
+    window.busynessFetchPromise = fetchPromise;
+
+    return fetchPromise;
   };
 
   const clearCache = () => {

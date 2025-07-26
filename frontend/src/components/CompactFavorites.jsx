@@ -5,6 +5,7 @@ import { Box, Typography, IconButton, Button } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "@mui/icons-material";
 import { useLike } from "../context/LikeContext";
 import { usePlan } from "../context/PlanContext";
+import { useBusyness } from "../context/BusynessContext";
 import VenueCard from "./VenueCard";
 import { useEffect, useState, useRef } from "react";
 import { Favorite as FavoriteIcon } from "@mui/icons-material";
@@ -12,21 +13,41 @@ import { Favorite as FavoriteIcon } from "@mui/icons-material";
 export default function CompactFavorites() {
     const { likedVenues, handleLike } = useLike();
     const { plan, addToPlan, removeFromPlan, isInPlan } = usePlan();
+    const { busynessData: contextBusynessData, fetchBusynessData } = useBusyness();
     const scrollRef = useRef(null);
     const [busynessMap, setBusynessMap] = useState({});
     const [enrichedVenues, setEnrichedVenues] = useState([]);
     const [allVenues, setAllVenues] = useState([]);
 
-    // fetch busyness and location data
+    // fetch busyness and location data using context
     useEffect(() => {
-        fetch("/api/vibe/map-data")
-            .then((res) => res.json())
-            .then((data) => {
-                setBusynessMap(data.busyness || {});
+        const loadData = async () => {
+            try {
+                // Use context for busyness data
+                if (!contextBusynessData || contextBusynessData.length === 0) {
+                    await fetchBusynessData();
+                }
+                
+                // Convert context busyness data to map format
+                if (contextBusynessData && contextBusynessData.length > 0) {
+                    const busynessMapFromContext = {};
+                    contextBusynessData.forEach(item => {
+                        busynessMapFromContext[item.LocationID] = item.busyness;
+                    });
+                    setBusynessMap(busynessMapFromContext);
+                }
+
+                // Fetch venues data
+                const response = await fetch("/api/vibe/map-data");
+                const data = await response.json();
                 setAllVenues(data.locations || []);
-            })
-            .catch((err) => console.error("Failed to fetch busyness data:", err));
-    }, []);
+            } catch (err) {
+                console.error("Failed to fetch data:", err);
+            }
+        };
+        
+        loadData();
+    }, [contextBusynessData, fetchBusynessData]);
 
     // Enrich likedVenues with full data from allVenues
     useEffect(() => {
