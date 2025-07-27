@@ -18,9 +18,9 @@ services:
       BUSYNESS_SERVICE_URL: http://busyness-service:5000
       LLM_SERVICE_URL: http://llm-service:5000
       APP_JWT_SECRET: ${APP_JWT_SECRET}
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/urban_gala?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      SPRING_DATASOURCE_USERNAME: urbanuser
-      SPRING_DATASOURCE_PASSWORD: urbanpass
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-urban_gala}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-urbanuser}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
     networks:
       - app-network
     healthcheck:
@@ -39,10 +39,10 @@ services:
     ports:
       - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: urban_gala
-      MYSQL_USER: urbanuser
-      MYSQL_PASSWORD: urbanpass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-urban_gala}
+      MYSQL_USER: ${MYSQL_USER:-urbanuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     # Set default authentication plugin for compatibility with older clients
     command:
       - --local-infile=1
