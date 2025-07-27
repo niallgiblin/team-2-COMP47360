@@ -51,10 +51,25 @@ button:focus-visible {
 body {
   margin: 0;
   padding: 0;
-  min-height: 100vh;
   background-color: #121212; 
   font-family: 'Urbanist', sans-serif;
-  display: block; 
+  display: block;
+  overflow-x: hidden;
+  /* Hide scrollbar when not in use */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+html {
+  overflow-x: hidden;
+  /* Hide scrollbar when not in use */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+::-webkit-scrollbar {
+  display: none;
 }
 
 

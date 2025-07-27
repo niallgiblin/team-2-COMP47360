@@ -5,15 +5,14 @@ import { Drawer, Box, Typography, IconButton, Divider } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 
-// sidebar component for displaying directions
 export default function DirectionsSidebar({ open, onClose, directions, travelMode, setTravelMode }) {
   return (
     <Drawer
-      anchor="right"              // sidebar slides in from the right
+      anchor="right"
       open={open}
       onClose={onClose}
-      hideBackdrop                // prevent dark overlay
-      variant="persistent"        // keeps the drawer open until user closes it
+      hideBackdrop
+      variant="persistent"
       sx={{
         '& .MuiDrawer-paper': {
           position: 'fixed',
@@ -25,6 +24,8 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
           color: '#fff',
           boxShadow: '-2px 0 8px rgba(0,0,0,0.4)',
           p: 3,
+          display: 'flex',
+          flexDirection: 'column',
         },
       }}
     >
@@ -61,8 +62,8 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
 
       {/* Travel Mode Toggle */}
       <ToggleButtonGroup
-        value={travelMode}            // current mode
-        exclusive                     // only one mode can be active at a time
+        value={travelMode}
+        exclusive
         onChange={(e, mode) => mode && setTravelMode(mode)}
         size="small"
         sx={{
@@ -100,59 +101,94 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
         }} 
       />
 
-      {/* Steps */}
-      {!directions || directions.length === 0 ? (
-        <Typography 
-          sx={{ 
-            color: '#888' 
-          }}
-        >
-          No directions available.
-        </Typography>
-      ) : (
-        directions.map((step, index) => {
-          const isTransit = step.transitDetails?.line;
+      {/* Scrollable Directions Container */}
+      <Box sx={{ 
+        flex: 1, 
+        overflowY: 'auto',
+        pr: 1,
+        pb: 3, // Add bottom padding to ensure content isn't cut off
+        '&::-webkit-scrollbar': {
+          width: '6px',
+        },
+        '&::-webkit-scrollbar-track': {
+          background: '#222',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: '#FF4ECD',
+          borderRadius: '3px',
+        },
+        '&::-webkit-scrollbar-thumb:hover': {
+          background: '#FF6ECD',
+        },
+      }}>
+        {!directions || directions.length === 0 ? (
+          <Typography 
+            sx={{ 
+              color: '#888' 
+            }}
+          >
+            No directions available.
+          </Typography>
+        ) : (
+          <Box>
+            {/* Group steps by leg */}
+            {directions.map((step, index) => {
+              const isTransit = step.transitDetails?.line;
+              const isLegStart = step.legIndex !== undefined && (index === 0 || directions[index - 1]?.legIndex !== step.legIndex);
 
-          return (
-            <Box 
-              key={index} 
-              sx={{ mb: 2 }}>
-              
-              {/* Summary title*/}
-              <Typography variant="subtitle1" 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#FFF', 
-                }}
-              >
-                {step.summary}
-              </Typography>
+              return (
+                <Box key={index}>
+                  {/* Leg title */}
+                  {isLegStart && (
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        fontWeight: 'bold', 
+                        color: '#3ABEFF',
+                        mb: 1,
+                        mt: index > 0 ? 3 : 0
+                      }}
+                    >
+                      {step.legStartLocation?.name || `Leg ${step.legIndex + 1}`} → {step.legEndLocation?.name || 'Destination'}
+                    </Typography>
+                  )}
 
-              {/* Instruction details */}
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  color: '#aaa' ,
-                  lineHeight: 1.6,
-                }}
-              >
-                {isTransit ? (
-                  <>
-                    Take <strong>{step.transitDetails.line.shortName}</strong> (
-                    {step.transitDetails.line.vehicle?.type || 'Transit'}) toward{' '}
-                    <strong>{step.transitDetails.headsign}</strong> from{' '}
-                    <strong>{step.transitDetails.departureStop.name}</strong> to{' '}
-                    <strong>{step.transitDetails.arrivalStop.name}</strong>.
-                  </>
-                ) : (
-                  step.instructions
-                )}
-              </Typography>
-            </Box>
-          );
-        })
-      )}
+                  {/* Step with bullet point */}
+                  <Box sx={{ mb: 1.5, pl: 2 }}>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        color: '#FFFFFF',
+                        lineHeight: 1.6,
+                        position: 'relative',
+                        '&::before': {
+                          content: '"•"',
+                          color: '#FF4ECD',
+                          position: 'absolute',
+                          left: '-12px',
+                          fontWeight: 'bold'
+                        }
+                      }}
+                    >
+                      {isTransit ? (
+                        <>
+                          Take <strong>{step.transitDetails?.line?.shortName || 'Transit'}</strong> (
+                          {step.transitDetails?.line?.vehicle?.type || 'Transit'}) toward{' '}
+                          <strong>{step.transitDetails?.headsign || 'destination'}</strong> from{' '}
+                          <strong>{step.transitDetails?.departureStop?.name || 'departure'}</strong> to{' '}
+                          <strong>{step.transitDetails?.arrivalStop?.name || 'arrival'}</strong>.
+                        </>
+                      ) : (
+                        step.instructions || 'Continue on route'
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
+      </Box>
     </Drawer>
   );
-}
-
+} 

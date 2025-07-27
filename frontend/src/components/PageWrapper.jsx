@@ -12,16 +12,20 @@ export default function PageWrapper({ children, fullWidth = false, fullHeight = 
         position: 'relative', 
         display: 'flex',
         flexDirection: 'column',
-        minHeight: fullHeight ? '100vh' : 'auto',
+        height: 'auto',
+        maxWidth: '100vw',       // ensure it doesn't exceed viewport width
       }}
     >
       <Box
         sx={{
           paddingTop: 8,         // space below nav bar
           paddingX: { xs: 1, sm: 2, md: 4, lg: 6 },            // horizontal padding
+          width: '100%',         // ensure full width
+          maxWidth: '100%',      // prevent overflow
+          overflowX: 'hidden',   // prevent horizontal scroll
           ...(fullWidth
             ? {  
-                maxWidth: {  xs: '500px', sm: '700px', md: '850px', lg: '1200px'},   // allow wider views
+                maxWidth: {  xs: '100%', sm: '100%', md: '850px', lg: '1200px'},   // allow wider views but cap at 100%
                 width: '100%',
                 mx: 'auto',           // center the content again
               }  
@@ -31,7 +35,7 @@ export default function PageWrapper({ children, fullWidth = false, fullHeight = 
                 width: '100%',
               }),
           flexGrow: 1,             // Let the inner content stretch vertically
-          overflow: 'hidden',     // prevent overflow from children
+          overflowY: 'visible',   // allow vertical scroll
         }}
       >
         {children}        {/* injected page content */}

@@ -4,7 +4,7 @@ import React from 'react';
 import { Box, Typography, Slider, Button } from '@mui/material';
 import { DateTime } from "luxon";         // used to format timestamps
 
-export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange, mode }) {
+export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange, mode, onInteractionStart, onInteractionEnd }) {
 
   if (!timestamps.length) return null;    // if no timestamps available, return null
 
@@ -12,6 +12,11 @@ export default function ForecastSlider({ timestamps = [], selectedTimestamp, onC
 
   return (
     <Box
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
       sx={{
         px: 2,
         py: 2,
@@ -42,6 +47,23 @@ export default function ForecastSlider({ timestamps = [], selectedTimestamp, onC
             step={1}
             onChange={(e, index) => onChange(timestamps[index])}
             marks
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onInteractionStart && onInteractionStart();
+            }}
+            onMouseUp={(e) => {
+              e.stopPropagation();
+              onInteractionEnd && onInteractionEnd();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              onInteractionStart && onInteractionStart();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              onInteractionEnd && onInteractionEnd();
+            }}
+            onClick={(e) => e.stopPropagation()}
             sx={{
               height: 8,
               '& .MuiSlider-thumb': {
