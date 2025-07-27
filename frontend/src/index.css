@@ -51,7 +51,7 @@ button:focus-visible {
 body {
   margin: 0;
   padding: 0;
-  background-color: #121212; 
+  background-color: #000000; 
   font-family: 'Urbanist', sans-serif;
   display: block;
   overflow-x: hidden;

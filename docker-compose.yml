@@ -67,7 +67,8 @@ services:
       - "5173:5173"
       - "24678:24678"
     volumes:
-      - ./frontend:/app
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
       - /app/node_modules
     command: npm run dev
     environment:
