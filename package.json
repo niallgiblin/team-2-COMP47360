@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.7.2",
     "@mapbox/polyline": "^1.2.1",
     "@turf/boolean-point-in-polygon": "^7.2.0",
     "@turf/helpers": "^7.2.0"
