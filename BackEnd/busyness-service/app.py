@@ -3,6 +3,7 @@ import sys
 import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+import threading
 
 # Import and inspect the predictor module
 try:
@@ -36,10 +37,14 @@ logger = logging.getLogger("app")
 app = Flask(__name__)
 CORS(app)
 
-# Global state
+# Global state with improved caching
 initialized = False
 initialization_error = None
-cache = None # This will now be cached indefinitely after the first call
+cache = None
+cache_timestamp = None
+cache_duration = 30 * 60  # 30 minutes cache duration
+pending_request = None
+request_lock = threading.Lock()
 
 @app.route("/health")
 def health():
@@ -77,10 +82,14 @@ def get_busyness():
             "details": initialization_error 
         }), 503
 
-    global cache
-    # Check cache first
-    if cache:
-        logger.info("Returning cached busyness predictions (cached indefinitely).")
+    global cache, cache_timestamp, pending_request
+    
+    # Check if we have valid cached data
+    current_time = time.time()
+    if cache and cache_timestamp and (current_time - cache_timestamp) < cache_duration:
+        logger.info("Returning cached busyness predictions (cache valid for %d more seconds)", 
+                   cache_duration - (current_time - cache_timestamp))
+        
         # Also return forecast (not cached for now)
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
@@ -89,6 +98,21 @@ def get_busyness():
         logger.info("🔍 [DEBUG] Returning cached response with forecast: %s", forecast)
         return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
 
+    # Check if there's already a pending request
+    with request_lock:
+        if pending_request:
+            logger.info("Waiting for existing request to complete")
+            try:
+                result = pending_request.result()
+                return jsonify(result)
+            except Exception as e:
+                logger.error("Error waiting for existing request: %s", e)
+                pending_request = None
+        
+        # Create new request
+        import concurrent.futures
+        pending_request = concurrent.futures.Future()
+    
     try:
         # Use provided lat/lon or default to a central Manhattan location (Times Square)
         lat = request.args.get('lat', default=40.7580, type=float)
@@ -125,7 +149,8 @@ def get_busyness():
 
         # Update cache
         cache = normalized_predictions
-        logger.info("Busyness predictions generated and cached.")
+        cache_timestamp = current_time
+        logger.info("Busyness predictions generated and cached for %d seconds", cache_duration)
 
         # Also return forecast
         from predictor.busyness import forecast_busyness_for_all_zones
@@ -139,10 +164,24 @@ def get_busyness():
             "cached": False
         }
         logger.info("🔍 [DEBUG] Final response: %s", response)
+        
+        # Set the result for any waiting requests
+        with request_lock:
+            if pending_request:
+                pending_request.set_result(response)
+                pending_request = None
+        
         return jsonify(response)
 
     except Exception as e:
         logger.error(f"Error in /busyness endpoint: {str(e)}", exc_info=True)
+        
+        # Set the error for any waiting requests
+        with request_lock:
+            if pending_request:
+                pending_request.set_exception(e)
+                pending_request = None
+        
         return jsonify({"success": False, "error": "Internal server error"}), 500
 
 def initialize_service():
@@ -157,15 +196,15 @@ def initialize_service():
             logger.info(f"✅ Service initialized successfully. Models loaded - DNN: {len(dnn_models)}, LSTM: 1")
         else:
             initialization_error = "Model loading function failed or loaded no models."
-            logger.error(f"❌ {initialization_error}")
+            logger.error("❌ Service initialization failed: %s", initialization_error)
     except Exception as e:
-        initialization_error = f"An exception occurred during initialization: {str(e)}"
-        logger.error(f"❌ {initialization_error}", exc_info=True)
+        initialization_error = f"Initialization error: {str(e)}"
+        logger.error("❌ Service initialization failed: %s", initialization_error, exc_info=True)
 
-# Initialize service when the module is loaded.
-# This will run once in each Gunicorn worker process.
-initialize_service()
-
-# Start the Flask app
+# Initialize the service when the module is imported
 if __name__ == "__main__":
+    initialize_service()
     app.run(host="0.0.0.0", port=5000, debug=False)
+else:
+    # Initialize when imported as a module (for Docker)
+    initialize_service()

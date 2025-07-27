@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 const BusynessContext = createContext();
 
@@ -18,11 +18,15 @@ export const BusynessProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [lastFetchTime, setLastFetchTime] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Add request deduplication
+  const pendingRequestRef = useRef(null);
+  const cacheKey = 'venueBusynessCache_v2'; // Updated cache key
 
   // Load cached data on mount
   useEffect(() => {
     try {
-      const cached = sessionStorage.getItem('venueBusynessCache');
+      const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const { busynessData: cachedBusyness, predictionData: cachedPrediction, venueData: cachedVenues, lastFetchTime: cachedTime } = JSON.parse(cached);
         if (cachedTime && Date.now() - cachedTime < 30 * 60 * 1000) { // 30 minute cache
@@ -31,6 +35,7 @@ export const BusynessProvider = ({ children }) => {
           setVenueData(cachedVenues);
           setLastFetchTime(cachedTime);
           setIsInitialized(true);
+          console.log('🔍 [CACHE] Loaded cached data from sessionStorage');
           return;
         }
       }
@@ -52,7 +57,8 @@ export const BusynessProvider = ({ children }) => {
           venueData,
           lastFetchTime: Date.now()
         };
-        sessionStorage.setItem('venueBusynessCache', JSON.stringify(cacheData));
+        sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        console.log('🔍 [CACHE] Saved data to sessionStorage');
       } catch (err) {
         console.warn('Failed to save data to cache:', err);
       }
@@ -62,16 +68,26 @@ export const BusynessProvider = ({ children }) => {
   const fetchAllData = async () => {
     // If we have recent data (less than 30 minutes old), use cached data
     if (lastFetchTime && Date.now() - lastFetchTime < 30 * 60 * 1000) {
+      console.log('🔍 [CACHE] Using recent cached data');
       return { busynessData, predictionData, venueData };
     }
 
-    // If we're already loading, don't start another request
+    // If we're already loading, wait for the existing request
     if (isLoading) {
-      return { busynessData, predictionData, venueData };
+      console.log('🔍 [CACHE] Waiting for existing request');
+      if (pendingRequestRef.current) {
+        try {
+          const result = await pendingRequestRef.current;
+          return result;
+        } catch (error) {
+          console.error('Error waiting for existing fetch:', error);
+        }
+      }
     }
 
     // Check if there's already a pending request
     if (window.venueBusynessFetchPromise) {
+      console.log('🔍 [CACHE] Using existing global promise');
       try {
         const result = await window.venueBusynessFetchPromise;
         return result;
@@ -86,6 +102,8 @@ export const BusynessProvider = ({ children }) => {
     // Create a promise for this fetch and store it globally
     const fetchPromise = (async () => {
       try {
+        console.log('🔍 [API] Starting fresh data fetch');
+        
         // Fetch both busyness and venue data in parallel
         const [busynessResponse, venueResponse] = await Promise.all([
           fetch('/api/vibe/map-data'),
@@ -101,6 +119,8 @@ export const BusynessProvider = ({ children }) => {
           venueResponse.json()
         ]);
         
+        console.log('🔍 [API] Received data from both endpoints');
+        
         // Process busyness data
         let processedBusynessData = [];
         if (busynessData.busyness) {
@@ -108,6 +128,13 @@ export const BusynessProvider = ({ children }) => {
             LocationID: String(locationId),
             busyness: busynessValue,
           }));
+        }
+        
+        // Process prediction data (forecast)
+        let processedPredictionData = [];
+        if (busynessData.predictions) {
+          processedPredictionData = busynessData.predictions;
+          console.log("🔍 [CONTEXT] Processed prediction data:", processedPredictionData.slice(0, 2));
         }
         
         // Process venue data
@@ -136,20 +163,20 @@ export const BusynessProvider = ({ children }) => {
             zone: venue.zone || venue.Zone || 'Unknown',
           };
           
-                     // Add zoneId using geo-lookup if not present
-           if (!processed.zoneId && processed.latitude && processed.longitude && zoneData) {
-             try {
-               const venuePoint = turfPoint([processed.longitude, processed.latitude]);
-               const matchingZone = zoneData.features.find(feature => 
-                 booleanPointInPolygon(venuePoint, feature.geometry)
-               );
-                               if (matchingZone) {
-                  processed.zoneId = String(matchingZone.properties.LocationID);
-                }
-              } catch (err) {
-                console.warn(`[CONTEXT DEBUG] Geo-lookup failed for venue '${processed.name}':`, err);
+          // Add zoneId using geo-lookup if not present
+          if (!processed.zoneId && processed.latitude && processed.longitude && zoneData) {
+            try {
+              const venuePoint = turfPoint([processed.longitude, processed.latitude]);
+              const matchingZone = zoneData.features.find(feature => 
+                booleanPointInPolygon(venuePoint, feature.geometry)
+              );
+              if (matchingZone) {
+                processed.zoneId = String(matchingZone.properties.LocationID);
               }
-           }
+            } catch (err) {
+              console.warn(`[CONTEXT DEBUG] Geo-lookup failed for venue '${processed.name}':`, err);
+            }
+          }
           
           return processed;
         });
@@ -169,10 +196,12 @@ export const BusynessProvider = ({ children }) => {
         });
         
         setBusynessData(processedBusynessData);
-        setPredictionData(busynessData.predictions || []);
+        setPredictionData(processedPredictionData);
         setVenueData(enrichedVenues);
         setLastFetchTime(Date.now());
         setIsInitialized(true);
+        
+        console.log('🔍 [API] Successfully processed and stored data');
         
         return { 
           busynessData: processedBusynessData, 
@@ -187,11 +216,13 @@ export const BusynessProvider = ({ children }) => {
         setIsLoading(false);
         // Clear the global promise
         window.venueBusynessFetchPromise = null;
+        pendingRequestRef.current = null;
       }
     })();
 
     // Store the promise globally so other components can wait for it
     window.venueBusynessFetchPromise = fetchPromise;
+    pendingRequestRef.current = fetchPromise;
 
     return fetchPromise;
   };
@@ -211,7 +242,8 @@ export const BusynessProvider = ({ children }) => {
     setVenueData(null);
     setLastFetchTime(null);
     setIsInitialized(false);
-    sessionStorage.removeItem('venueBusynessCache');
+    sessionStorage.removeItem(cacheKey);
+    console.log('🔍 [CACHE] Cleared all cached data');
   };
 
   const value = {
