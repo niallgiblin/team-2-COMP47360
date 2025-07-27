@@ -57,7 +57,7 @@ export default function FindMyVibe() {
   const getCachedResults = useCallback(() => {
     const cached = searchCache.get(searchKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      console.log('🔍 [CACHE] Using cached search results for:', searchKey);
+
       return cached.results;
     }
     return null;

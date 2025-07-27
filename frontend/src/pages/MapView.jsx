@@ -189,7 +189,7 @@ export default function MapView() {
 
   // Debug mode changes
   useEffect(() => {
-    console.log("🔍 [DEBUG] Mode changed to:", mode);
+
   }, [mode]);
 
   // Refs
@@ -1148,7 +1148,7 @@ export default function MapView() {
         </Typography>
         <Button
           onClick={() => {
-            console.log("🔍 [DEBUG] Switching to LIVE mode");
+    
             setMode("live");
           }}
           sx={{
@@ -1171,7 +1171,7 @@ export default function MapView() {
         </Button>
         <Button
           onClick={() => {
-            console.log("🔍 [DEBUG] Switching to FORECAST mode");
+    
             setMode("forecast");
           }}
           sx={{

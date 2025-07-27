@@ -157,19 +157,18 @@ export default function DemoMap({
   // Debug logging for forecast data
   useEffect(() => {
     if (currentMode === "forecast" && predictionData && predictionData.length > 0) {
-      console.log("🔍 [DEBUG] Available forecast data:", predictionData.slice(0, 3));
-      console.log("🔍 [DEBUG] Selected timestamp:", selectedTimestamp);
+
       
       // Log the first few LocationIDs to understand the structure
       const sampleIds = predictionData.slice(0, 5).map(p => p.LocationID);
-      console.log("🔍 [DEBUG] Sample LocationIDs:", sampleIds);
+      
       
       // Log the mapping for the first few zones
       const sampleMappings = sampleIds.map(id => ({
         dnnId: id,
         geoJsonId: dnnToGeoJsonMapping[id]
       }));
-      console.log("🔍 [DEBUG] Sample mappings:", sampleMappings);
+      
     }
   }, [currentMode, predictionData, selectedTimestamp]);
 
