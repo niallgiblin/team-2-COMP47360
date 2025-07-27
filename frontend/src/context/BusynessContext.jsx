@@ -35,7 +35,7 @@ export const BusynessProvider = ({ children }) => {
           setVenueData(cachedVenues);
           setLastFetchTime(cachedTime);
           setIsInitialized(true);
-          console.log('🔍 [CACHE] Loaded cached data from sessionStorage');
+  
           return;
         }
       }
@@ -58,7 +58,7 @@ export const BusynessProvider = ({ children }) => {
           lastFetchTime: Date.now()
         };
         sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
-        console.log('🔍 [CACHE] Saved data to sessionStorage');
+
       } catch (err) {
         console.warn('Failed to save data to cache:', err);
       }
@@ -68,13 +68,13 @@ export const BusynessProvider = ({ children }) => {
   const fetchAllData = async () => {
     // If we have recent data (less than 30 minutes old), use cached data
     if (lastFetchTime && Date.now() - lastFetchTime < 30 * 60 * 1000) {
-      console.log('🔍 [CACHE] Using recent cached data');
+      
       return { busynessData, predictionData, venueData };
     }
 
     // If we're already loading, wait for the existing request
     if (isLoading) {
-      console.log('🔍 [CACHE] Waiting for existing request');
+      
       if (pendingRequestRef.current) {
         try {
           const result = await pendingRequestRef.current;
@@ -87,7 +87,7 @@ export const BusynessProvider = ({ children }) => {
 
     // Check if there's already a pending request
     if (window.venueBusynessFetchPromise) {
-      console.log('🔍 [CACHE] Using existing global promise');
+      
       try {
         const result = await window.venueBusynessFetchPromise;
         return result;
@@ -102,7 +102,7 @@ export const BusynessProvider = ({ children }) => {
     // Create a promise for this fetch and store it globally
     const fetchPromise = (async () => {
       try {
-        console.log('🔍 [API] Starting fresh data fetch');
+  
         
         // Fetch both busyness and venue data in parallel
         const [busynessResponse, venueResponse] = await Promise.all([
@@ -119,7 +119,7 @@ export const BusynessProvider = ({ children }) => {
           venueResponse.json()
         ]);
         
-        console.log('🔍 [API] Received data from both endpoints');
+
         
         // Process busyness data
         let processedBusynessData = [];
@@ -134,7 +134,7 @@ export const BusynessProvider = ({ children }) => {
         let processedPredictionData = [];
         if (busynessData.predictions) {
           processedPredictionData = busynessData.predictions;
-          console.log("🔍 [CONTEXT] Processed prediction data:", processedPredictionData.slice(0, 2));
+  
         }
         
         // Process venue data
@@ -201,7 +201,7 @@ export const BusynessProvider = ({ children }) => {
         setLastFetchTime(Date.now());
         setIsInitialized(true);
         
-        console.log('🔍 [API] Successfully processed and stored data');
+
         
         return { 
           busynessData: processedBusynessData, 
@@ -243,7 +243,7 @@ export const BusynessProvider = ({ children }) => {
     setLastFetchTime(null);
     setIsInitialized(false);
     sessionStorage.removeItem(cacheKey);
-    console.log('🔍 [CACHE] Cleared all cached data');
+    
   };
 
   const value = {
