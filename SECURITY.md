@@ -162,6 +162,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 ```
 
 
+
 ### Logging & Monitoring
 
 1. **Security Events**: All authentication and authorization events are logged
