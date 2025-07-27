@@ -1,6 +1,6 @@
 # Urban Gala
 
-Urban Gala is a full-stack web application designed to help users discover educational, social, and cultural locations around Manhattan. It features an interactive map with live and forecasted busyness levels, personalized recommendations based on user-described "vibes", and an AI-powered chatbot for conversational search.
+Urban Gala is a full-stack web application designed to help users discover trending locations around Manhattan that match their vibe. It features an interactive map with live and forecasted busyness levels, personalized llm-powered recommendations based on user-described "vibes", and a chatbot for conversational search.
 
 ## Key Features
 
@@ -8,7 +8,7 @@ Urban Gala is a full-stack web application designed to help users discover educa
 -   **Vibe-Based Search:** Use natural language to find locations that match your desired atmosphere (e.g., "a quiet cafe with good coffee").
 -   **AI Chatbot:** Engage in a conversation to get location suggestions and information.
 -   **Itinerary Planning:** Create and save custom plans for your outings.
--   **User Authentication & Profiles:** Sign up, log in, and manage your profile.
+-   **User Authentication & Profiles:** Sign up, log in, and share plans with friends.
 
 ## Architecture Overview
 
