@@ -1,14 +1,13 @@
 import { vi } from 'vitest';
+import React, { useContext } from 'react';
+import { render, act, waitFor } from '@testing-library/react';
+import { AuthProvider, AuthContext } from '../AuthContext';
 
 const mockNavigate = vi.fn();
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
-
-import React from 'react';
-import { render, act, waitFor } from '@testing-library/react';
-import { AuthProvider, useAuth } from '../AuthContext'; // no .jsx extension
 
 // Mock localStorage with a store object
 let store = {};
@@ -48,7 +47,7 @@ beforeEach(() => {
 
 // Test helper component to access auth context
 const TestComponent = ({ action }) => {
-  const auth = useAuth();
+  const auth = useContext(AuthContext);
 
   React.useEffect(() => {
     if (action) {

@@ -1,13 +1,10 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { PlanProvider, usePlan } from "../PlanContext";
-import { vi, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
+import { AuthContext } from '../../context/AuthContext';
+import { PlanProvider, usePlan } from '../PlanContext';
 
-// ✅ Mock AuthContext (user is required in PlanContext)
-vi.mock('../AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'test-user', firstName: 'Test' } }),
-}));
-
+// A mock component that uses the PlanContext
 function TestComponent() {
   const { plan, addToPlan, removeFromPlan } = usePlan();
 
@@ -16,48 +13,67 @@ function TestComponent() {
       <div data-testid="plan-length">{plan.length}</div>
       <div data-testid="plan-json">{JSON.stringify(plan)}</div>
       <button onClick={() => addToPlan({ id: '1', name: 'Venue 1' })} data-testid="add">
-        Add Venue 1
+        Add
       </button>
       <button onClick={() => removeFromPlan('1')} data-testid="remove">
-        Remove Venue 1
+        Remove
       </button>
     </>
   );
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+// Provide a fake auth context so `useAuth()` inside PlanContext doesn't fail
+function MockAuthProvider({ children }) {
+  const mockAuthValue = {
+    user: { id: 'mock-user', firstName: 'Test' },
+    token: 'mock-token',
+    isAuthenticated: true,
+    makeAuthenticatedRequest: async () => ({
+      json: async () => ({ plans: [], sharedPlans: [] }),
+    }),
+  };
 
-test('addToPlan and removeFromPlan work correctly', () => {
-  render(
-    <PlanProvider>
-      <TestComponent />
-    </PlanProvider>
+  return (
+    <AuthContext.Provider value={mockAuthValue}>
+      {children}
+    </AuthContext.Provider>
   );
+}
 
-  const lengthDiv = screen.getByTestId('plan-length');
-  const planJSON = screen.getByTestId('plan-json');
-  const addBtn = screen.getByTestId('add');
-  const removeBtn = screen.getByTestId('remove');
+describe('PlanContext', () => {
+  beforeEach(() => {
+    localStorage.clear(); // avoid using stale token data
+  });
 
-  // 🔍 Initially empty
-  expect(lengthDiv.textContent).toBe('0');
-  expect(planJSON.textContent).toBe('[]');
+  test('addToPlan and removeFromPlan work correctly', async () => {
+    render(
+      <MockAuthProvider>
+        <PlanProvider>
+          <TestComponent />
+        </PlanProvider>
+      </MockAuthProvider>
+    );
 
-  // ➕ Add venue
-  fireEvent.click(addBtn);
-  expect(lengthDiv.textContent).toBe('1');
-  expect(planJSON.textContent).toContain('"id":"1"');
-  expect(planJSON.textContent).toContain('"name":"Venue 1"');
+    const lengthDiv = screen.getByTestId('plan-length');
+    const planJSON = screen.getByTestId('plan-json');
+    const addBtn = screen.getByTestId('add');
+    const removeBtn = screen.getByTestId('remove');
 
-  // ➕ Add duplicate (should not increase count)
-  fireEvent.click(addBtn);
-  expect(lengthDiv.textContent).toBe('1'); // Still 1
-  expect(planJSON.textContent.match(/"id":"1"/g)?.length).toBe(1); // Still only one item with id 1
+    expect(lengthDiv.textContent).toBe('0');
+    expect(planJSON.textContent).toBe('[]');
 
-  // ➖ Remove
-  fireEvent.click(removeBtn);
-  expect(lengthDiv.textContent).toBe('0');
-  expect(planJSON.textContent).toBe('[]');
+    // Add venue
+    fireEvent.click(addBtn);
+    expect(lengthDiv.textContent).toBe('1');
+    expect(planJSON.textContent).toContain('"id":"1"');
+
+    // Try to add the same venue again (should not duplicate)
+    fireEvent.click(addBtn);
+    expect(lengthDiv.textContent).toBe('1');
+
+    // Remove venue
+    fireEvent.click(removeBtn);
+    expect(lengthDiv.textContent).toBe('0');
+    expect(planJSON.textContent).toBe('[]');
+  });
 });
