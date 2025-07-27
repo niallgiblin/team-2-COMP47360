@@ -1,6 +1,6 @@
 // displays a horizontal time slider to navigate forecast busyness timestamps
 // used in the MapView.jsx page
-
+import React from 'react';
 import { Box, Typography, Slider, Button } from '@mui/material';
 import { DateTime } from "luxon";         // used to format timestamps
 
