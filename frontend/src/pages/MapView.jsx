@@ -1262,23 +1262,7 @@ export default function MapView() {
                 }}
                 InputLabelProps={{ shrink: true }}
               />
-              <Button
-                variant="contained"
-                onClick={handleSetLocation}
-                sx={{
-                  background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
-                  color: '#000',
-                  fontWeight: 'bold',
-                  px: 2,
-                  py: 1,
-                  borderRadius: 2,
-                  height: 40,
-                  alignSelf: 'center',
-                  mt: 0.5,
-                }}
-              >
-                Set Location
-              </Button>
+
 
               <TextField
                 size="small"
