@@ -61,6 +61,11 @@ public class VibeService {
     private Instant lastBusynessFetch = null;
     private static final long BUSYNESS_CACHE_DURATION_SECONDS = 600; // 10 minutes
 
+    // Cache for map data
+    private VibeSearchResponse cachedMapData = null;
+    private Instant lastMapDataFetch = null;
+    private static final long MAP_DATA_CACHE_DURATION_SECONDS = 300; // 5 minutes
+
     public VibeService(RestTemplateBuilder restTemplateBuilder,
             LocationRepository locationRepository,
             LocationService locationService) {
@@ -83,49 +88,21 @@ public class VibeService {
             return cached.getResponse();
         }
 
-        // 1. Fetch from ML service
-        List<Location> mlLocations = new ArrayList<>();
-        if (isMLServiceAvailable()) {
-            mlLocations = fetchMLRecommendations(vibeDescription, maxResults);
-        }
+        // 1. Fetch ML recommendations
+        List<Location> mlLocations = fetchMLRecommendations(vibeDescription, maxResults);
+        
+        // 3. Use only ML results (no keyword fallback)
+        List<Location> finalLocations = mlLocations;
+        
+        // 4. Set explanation and confidence based on ML results
+        String explanation = "Found locations using AI-powered semantic search.";
+        double confidence = mlLocations.isEmpty() ? 0.0 : 
+                          mlLocations.get(0).getSimilarity() != null ? mlLocations.get(0).getSimilarity() : 0.0;
 
-        // 2. Fetch from keyword search
-        List<Location> keywordLocations = keywordFallback(vibeDescription);
-
-        // 3. Combine and de-duplicate results, prioritizing keyword matches
-        Map<Integer, Location> combinedLocations = new LinkedHashMap<>();
-
-        // Add keyword results first, as they are more literal matches.
-        keywordLocations.forEach(loc -> combinedLocations.putIfAbsent(loc.getId(), loc));
-
-        // Then, fill the rest with ML results, skipping duplicates.
-        mlLocations.forEach(loc -> {
-            if (combinedLocations.size() < maxResults) {
-                combinedLocations.putIfAbsent(loc.getId(), loc);
-            }
-        });
-
-        // 4. Limit the final combined list
-        List<Location> finalLocations = new ArrayList<>(combinedLocations.values());
-
-        // 5. Set explanation and confidence for the response
-        String explanation;
-        double confidence;
-        if (!mlLocations.isEmpty() && mlLocations.get(0).getSimilarity() != null && mlLocations.get(0).getSimilarity() >= ML_CONFIDENCE_THRESHOLD) {
-            explanation = "Found results based on your vibe, supplemented with keyword matches.";
-            confidence = mlLocations.get(0).getSimilarity();
-        } else if (!finalLocations.isEmpty()) {
-            explanation = "Couldn't find a strong vibe match. Here are results based on your keywords.";
-            confidence = 0.5;
-        } else {
-            explanation = "No matching venues found for your query.";
-            confidence = 0.0;
-        }
-
-        // 6. Get busyness data
+        // 5. Get busyness data
         Map<String, Double> busynessData = getLiveBusyness();
 
-        // 7. Build and cache response
+        // 6. Build and cache response
         VibeSearchResponse response = buildResponse(finalLocations, explanation, confidence, busynessData);
         
         // Cache the result
@@ -172,6 +149,15 @@ public class VibeService {
     @SuppressWarnings("unchecked")
     public VibeSearchResponse getMapData() {
         logger.info("Fetching all locations and busyness data for map.");
+        
+        // Check if we have cached map data
+        if (lastMapDataFetch != null && 
+            Instant.now().isBefore(lastMapDataFetch.plusSeconds(MAP_DATA_CACHE_DURATION_SECONDS)) &&
+            cachedMapData != null) {
+            logger.info("Using cached map data");
+            return cachedMapData;
+        }
+        
         List<Location> allLocations = locationService.getAllLocations();
 
         // Fetch the full report including live and forecast data
@@ -203,7 +189,14 @@ public class VibeService {
         String explanation = "Complete location data for map view.";
         double confidence = 1.0;
 
-        return buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
+        VibeSearchResponse response = buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
+        
+        // Cache the response
+        cachedMapData = response;
+        lastMapDataFetch = Instant.now();
+        logger.info("Cached map data for {} seconds", MAP_DATA_CACHE_DURATION_SECONDS);
+        
+        return response;
     }
 
     public Map<String, Double> getLiveBusyness() {
@@ -396,27 +389,7 @@ public class VibeService {
         return locationRepository.findAllById(locationIds);
     }
 
-    private List<Location> keywordFallback(String vibeDescription) {
-        if (vibeDescription == null || vibeDescription.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
 
-        String[] keywords = vibeDescription.toLowerCase().split("\\s+");
-        List<Location> results = new ArrayList<>();
-
-        for (String keyword : keywords) {
-            if (keyword.length() < 3) continue; // Skip very short keywords
-
-            List<Location> keywordResults = locationRepository.searchByText(keyword);
-            results.addAll(keywordResults);
-        }
-
-        // Remove duplicates and limit results
-        return results.stream()
-                .distinct()
-                .limit(10)
-                .collect(Collectors.toList());
-    }
 
     @SuppressWarnings("unchecked")
     private Map<String, Double> fetchBusynessData() {

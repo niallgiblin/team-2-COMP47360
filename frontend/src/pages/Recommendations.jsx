@@ -18,6 +18,7 @@ const trendingCache = {
 };
 
 export default function Recommendations() {
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { busynessData: contextBusynessData, venueData: cachedVenues, isInitialized, fetchAllData } = useBusyness();
   const [venues, setVenues] = useState([]);

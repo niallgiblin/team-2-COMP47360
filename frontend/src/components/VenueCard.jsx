@@ -250,7 +250,10 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
               <Button
                 variant="text"
                 size="small"
-                onClick={handleWebsiteClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleWebsiteClick();
+                }}
                 startIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
                 sx={{
                   color: '#FF4ECD',
@@ -274,7 +277,10 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                     variant="contained"
                     size="small"
                     fullWidth
-                  onClick={() => { if (addToPlan) addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri }); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (addToPlan) addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri });
+                    }}
                     disabled={isPlanFull}
                     sx={{
                       background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',

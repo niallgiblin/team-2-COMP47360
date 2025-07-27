@@ -64,7 +64,10 @@ export default function CompactPlanSummary() {
       <Box sx={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
         {/* Chevron Buttons */}
         <IconButton
-          onClick={scrollLeft}
+          onClick={(e) => {
+            e.stopPropagation();
+            scrollLeft();
+          }}
           sx={{
             position: 'absolute',
             left: -10,
@@ -82,7 +85,10 @@ export default function CompactPlanSummary() {
         </IconButton>
 
         <IconButton
-          onClick={scrollRight}
+          onClick={(e) => {
+            e.stopPropagation();
+            scrollRight();
+          }}
           sx={{
             position: 'absolute',
             right: -10,
