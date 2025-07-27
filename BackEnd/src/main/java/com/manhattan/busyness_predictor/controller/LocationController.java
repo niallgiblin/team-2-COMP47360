@@ -152,6 +152,8 @@ public class LocationController {
         return ResponseEntity.ok(history);
     }
 
+
+
     @GetMapping("/search")
     public ResponseEntity<Page<LocationDto>> searchLocations(
             @RequestParam(required = false) String input,

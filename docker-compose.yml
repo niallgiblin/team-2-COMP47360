@@ -1,31 +1,4 @@
 services:
-  db:
-    image: mysql:8.0
-    container_name: urban-gala-db
-    restart: unless-stopped
-    ports:
-      - "3307:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: urban_gala
-      MYSQL_USER: urbanuser
-      MYSQL_PASSWORD: urbanpass
-    # Set default authentication plugin for compatibility with older clients
-    command:
-      - --local-infile=1
-      - --default-authentication-plugin=mysql_native_password
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
-      timeout: 20s
-      retries: 10
-      interval: 10s
-      start_period: 40s
-    volumes:
-      - db_data:/var/lib/mysql
-      - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
-    networks:
-      - app-network
-
   backend:
     build:
       context: ./backend
@@ -58,6 +31,33 @@ services:
       start_period: 60s
     volumes:
       - ./backend/avatars:/app/backend/avatars
+
+  db:
+    image: mysql:8.0
+    container_name: urban-gala-db
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: urban_gala
+      MYSQL_USER: urbanuser
+      MYSQL_PASSWORD: urbanpass
+    # Set default authentication plugin for compatibility with older clients
+    command:
+      - --local-infile=1
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
+    networks:
+      - app-network
 
   frontend:
     build:
@@ -109,11 +109,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G  # Increased memory for sentence transformers
-          cpus: '1.0'
+          memory: 3G  # Increased from 2G for sentence transformers
+          cpus: '1.5'  # Increased from 1.0 for better processing
         reservations:
-          memory: 1G
-          cpus: '0.25'
+          memory: 2G  # Guaranteed memory for model loading
+          cpus: '0.5'  # Guaranteed CPU for responsiveness
     restart: unless-stopped
 
   busyness-service:
@@ -137,11 +137,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G  # Final memory increase to handle TensorFlow's peak usage
-          cpus: '2.0'
+          memory: 3G  # Increased from 2G for TensorFlow models
+          cpus: '2.5'  # Increased from 2.0 for parallel inference
         reservations:
-          memory: 2G  # Guarantee the full memory amount to prevent swapping
-          cpus: '0.5'
+          memory: 2G  # Guaranteed memory for model loading
+          cpus: '1.0'  # Guaranteed CPU for responsiveness
     restart: unless-stopped
 
 networks:

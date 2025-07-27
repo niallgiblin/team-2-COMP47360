@@ -32,12 +32,13 @@ import CompactSharedPlans from "../components/CompactSharedPlans";
 // Data and context
 import { usePlan } from "../context/PlanContext";
 import { useBusyness } from "../context/BusynessContext";
-import { safeSetItem, safeGetItem, STORAGE_KEYS } from "../utils/storageUtils";
+import { STORAGE_KEYS } from "../utils/storageUtils";
 
 // External libraries, utilities for directions and geo-calculations
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import { DateTime } from "luxon";
+import polyline from "@mapbox/polyline";
 
 // Cache for map data
 const mapDataCache = {
@@ -84,6 +85,57 @@ const geocodeAddress = async (address) => {
   return null;
 };
 
+
+
+// Working polyline decoder for Google Directions API
+const decodePolylineSimple = (encoded) => {
+  if (!encoded) {
+    return [];
+  }
+  
+  
+  const poly = [];
+  let index = 0, len = encoded.length;
+  let lat = 0, lng = 0;
+
+  while (index < len) {
+    let shift = 0, result = 0;
+
+    do {
+      let b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (result >= 0x20);
+
+    let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      let b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (result >= 0x20);
+
+    let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    // Return in [lat, lng] format for Leaflet
+    const coord = [lat / 1e5, lng / 1e5];
+    poly.push(coord);
+    
+    // Debug first few coordinates
+    if (poly.length <= 3) {
+      // Debug logging removed
+    }
+  }
+
+
+  return poly;
+};
+
 // NYC bounding box check
 function isInNYC(lat, lng) {
   return (
@@ -118,36 +170,64 @@ export default function MapView() {
   // State for user location and directions
   const [userLocation, setUserLocation] = useState(null);
   const [manualStart, setManualStart] = useState("");
-  const [manualDestination, setManualDestination] = useState(""); // Add missing manualDestination state
+  const [manualDestination, setManualDestination] = useState("");
   const [showDirections, setShowDirections] = useState(false);
   const [directions, setDirections] = useState(null);
-  const [travelMode, setTravelMode] = useState("WALKING"); // Add missing travelMode state
-  // const [directionsLoading, setDirectionsLoading] = useState(false);
+  const [travelMode, setTravelMode] = useState("WALK");
+  const [directionsPolyline, setDirectionsPolyline] = useState(null);
 
   // State for selected venue and plan
   const [selectedVenue, setSelectedVenue] = useState(null);
-  const [fromPlan, setFromPlan] = useState(false);
-  const [plan, setPlan] = useState([]);
 
   // State for forecast
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
   const [forecastTimestamps] = useState(generateNext12Hours());
-  const [mode, setMode] = useState("live"); // Add missing mode state for busyness level toggle
-  const [viewMode, setViewMode] = useState("plan"); // Add missing viewMode state
-  const [resetMapKey, setResetMapKey] = useState(0); // Add missing resetMapKey state
-  const [zoneCenter, setZoneCenter] = useState(null); // Add missing zoneCenter state
-  const [directionsPolyline, setDirectionsPolyline] = useState(null); // Add missing directionsPolyline state
+  const [mode, setMode] = useState("live");
+  const [viewMode, setViewMode] = useState("plan");
+  const [resetMapKey] = useState(0);
+  const [zoneCenter, setZoneCenter] = useState(null);
+
+  // Debug mode changes
+  useEffect(() => {
+    console.log("🔍 [DEBUG] Mode changed to:", mode);
+  }, [mode]);
 
   // Refs
   const mapSectionRef = useRef(null);
 
   // Context data
   const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchAllData } = useBusyness();
-  // const { plan: currentPlan } = usePlan();
+  const { plan: currentPlan, fromPlan: contextFromPlan, setFromPlan: setContextFromPlan } = usePlan();
+
+  // Use context values for plan and fromPlan
+  const plan = currentPlan || [];
+  const fromPlan = contextFromPlan || false;
 
   // Get state from navigation
   const location = useLocation();
   const selectedVenueFromState = location.state?.selectedVenue;
+
+  // Update context when venue is selected from navigation
+  useEffect(() => {
+    if (selectedVenueFromState) {
+      setSelectedVenue(selectedVenueFromState);
+      setContextFromPlan(false);
+    }
+  }, [selectedVenueFromState, setContextFromPlan]);
+
+  // Initialize plan state from context or navigation
+  useEffect(() => {
+    if (selectedVenueFromState) {
+      setContextFromPlan(true);
+      // Plan is already set in context
+    } else if (currentPlan && currentPlan.length > 0) {
+      setContextFromPlan(true);
+      // Plan is already set in context
+    } else {
+      setContextFromPlan(false);
+      // Plan is already cleared in context
+    }
+  }, [selectedVenueFromState, currentPlan, setContextFromPlan]);
 
   // Check if we have cached map data
   const getCachedMapData = () => {
@@ -155,7 +235,7 @@ export default function MapView() {
         mapDataCache.venuesData && 
         mapDataCache.timestamp && 
         Date.now() - mapDataCache.timestamp < mapDataCache.duration) {
-      console.log('🔍 [CACHE] Using cached map data');
+
       return {
         zoneData: mapDataCache.zoneData,
         venuesData: mapDataCache.venuesData
@@ -186,8 +266,6 @@ export default function MapView() {
         } catch (err) {
           console.error("Failed to load busyness data:", err);
         }
-      } else {
-        console.log('🔍 [CACHE] Using existing busyness data from context');
       }
     };
     loadBusynessData();
@@ -215,7 +293,7 @@ export default function MapView() {
         try {
           mapDataCache.zoneData = json;
           mapDataCache.timestamp = Date.now();
-          console.log('🔍 [CACHE] Cached zone data');
+
         } catch (e) {
           console.warn('Failed to cache zone data:', e.message);
         }
@@ -260,7 +338,7 @@ export default function MapView() {
           }));
           mapDataCache.venuesData = essentialVenues;
           mapDataCache.timestamp = Date.now();
-          console.log('🔍 [CACHE] Cached essential venues data');
+
         } catch (e) {
           console.warn('Failed to cache venues data:', e.message);
         }
@@ -303,6 +381,7 @@ export default function MapView() {
 
   // 4. Enrich venues with zone IDs once all data is loaded
   useEffect(() => {
+    
     if (!zoneData || venues.length === 0) {
       if (fromPlan && plan.length > 0) {
         setEnrichedVenues(plan);
@@ -310,6 +389,28 @@ export default function MapView() {
       return;
     }
 
+    // If viewing a plan, only show plan venues
+    if (fromPlan && plan.length > 0) {
+      const enriched = plan.map((venue) => {
+        if (typeof venue.lat !== "number" || typeof venue.lng !== "number")
+          return venue;
+        const venuePoint = turfPoint([venue.lng, venue.lat]);
+        const matchingZone = zoneData.features.find((feature) =>
+          booleanPointInPolygon(venuePoint, feature.geometry)
+        );
+        return {
+          ...venue,
+          zone: matchingZone ? matchingZone.properties.LocationID : null,
+        };
+      });
+      setEnrichedVenues(enriched);
+      if (!selectedVenueFromState && !selectedVenue && enriched.length > 0) {
+        setSelectedVenue(enriched[0]);
+      }
+      return;
+    }
+
+    // Otherwise, enrich all venues
     const enriched = venues.map((venue) => {
       if (typeof venue.lat !== "number" || typeof venue.lng !== "number")
         return venue;
@@ -358,28 +459,74 @@ export default function MapView() {
     let start = null;
     let destination = null;
 
-    // Determine Start Location
-    if (userLocation) {
-      start = userLocation;
-    } else if (manualStart.trim()) {
-      start = await geocodeAddress(manualStart);
-      if (!start) {
-        alert("Could not find the start location.");
-        return;
+    // If viewing a plan with multiple venues, create route between plan venues
+    if (hasPlan && planVenues.length > 1) {
+      // Check if we have a user location or manual start - if so, use that as start
+      if (userLocation || manualStart.trim()) {
+        // Use user location or manual start as origin, route through all plan venues
+        if (userLocation) {
+          start = userLocation;
+        } else {
+          start = await geocodeAddress(manualStart);
+          if (!start) {
+            alert("Could not find the start location.");
+            return;
+          }
+        }
+        destination = { lat: planVenues[planVenues.length - 1].lat, lng: planVenues[planVenues.length - 1].lng };
+      } else {
+        // No user start - use first venue as start, last venue as destination
+        start = { lat: planVenues[0].lat, lng: planVenues[0].lng };
+        destination = { lat: planVenues[planVenues.length - 1].lat, lng: planVenues[planVenues.length - 1].lng };
+      }
+    } else if (hasPlan && planVenues.length === 1) {
+      // Single venue in plan - use it as destination
+      destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
+      
+      // Determine Start Location - use first venue as default if no user location
+      if (userLocation) {
+        start = userLocation;
+      } else if (manualStart.trim()) {
+        start = await geocodeAddress(manualStart);
+        if (!start) {
+          alert("Could not find the start location.");
+          return;
+        }
+      } else {
+        // No start location provided - use first venue as start and destination
+        start = { lat: planVenues[0].lat, lng: planVenues[0].lng };
+        destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
       }
     } else {
-      alert("Please set a start location.");
-      return;
-    }
+      // Determine Start Location
+      if (userLocation) {
+        start = userLocation;
+      } else if (manualStart.trim()) {
+        start = await geocodeAddress(manualStart);
+        if (!start) {
+          alert("Could not find the start location.");
+          return;
+        }
+      } else {
+        alert("Please set a start location.");
+        return;
+      }
 
-    // Determine Destination
-    if (selectedVenue) {
-      destination = { lat: selectedVenue.lat, lng: selectedVenue.lng };
-    } else if (planVenues.length > 0) {
-      destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
-    } else {
-      alert("Please select a destination venue.");
-      return;
+      // Determine Destination
+      if (manualDestination.trim()) {
+        destination = await geocodeAddress(manualDestination);
+        if (!destination) {
+          alert("Could not find the destination location.");
+          return;
+        }
+      } else if (selectedVenue) {
+        destination = { lat: selectedVenue.lat, lng: selectedVenue.lng };
+      } else if (planVenues.length > 0) {
+        destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
+      } else {
+        alert("Please select a destination venue or enter a destination address.");
+        return;
+      }
     }
 
     // setDirectionsLoading(true); // This line was commented out
@@ -396,8 +543,244 @@ export default function MapView() {
         directionsData = await getSingleDestinationDirections(start, destination, GOOGLE_API_KEY);
       }
 
-      if (directionsData) {
-        setDirections(directionsData);
+                      if (directionsData) {
+                  
+                  // Process legs to preserve structure and add leg information
+                  
+                  let processedLegs;
+                  
+                  if (travelMode === 'TRANSIT' && fromPlan && plan.length > 1) {
+                    // For transit with multiple venues, create separate legs for each venue segment
+                    processedLegs = [];
+                    
+                    for (let i = 0; i < plan.length - 1; i++) {
+                      const fromVenue = plan[i];
+                      const toVenue = plan[i + 1];
+                      
+                      // Get transit directions for this segment
+                      try {
+                        const segmentDirections = await getSingleDestinationDirections(
+                          { lat: fromVenue.lat, lng: fromVenue.lng },
+                          { lat: toVenue.lat, lng: toVenue.lng },
+                          GOOGLE_API_KEY
+                        );
+                        
+                        if (segmentDirections && segmentDirections.legs) {
+                          const segmentLeg = segmentDirections.legs[0];
+                          const segmentSteps = segmentLeg.steps || [];
+                          
+                          // Add steps for this segment with proper leg information
+                          const segmentProcessedSteps = segmentSteps.map((step) => ({
+                            ...step,
+                            legIndex: i,
+                            legStartLocation: { ...segmentLeg.startLocation, name: fromVenue.name },
+                            legEndLocation: { ...segmentLeg.endLocation, name: toVenue.name }
+                          }));
+                          
+                          processedLegs.push(...segmentProcessedSteps);
+                        }
+                      } catch {
+                        // Error handling for segment directions
+                      }
+                    }
+                  } else {
+                    // For walking or single destination, use the original leg processing
+                    if (travelMode === 'WALK' && fromPlan && plan.length > 1) {
+                      // For walking with multiple venues, create separate legs for each venue segment
+                      processedLegs = [];
+                      
+                      for (let i = 0; i < plan.length - 1; i++) {
+                        const fromVenue = plan[i];
+                        const toVenue = plan[i + 1];
+                        
+                        // Get walking directions for this segment
+                        try {
+                          const segmentDirections = await getSingleDestinationDirections(
+                            { lat: fromVenue.lat, lng: fromVenue.lng },
+                            { lat: toVenue.lat, lng: toVenue.lng },
+                            GOOGLE_API_KEY
+                          );
+                          
+                          if (segmentDirections && segmentDirections.legs) {
+                            const segmentLeg = segmentDirections.legs[0];
+                            const segmentSteps = segmentLeg.steps || [];
+                            
+                            // Add steps for this segment with proper leg information
+                            const segmentProcessedSteps = segmentSteps.map((step) => ({
+                              ...step,
+                              legIndex: i,
+                              legStartLocation: { ...segmentLeg.startLocation, name: fromVenue.name },
+                              legEndLocation: { ...segmentLeg.endLocation, name: toVenue.name }
+                            }));
+                            
+                            processedLegs.push(...segmentProcessedSteps);
+                          }
+                        } catch {
+                          // Error handling for segment directions
+                        }
+                      }
+                    } else {
+                      // For single destination or other cases, use the original leg processing
+                      processedLegs = directionsData.legs.map((leg, legIndex) => {
+                        const legSteps = leg.steps || [];
+                        
+                        // Get venue names for this leg
+                        let startVenueName = 'Start';
+                        let endVenueName = 'Destination';
+                        
+                        if (fromPlan && plan.length > 0) {
+                          if (travelMode === 'TRANSIT') {
+                            // For transit, we only have one leg from first to last venue
+                            startVenueName = plan[0].name;
+                            endVenueName = plan[plan.length - 1].name;
+                          } else {
+                            // For walking, we have multiple legs
+                            if (legIndex === 0) {
+                              startVenueName = plan[0].name;
+                              endVenueName = plan[1]?.name || 'Destination';
+                            } else if (legIndex < plan.length - 1) {
+                              startVenueName = plan[legIndex].name;
+                              endVenueName = plan[legIndex + 1].name;
+                            } else {
+                              startVenueName = plan[plan.length - 2]?.name || 'Previous Venue';
+                              endVenueName = plan[plan.length - 1].name;
+                            }
+                          }
+                        }
+                        
+                        return legSteps.map((step) => ({
+                          ...step,
+                          legIndex,
+                          legStartLocation: { ...leg.startLocation, name: startVenueName },
+                          legEndLocation: { ...leg.endLocation, name: endVenueName }
+                        }));
+                      }).flat();
+                    }
+                  }
+                  
+                  setDirections(processedLegs);
+        if (directionsData.polyline) {
+          try {
+            
+            let decodedPolyline;
+            // The Google Directions API v2 returns encoded polyline that needs to be decoded
+            // For plan routes, create a seamless route by getting directions between each venue
+            if (fromPlan && plan.length > 0) {
+              
+              // Get directions between each venue in the plan
+              const routeSegments = [];
+              
+              for (let i = 0; i < plan.length - 1; i++) {
+                const fromVenue = plan[i];
+                const toVenue = plan[i + 1];
+                
+                
+                try {
+                  const segmentDirections = await getSingleDestinationDirections(
+                    { lat: fromVenue.lat, lng: fromVenue.lng },
+                    { lat: toVenue.lat, lng: toVenue.lng },
+                    GOOGLE_API_KEY
+                  );
+                  
+                  if (segmentDirections && segmentDirections.polyline) {
+                    // Decode this segment's polyline
+                    let segmentCoords;
+                    try {
+                      segmentCoords = polyline.decode(segmentDirections.polyline);
+                    } catch {
+                      segmentCoords = decodePolylineSimple(segmentDirections.polyline);
+                    }
+                    if (segmentCoords.length > 0) {
+                      routeSegments.push(...segmentCoords);
+                    }
+                  }
+                } catch {
+                  // Add direct line between venues as fallback
+                  routeSegments.push([fromVenue.lat, fromVenue.lng]);
+                  routeSegments.push([toVenue.lat, toVenue.lng]);
+                }
+              }
+              
+              if (routeSegments.length > 0) {
+                decodedPolyline = routeSegments;
+              } else {
+                // Fallback to direct lines between venues
+                decodedPolyline = plan.map(venue => [venue.lat, venue.lng]);
+              }
+            } else {
+                          // For single destination routes, use the original polyline
+            if (typeof directionsData.polyline === 'string') {
+              
+              // Use mapbox polyline decoder
+              try {
+                decodedPolyline = polyline.decode(directionsData.polyline);
+              } catch {
+                decodedPolyline = decodePolylineSimple(directionsData.polyline);
+              }
+              
+              // Log the decoded coordinates for debugging
+              if (decodedPolyline.length > 0) {
+                // Debug logging removed
+              }
+            } else if (directionsData.polyline && directionsData.polyline.points) {
+                // Polyline with points array (shouldn't happen with v2 API)
+                decodedPolyline = directionsData.polyline.points.map(point => [point.lat, point.lng]);
+              } else {
+                decodedPolyline = [];
+              }
+            }
+            
+            if (decodedPolyline.length > 0) {
+              setDirectionsPolyline(decodedPolyline);
+            } else {
+              // Create a simple straight-line route as fallback
+              const start = directionsData.legs?.[0]?.startLocation;
+              const end = directionsData.legs?.[directionsData.legs.length - 1]?.endLocation;
+              if (start && end) {
+                const fallbackRoute = [
+                  [start.latLng.latitude, start.latLng.longitude],
+                  [end.latLng.latitude, end.latLng.longitude]
+                ];
+                setDirectionsPolyline(fallbackRoute);
+              } else {
+                // If we can't get start/end from legs, try to create route from plan venues
+                if (fromPlan && plan.length > 0) {
+                  const fallbackRoute = plan.map(venue => [venue.lat, venue.lng]);
+                  setDirectionsPolyline(fallbackRoute);
+                } else {
+                  setDirectionsPolyline(null);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error decoding polyline:', error);
+            // Create a simple straight-line route as fallback
+            const start = directionsData.legs?.[0]?.startLocation;
+            const end = directionsData.legs?.[directionsData.legs.length - 1]?.endLocation;
+            if (start && end) {
+              const fallbackRoute = [
+                [start.latLng.latitude, start.latLng.longitude],
+                [end.latLng.latitude, end.latLng.longitude]
+              ];
+              setDirectionsPolyline(fallbackRoute);
+            } else {
+              setDirectionsPolyline(null);
+            }
+          }
+        } else {
+          // Create a simple straight-line route as fallback
+          const start = directionsData.legs?.[0]?.startLocation;
+          const end = directionsData.legs?.[directionsData.legs.length - 1]?.endLocation;
+          if (start && end) {
+            const fallbackRoute = [
+              [start.latLng.latitude, start.latLng.longitude],
+              [end.latLng.latitude, end.latLng.longitude]
+            ];
+            setDirectionsPolyline(fallbackRoute);
+          } else {
+            setDirectionsPolyline(null);
+          }
+        }
       } else {
         alert("Could not load directions. Please try again.");
       }
@@ -408,9 +791,6 @@ export default function MapView() {
       // setDirectionsLoading(false); // This line was commented out
     }
   };
-
-  // Helper function to validate coordinates
-  const isValidCoord = (obj) => obj && typeof obj.lat === 'number' && typeof obj.lng === 'number' && !isNaN(obj.lat) && !isNaN(obj.lng);
 
   // Reset map function
   const handleResetMap = () => {
@@ -424,20 +804,289 @@ export default function MapView() {
 
   // Toggle directions function
   const toggleDirections = () => {
-    setShowDirections(!showDirections);
+    if (showDirections) {
+      setShowDirections(false);
+    } else {
+      handleGetDirections();
+    }
   };
 
   // Helper functions for directions
   const getSingleDestinationDirections = async (start, destination, apiKey) => {
-    // Placeholder implementation
-    console.log("Getting single destination directions");
-    return null;
+    try {
+      
+      const requestBody = {
+        origin: { 
+          location: { 
+            latLng: { 
+              latitude: start.lat, 
+              longitude: start.lng 
+            } 
+          } 
+        },
+        destination: { 
+          location: { 
+            latLng: { 
+              latitude: destination.lat, 
+              longitude: destination.lng 
+            } 
+          } 
+        },
+        travelMode: travelMode === 'WALK' ? 'WALK' : 'TRANSIT'
+      };
+
+      // Only add routingPreference for DRIVE mode (if we had it)
+      if (travelMode === 'DRIVE') {
+        requestBody.routingPreference = 'TRAFFIC_AWARE';
+      }
+      
+      const response = await fetch(`https://routes.googleapis.com/directions/v2:computeRoutes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.legs,routes.polyline.encodedPolyline,routes.legs.steps,routes.legs.steps.navigationInstruction,routes.legs.steps.transitDetails'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Single destination Directions API error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      const route = data.routes?.[0];
+      
+      if (!route) {
+        throw new Error('No route found in response');
+      }
+
+      // Process the legs to extract proper step instructions
+      const processedLegs = route.legs.map(leg => ({
+        ...leg,
+        steps: leg.steps.map((step) => {
+          // Try to get instruction from various possible sources
+          let instruction = "Continue on route";
+          
+          // Priority order for instruction extraction
+          if (step.navigationInstruction?.instructions) {
+            instruction = step.navigationInstruction.instructions;
+          } else if (step.instructions) {
+            instruction = step.instructions;
+          } else if (step.navigationInstruction?.primaryText?.text) {
+            instruction = step.navigationInstruction.primaryText.text;
+          } else if (step.navigationInstruction?.primaryText && typeof step.navigationInstruction.primaryText === 'string') {
+            instruction = step.navigationInstruction.primaryText;
+          }
+          
+          // Clean up instruction text
+          if (typeof instruction === 'number' || (typeof instruction === 'string' && instruction.match(/^\d+s?$/))) {
+            instruction = "Continue on route";
+          }
+          
+          // For transit steps, create a meaningful instruction
+          if (step.transitDetails) {
+            const line = step.transitDetails.line?.shortName || 'Transit';
+            const headsign = step.transitDetails.headsign || 'destination';
+            instruction = `Take ${line} toward ${headsign}`;
+          } else if (instruction === "Continue on route" && step.staticDuration && step.staticDuration > 0) {
+            // Only create duration-based instruction if we have a valid duration
+            const minutes = Math.round(step.staticDuration / 60);
+            if (!isNaN(minutes) && minutes > 0) {
+              instruction = `Continue for ${minutes} minutes`;
+            }
+          }
+          
+          // Calculate duration and distance safely
+          let duration = null;
+          let distance = null;
+          if (step.staticDuration && step.staticDuration > 0) {
+            const minutes = Math.round(step.staticDuration / 60);
+            if (!isNaN(minutes) && minutes > 0) {
+              duration = `${minutes} min`;
+              distance = `${minutes} min`;
+            }
+          }
+          
+          return {
+            ...step,
+            instructions: instruction,
+            distance: distance,
+            duration: duration,
+            summary: instruction
+          };
+        })
+      }));
+
+      
+      return {
+        polyline: route.polyline?.encodedPolyline || route.polyline?.polyline || null,
+        legs: processedLegs
+      };
+    } catch (error) {
+      console.error('Error getting single destination directions:', error);
+      return null;
+    }
   };
 
   const getMultiStopDirections = async (start, venues, apiKey) => {
-    // Placeholder implementation
-    console.log("Getting multi-stop directions");
-    return null;
+    try {
+      
+      // Check if start is a user location (has lat/lng) or a venue from the plan
+      const isUserStart = start && typeof start.lat === 'number' && typeof start.lng === 'number';
+      
+      // Check if this is a single venue plan with same start and destination
+      const isSingleVenuePlan = venues.length === 1 && 
+        start.lat === venues[0].lat && start.lng === venues[0].lng;
+      
+      if (isSingleVenuePlan) {
+        return {
+          polyline: null,
+          legs: [{ steps: [{ instructions: "You are already at your destination" }] }]
+        };
+      }
+      
+      let waypoints;
+      let origin;
+      let destination;
+      
+      if (travelMode === 'TRANSIT') {
+        // For TRANSIT mode, we need to handle each segment separately since Google doesn't support waypoints
+        // We'll get directions for each venue-to-venue segment
+        if (isUserStart) {
+          // User start to last venue (single route)
+          origin = { location: { latLng: { latitude: start.lat, longitude: start.lng } } };
+          destination = { location: { latLng: { latitude: venues[venues.length - 1].lat, longitude: venues[venues.length - 1].lng } } };
+        } else {
+          // First venue to last venue (single route)
+          origin = { location: { latLng: { latitude: venues[0].lat, longitude: venues[0].lng } } };
+          destination = { location: { latLng: { latitude: venues[venues.length - 1].lat, longitude: venues[venues.length - 1].lng } } };
+        }
+        waypoints = []; // No waypoints for TRANSIT
+      } else {
+        // For WALK mode, we can use waypoints
+        if (isUserStart) {
+          // User provided start location - route from user to all plan venues
+          waypoints = venues.map(venue => ({
+            location: { latLng: { latitude: venue.lat, longitude: venue.lng } }
+          }));
+          origin = { location: { latLng: { latitude: start.lat, longitude: start.lng } } };
+          destination = { location: { latLng: { latitude: venues[venues.length - 1].lat, longitude: venues[venues.length - 1].lng } } };
+        } else {
+          // No user start - route between plan venues only
+          waypoints = venues.slice(1, -1).map(venue => ({
+            location: { latLng: { latitude: venue.lat, longitude: venue.lng } }
+          }));
+          origin = { location: { latLng: { latitude: venues[0].lat, longitude: venues[0].lng } } };
+          destination = { location: { latLng: { latitude: venues[venues.length - 1].lat, longitude: venues[venues.length - 1].lng } } };
+        }
+      }
+
+
+      const requestBody = {
+        origin: origin,
+        destination: destination,
+        travelMode: travelMode === 'WALK' ? 'WALK' : 'TRANSIT'
+      };
+
+      // Add waypoints for WALK mode
+      if (travelMode === 'WALK' && waypoints.length > 0) {
+        requestBody.intermediates = waypoints;
+      }
+
+      const response = await fetch(`https://routes.googleapis.com/directions/v2:computeRoutes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.legs,routes.polyline.encodedPolyline,routes.legs.steps,routes.legs.steps.navigationInstruction,routes.legs.steps.transitDetails'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Multi-stop Directions API error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      const route = data.routes?.[0];
+      
+      if (!route) {
+        throw new Error('No route found in response');
+      }
+
+      // Process the legs to extract proper step instructions
+      const processedLegs = route.legs.map(leg => ({
+        ...leg,
+        steps: leg.steps.map((step) => {
+          // Try to get instruction from various possible sources
+          let instruction = "Continue on route";
+          
+          // Priority order for instruction extraction
+          if (step.navigationInstruction?.instructions) {
+            instruction = step.navigationInstruction.instructions;
+          } else if (step.instructions) {
+            instruction = step.instructions;
+          } else if (step.navigationInstruction?.primaryText?.text) {
+            instruction = step.navigationInstruction.primaryText.text;
+          } else if (step.navigationInstruction?.primaryText && typeof step.navigationInstruction.primaryText === 'string') {
+            instruction = step.navigationInstruction.primaryText;
+          }
+          
+          // Clean up instruction text
+          if (typeof instruction === 'number' || (typeof instruction === 'string' && instruction.match(/^\d+s?$/))) {
+            instruction = "Continue on route";
+          }
+          
+          // For transit steps, create a meaningful instruction
+          if (step.transitDetails) {
+            const line = step.transitDetails.line?.shortName || 'Transit';
+            const headsign = step.transitDetails.headsign || 'destination';
+            instruction = `Take ${line} toward ${headsign}`;
+          } else if (instruction === "Continue on route" && step.staticDuration && step.staticDuration > 0) {
+            // Only create duration-based instruction if we have a valid duration
+            const minutes = Math.round(step.staticDuration / 60);
+            if (!isNaN(minutes) && minutes > 0) {
+              instruction = `Continue for ${minutes} minutes`;
+            }
+          }
+          
+          // Calculate duration and distance safely
+          let duration = null;
+          let distance = null;
+          if (step.staticDuration && step.staticDuration > 0) {
+            const minutes = Math.round(step.staticDuration / 60);
+            if (!isNaN(minutes) && minutes > 0) {
+              duration = `${minutes} min`;
+              distance = `${minutes} min`;
+            }
+          }
+          
+          return {
+            ...step,
+            instructions: instruction,
+            distance: distance,
+            duration: duration,
+            summary: instruction
+          };
+        })
+      }));
+
+      
+      return {
+        polyline: route.polyline?.encodedPolyline || route.polyline?.polyline || null,
+        legs: processedLegs
+      };
+    } catch (error) {
+      console.error('Error getting multi-stop directions:', error);
+      return null;
+    }
   };
 
   // 5. Fetch directions when mode changes (walk/ public transport)
@@ -498,7 +1147,10 @@ export default function MapView() {
           Check Busyness Level:
         </Typography>
         <Button
-          onClick={() => setMode("live")}
+          onClick={() => {
+            console.log("🔍 [DEBUG] Switching to LIVE mode");
+            setMode("live");
+          }}
           sx={{
             fontWeight: "bold",
             textTransform: "uppercase",
@@ -518,7 +1170,10 @@ export default function MapView() {
           Live
         </Button>
         <Button
-          onClick={() => setMode("forecast")}
+          onClick={() => {
+            console.log("🔍 [DEBUG] Switching to FORECAST mode");
+            setMode("forecast");
+          }}
           sx={{
             fontWeight: "bold",
             textTransform: "uppercase",
@@ -552,31 +1207,6 @@ export default function MapView() {
           overflowY: 'visible',
         }}
       >
-        {/* Reset map button */}
-        <Box
-          sx={{
-            textAlign: "left",
-            mb: 1,
-            pl: 2,
-            mt: { xs: 2, lg: 3 },
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              color: "#ccc",
-              textDecoration: "underline",
-              cursor: "pointer",
-              "&:hover": {
-                color: "#fff",
-              },
-            }}
-            onClick={handleResetMap}
-          >
-            Reset Map
-          </Typography>
-        </Box>
-
         {/* Top Section: Controls and Venue Info */}
         <Box
           sx={{
@@ -588,7 +1218,7 @@ export default function MapView() {
             px: 2,
             mb: 3,
             gap: 3,
-            mt: { xs: 2, lg: -4 },
+            mt: { xs: 2, lg: 3 },
           }}
         >
           {/* Left: Start Location Input & Directions Button */}
@@ -611,8 +1241,8 @@ export default function MapView() {
             >
               <TextField
                 size="small"
-                label="Start location"
-                placeholder="Enter address or location"
+                label={fromPlan && plan.length > 1 ? "Start location (optional)" : "Start location"}
+                placeholder={fromPlan && plan.length > 1 ? "Enter address or leave empty to start from first venue" : "Enter address or location"}
                 variant="outlined"
                 value={manualStart}
                 onChange={(e) => setManualStart(e.target.value)}
@@ -649,6 +1279,7 @@ export default function MapView() {
               >
                 Set Location
               </Button>
+
               <TextField
                 size="small"
                 label="Destination"
@@ -674,7 +1305,7 @@ export default function MapView() {
               />
             </Box>
             {((fromPlan && (userLocation || plan.length > 0)) ||
-              selectedVenue) && (
+              selectedVenue || manualDestination.trim()) && (
               <Button
                 variant="contained"
                 onClick={toggleDirections}
@@ -697,6 +1328,30 @@ export default function MapView() {
               </Button>
             )}
             
+            {/* Reset map button - positioned below start location */}
+            <Box
+              sx={{
+                textAlign: "left",
+                mt: 1,
+                pl: 2,
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#ccc",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  "&:hover": {
+                    color: "#fff",
+                  },
+                }}
+                onClick={handleResetMap}
+              >
+                Reset Map
+              </Typography>
+            </Box>
+            
           {/* Forecast Slider */}
           {mode === "forecast" && contextPredictionData && contextPredictionData.length > 0 && (
             <Box
@@ -716,6 +1371,8 @@ export default function MapView() {
               />
             </Box>
           )}
+          
+
         </Box>
 
 
@@ -819,6 +1476,7 @@ export default function MapView() {
             position: "relative",
           }}
         >
+
           <DemoMap
             venues={enrichedVenues}
             selectedVenue={selectedVenue}
@@ -837,6 +1495,8 @@ export default function MapView() {
             zoneCenter={zoneCenter}
             setZoneCenter={setZoneCenter}
           />
+          
+
           <DirectionSidebar
             open={showDirections}
             onClose={() => setShowDirections(false)}
