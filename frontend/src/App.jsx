@@ -70,7 +70,8 @@ function AppLayout({ children }) {
     <Box 
       sx={{ 
         backgroundColor: '#000000', 
-        height: 'auto'
+        minHeight: '100vh',
+        width: '100%'
       }}
     >
       <NavBar />
