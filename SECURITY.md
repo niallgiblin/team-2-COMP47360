@@ -4,7 +4,7 @@
 
 This document outlines the security measures implemented in the Urban Gala project, including authentication, authorization, data protection, and secrets management.
 
-## 🔐 Secrets Management
+## Secrets Management
 
 ### Environment Variables
 
