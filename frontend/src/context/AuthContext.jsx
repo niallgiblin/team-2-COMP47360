@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const AuthContext = createContext(null);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
@@ -131,8 +131,11 @@ export const AuthProvider = ({ children }) => {
 
   // Upload user avatar (file data)
   const uploadAvatar = async (userId, file) => {
+    console.log('uploadAvatar called with:', { userId, fileName: file.name });
+    
     const formData = new FormData();
     formData.append("avatar", file);
+    
     const response = await makeAuthenticatedRequest(
       `${API_BASE_URL}/auth/profile/${userId}/avatar`,
       {
@@ -140,10 +143,22 @@ export const AuthProvider = ({ children }) => {
         body: formData,
       }
     );
+    
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Failed to upload avatar");
+    console.log('Upload avatar response:', data);
+    
+    if (!response.ok) {
+      console.error('Upload failed:', data);
+      throw new Error(data.error || "Failed to upload avatar");
+    }
+    
+    console.log('Before setting user - current user:', user);
+    console.log('Setting user to:', data.user);
+    
     setUser(data.user);
     localStorage.setItem("user", JSON.stringify(data.user));
+    
+    console.log('After setting user');
     return data.user;
   };
 
