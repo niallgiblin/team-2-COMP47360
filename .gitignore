@@ -6,7 +6,6 @@ yarn-error.log*
 pnpm-debug.log*
 .vite/
 dist/
-.env
 .env.*.local
 .idea/
 .vscode/
@@ -16,4 +15,5 @@ Thumbs.db
 Desktop.ini
 *.log
 .env
+.env.production
 *.pem
