@@ -2,13 +2,17 @@ package com.manhattan.busyness_predictor.controller;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -114,24 +118,42 @@ public class AuthController {
             throw new RuntimeException("No file uploaded");
         }
 
-        String avatarsDir = System.getProperty("user.dir") + "/backend/avatars/";
+        // Use the correct Docker container path
+        String avatarsDir = "/app/avatars/";
         File dir = new File(avatarsDir);
-        if (!dir.exists()) dir.mkdirs();
+        if (!dir.exists()) {
+            boolean created = dir.mkdirs();
+            if (!created) {
+                throw new RuntimeException("Failed to create avatars directory");
+            }
+        }
+
+        // Validate file type
+        String contentType = avatarFile.getContentType();
+        if (contentType == null || (!contentType.startsWith("image/"))) {
+            throw new RuntimeException("File must be an image");
+        }
 
         String original = avatarFile.getOriginalFilename();
         String ext = (original != null && original.contains("."))
                    ? original.substring(original.lastIndexOf('.'))
-                   : "";
+                   : ".jpg";
+        
         String filename = "avatar_user_" + userId + "_" + System.currentTimeMillis() + ext;
         File dest = new File(dir, filename);
-        avatarFile.transferTo(dest);
+        
+        try {
+            avatarFile.transferTo(dest);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to save avatar file: " + e.getMessage());
+        }
 
         String avatarUrl = "/avatars/" + filename;
         UserDto updatedUser = authService.updateUserAvatar(userId, avatarUrl);
 
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Avatar uploaded successfully");
-        response.put("user",    updatedUser);
+        response.put("user", updatedUser);
 
         return ResponseEntity.ok(response);
     }
@@ -149,16 +171,26 @@ public class AuthController {
         }
 
         UserDto user = authService.getUserById(userId);
-        if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
-            String filePath = System.getProperty("user.dir") + user.getAvatarUrl();
-            File file = new File(filePath);
-            if (file.exists()) file.delete();
+        String currentAvatarUrl = user.getAvatarUrl();
+        
+        // Delete the file if it exists
+        if (currentAvatarUrl != null && currentAvatarUrl.startsWith("/avatars/")) {
+            String filename = currentAvatarUrl.substring("/avatars/".length());
+            File avatarFile = new File("/app/avatars/" + filename);
+            if (avatarFile.exists()) {
+                boolean deleted = avatarFile.delete();
+                if (!deleted) {
+                    // Log the failure but don't throw an exception
+                    System.err.println("Failed to delete avatar file: " + avatarFile.getAbsolutePath());
+                }
+            }
         }
+
         UserDto updatedUser = authService.updateUserAvatar(userId, null);
 
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Avatar deleted successfully");
-        response.put("user",    updatedUser);
+        response.put("user", updatedUser);
 
         return ResponseEntity.ok(response);
     }

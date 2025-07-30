@@ -17,6 +17,10 @@ import {
 import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '../hooks/useAuth'; // custom context for auth/user management
 
+// Get the API base URL from environment
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+
 // Main profile form component
 export default function ProfileForm() {
   // Access user object and relevant auth functions
@@ -39,6 +43,7 @@ export default function ProfileForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Local avatar preview (used before uploading to backend)
   const [preview, setPreview] = useState(null);
@@ -61,10 +66,16 @@ export default function ProfileForm() {
         profileImageFile: null,
       });
 
-      // If user already has an avatar, use its URL for the preview
-      if (user.avatarUrl) setPreview(user.avatarUrl);
+      // Only clear preview if user has a new avatar URL (successful upload)
+      // This prevents the avatar from disappearing during upload
+      if (user.avatarUrl && preview) {
+        console.log('User updated with new avatar, clearing preview');
+        // Clean up the old preview URL
+        URL.revokeObjectURL(preview);
+        setPreview(null);
+      }
     }
-  }, [user]);
+  }, [user, preview]); // Added preview as dependency
 
   // Handle input changes for all text fields
   const handleChange = (e) => {
@@ -73,17 +84,94 @@ export default function ProfileForm() {
     setSuccess('');
   };
 
+  // Handle file input click
+  const handleUploadClick = () => {
+    console.log('Upload button clicked'); // Debug log
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    } else {
+      console.error('File input ref is null');
+    }
+  };
+
   // Handle avatar image selection and show preview
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
+    console.log('File input changed', e.target.files); // Debug log
     const file = e.target.files?.[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file); // temp preview URL
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      return;
+    }
+
+    console.log('File selected:', file.name, file.type, file.size); // Debug log
+
+    let imageUrl = null;
+    try {
+      imageUrl = URL.createObjectURL(file); // temp preview URL
       setPreview(imageUrl);
       setFormData((prev) => ({
         ...prev,
         profileImageFile: file, // actual file for future upload
       }));
+      
+      // Immediately upload the avatar
+      if (user) {
+        setError('');
+        setSuccess('');
+        setUploadingAvatar(true);
+        console.log('Starting avatar upload for user:', user.id); // Debug log
+        
+        try {
+          const result = await uploadAvatar(user.id, file);
+          console.log('Avatar upload successful:', result); // Debug log
+          setSuccess('Avatar uploaded successfully!');
+          
+          // Clear the file from state after successful upload
+          setFormData(prev => ({ ...prev, profileImageFile: null }));
+          
+          // DON'T clear the preview immediately - wait a moment for the user state to update
+          // The useEffect will handle clearing the preview when user updates
+          setTimeout(() => {
+            if (imageUrl) {
+              URL.revokeObjectURL(imageUrl);
+            }
+            setPreview(null);
+          }, 1000); // Give 1 second for the user state to update
+          
+        } catch (err) {
+          console.error('Avatar upload failed:', err); // Debug log
+          setError(err.message || 'Failed to upload avatar');
+          // Only clear preview on error
+          setPreview(null);
+          if (imageUrl) {
+            URL.revokeObjectURL(imageUrl);
+          }
+        } finally {
+          setUploadingAvatar(false);
+        }
+      }
+    } catch (err) {
+      console.error('Error processing file:', err);
+      setError('Error processing file');
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+      }
     }
+
+    // Clear the input value to allow selecting the same file again
+    e.target.value = '';
   };
 
   // Handle avatar removal
@@ -91,7 +179,7 @@ export default function ProfileForm() {
     if (!user) return;
     setError('');
     setSuccess('');
-    setUpdating(true);
+    setUploadingAvatar(true);
     try {
       await deleteAvatar(user.id);
       setPreview(null); // Clear the preview immediately
@@ -99,8 +187,34 @@ export default function ProfileForm() {
     } catch (err) {
       setError(err.message || 'Failed to remove avatar');
     } finally {
-      setUpdating(false);
+      setUploadingAvatar(false);
     }
+  };
+
+  // Get the correct avatar URL with better debugging
+  const getAvatarUrl = () => {
+    // If we have a preview, use it (for newly selected images)
+    if (preview) {
+      console.log('Using preview URL:', preview);
+      return preview;
+    }
+    
+    // If user has an avatar URL, use it
+    if (user?.avatarUrl) {
+      console.log('User avatarUrl:', user.avatarUrl);
+      // If the avatarUrl already includes the full URL, use it as is
+      if (user.avatarUrl.startsWith('http')) {
+        console.log('Using full URL:', user.avatarUrl);
+        return user.avatarUrl;
+      }
+      // Otherwise, construct the full URL
+      const fullUrl = `${BACKEND_URL}${user.avatarUrl}`;
+      console.log('Constructed URL:', fullUrl);
+      return fullUrl;
+    }
+    
+    console.log('No avatar URL available');
+    return null;
   };
 
   // Validate the form fields before submission
@@ -139,7 +253,7 @@ export default function ProfileForm() {
     setUpdating(true);
 
     try {
-      // Step 1: Update text-based profile data
+      // Update text-based profile data only
       const updateData = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
@@ -152,13 +266,6 @@ export default function ProfileForm() {
         updateData.newPassword = formData.newPassword;
       }
       await updateProfile(user.id, updateData);
-
-      // Step 2: If a new avatar file was selected, upload it
-      if (formData.profileImageFile) {
-        await uploadAvatar(user.id, formData.profileImageFile);
-        // Clear the file from state after successful upload
-        setFormData(prev => ({ ...prev, profileImageFile: null }));
-      }
 
       // Reset password fields after update
       setFormData((prev) => ({
@@ -202,44 +309,52 @@ export default function ProfileForm() {
         mb={3}
       >
         <Avatar
-          src={preview}
+          src={getAvatarUrl()}
           sx={{ width: 100, height: 100, mb: 2, bgcolor: '#333' }}
         >
-          {!preview && <PersonIcon fontSize="large" />}
+          {!getAvatarUrl() && <PersonIcon fontSize="large" />}
         </Avatar>
 
-        <input
-          type="file"
-          accept="image/*"
-          hidden
-          ref={fileInputRef}
-          onChange={handleImageChange}
-        />
-
         <Box display="flex" gap={1} mt={1}>
+          {/* Hidden file input */}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            style={{ display: 'none' }}
+            ref={fileInputRef}
+          />
+          
+          {/* Upload Photo Button */}
           <Button
-            onClick={() => fileInputRef.current.click()}
-            size="small"
+            onClick={handleUploadClick}
             variant="outlined"
+            disabled={uploadingAvatar}
             sx={{
               borderColor: '#3ABEFF',
               color: '#3ABEFF',
               fontWeight: 'bold',
               '&:hover': {
-                borderColor: '#FF4ECD',
-                background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
+                backgroundColor: '#3ABEFF',
                 color: '#000',
+              },
+              '&:disabled': {
+                borderColor: '#666',
+                color: '#666',
               },
             }}
           >
-            Upload Photo
+            {uploadingAvatar ? <CircularProgress size={20} /> : 'Upload Photo'}
           </Button>
-          {preview && (
+          
+          {/* Remove Avatar Button */}
+          {(preview || user?.avatarUrl) && (
             <Button
               onClick={handleRemoveAvatar}
               size="small"
               variant="outlined"
               color="error"
+              disabled={uploadingAvatar}
               sx={{
                 borderColor: '#f44336',
                 color: '#f44336',
@@ -247,6 +362,10 @@ export default function ProfileForm() {
                 '&:hover': {
                   backgroundColor: '#f44336',
                   color: '#fff',
+                },
+                '&:disabled': {
+                  borderColor: '#666',
+                  color: '#666',
                 },
               }}
             >
@@ -284,7 +403,6 @@ export default function ProfileForm() {
         <Typography variant="body2" color="gray" sx={{ mt: 0.5 }}>
           {formData.email}
         </Typography>
-        {/* Removed last login display */}
       </Box>
 
       {/* Display error or success message */}
