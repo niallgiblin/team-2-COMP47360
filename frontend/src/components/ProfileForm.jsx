@@ -19,7 +19,6 @@ import { useAuth } from '../hooks/useAuth'; // custom context for auth/user mana
 
 // Get the API base URL from environment
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
 // Main profile form component
 export default function ProfileForm() {
@@ -208,7 +207,7 @@ export default function ProfileForm() {
         return user.avatarUrl;
       }
       // Otherwise, construct the full URL
-      const fullUrl = `${BACKEND_URL}${user.avatarUrl}`;
+      const fullUrl = user.avatarUrl;
       console.log('Constructed URL:', fullUrl);
       return fullUrl;
     }

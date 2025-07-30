@@ -18,6 +18,10 @@ fi
 # Load environment variables
 source .env
 
+# Generate nginx configuration
+echo "🔧 Generating nginx configuration..."
+./generate-nginx-config.sh
+
 # Validate required environment variables
 required_vars=("MYSQL_ROOT_PASSWORD" "MYSQL_PASSWORD" "APP_JWT_SECRET" "VITE_GOOGLE_API_KEY" "HF_TOKEN")
 for var in "${required_vars[@]}"; do
