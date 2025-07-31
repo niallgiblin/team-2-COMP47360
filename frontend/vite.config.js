@@ -8,11 +8,6 @@ export default defineConfig({
     host: true, // Allow connections from network
     port: 5173, // Default vite port
     allowedHosts: ['frontend', 'localhost', '0.0.0.0'], // Allow nginx container
-    hmr: {
-      host: '46.137.74.122', // Use the EC2 public IP for WebSocket connections
-      port: 80, // Use the nginx port
-      protocol: 'ws', // Use WebSocket protocol
-    },
     proxy: {
       // Proxy LLM service requests FIRST
       '/api/chat': {
