@@ -17,4 +17,4 @@ Desktop.ini
 .env
 .env.production
 *.pem
-deploy-to-ec2.sh
+deploy-to-ec2.shscripts/urban-gala-complete.tar.gz
