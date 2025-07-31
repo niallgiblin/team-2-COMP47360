@@ -1,8 +1,34 @@
 package com.manhattan.busyness_predictor.controller;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
+import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manhattan.busyness_predictor.dto.AuthResponse;
@@ -11,92 +37,538 @@ import com.manhattan.busyness_predictor.dto.SignUpRequest;
 import com.manhattan.busyness_predictor.dto.UpdateProfileRequest;
 import com.manhattan.busyness_predictor.dto.UserDto;
 import com.manhattan.busyness_predictor.model.User;
-import com.manhattan.busyness_predictor.security.JwtTokenProvider;
 import com.manhattan.busyness_predictor.security.UserPrincipal;
 import com.manhattan.busyness_predictor.service.AuthService;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
+public class AuthControllerTest {
+    private static final Integer USER_ID = 1;
+    private static final String USERNAME = "testuser";
+    private static final String EMAIL = "test@example.com";
+    private static final String PASSWORD = "password123";
+    private static final String FIRST_NAME = "Test";
+    private static final String LAST_NAME = "User";
+    private static final String TOKEN = "jwt.token.here";
 
-@WebMvcTest(AuthController.class)
-@AutoConfigureMockMvc(addFilters = false)
-class AuthControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private AuthService authService;
 
-    @MockBean
-    private JwtTokenProvider jwtTokenProvider;
+    @InjectMocks
+    private AuthController authController;
 
-    @MockBean
-    private com.manhattan.busyness_predictor.security.CustomUserDetailsService customUserDetailsService;
+    private MockMvc mockMvc;
+    private ObjectMapper objectMapper;
+    private User testUser;
+    private UserDto testUserDto;
+    private UserPrincipal userPrincipal;
+    private TestingAuthenticationToken authentication;
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    @BeforeEach
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
+        
+        // Setup test user with all required fields
+        testUser = new User();
+        testUser.setId(USER_ID);
+        testUser.setUsername(USERNAME);
+        testUser.setEmail(EMAIL);
+        testUser.setFirstName(FIRST_NAME);
+        testUser.setLastName(LAST_NAME);
+        testUser.setPassword(PASSWORD);
+        
+        testUserDto = UserDto.fromUser(testUser);
+        userPrincipal = UserPrincipal.create(testUser);
+        
+        // Create authentication object
+        authentication = new TestingAuthenticationToken(
+            userPrincipal, 
+            null, 
+            List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+        authentication.setAuthenticated(true);
+        
+        // Setup MockMvc with proper security configuration
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(authController)
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                .setControllerAdvice(new TestGlobalExceptionHandler())
+                // Add a filter to handle authentication - more precise logic
+                .addFilters((request, response, chain) -> {
+                    // Clear any existing authentication first
+                    SecurityContextHolder.clearContext();
+                    
+                    // Only set authentication if explicitly provided via .with(authentication())
+                    if (request.getAttribute("org.springframework.security.authentication") != null) {
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
+                    // Check for Authorization header as secondary indicator
+                    else if (request instanceof jakarta.servlet.http.HttpServletRequest) {
+                        jakarta.servlet.http.HttpServletRequest httpRequest = (jakarta.servlet.http.HttpServletRequest) request;
+                        String authHeader = httpRequest.getHeader("Authorization");
+                        if (authHeader != null && authHeader.startsWith("Bearer " + TOKEN)) {
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        }
+                    }
+                    
+                    try {
+                        chain.doFilter(request, response);
+                    } finally {
+                        // Clean up security context after request
+                        SecurityContextHolder.clearContext();
+                    }
+                })
+                .build();
+        
+        objectMapper = new ObjectMapper();
+    }
+
+    // Test-specific global exception handler
+    @org.springframework.web.bind.annotation.ControllerAdvice
+    public static class TestGlobalExceptionHandler {
+        @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+        public org.springframework.http.ResponseEntity<?> handleValidationExceptions(
+                org.springframework.web.bind.MethodArgumentNotValidException ex) {
+            return new org.springframework.http.ResponseEntity<>("Validation failed", org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+        
+        @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
+        public org.springframework.http.ResponseEntity<?> handleRuntimeException(RuntimeException ex) {
+            java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
+            errorDetails.put("error", "An unexpected internal server error has occurred.");
+            errorDetails.put("message", ex.getMessage());
+            return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        
+        @org.springframework.web.bind.annotation.ExceptionHandler(Exception.class)
+        public org.springframework.http.ResponseEntity<?> handleGlobalException(Exception ex) {
+            java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
+            errorDetails.put("error", "An unexpected internal server error has occurred.");
+            errorDetails.put("message", ex.getMessage());
+            return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
     @Test
-    void whenSignUp_thenReturnMessageAndTokenAndUser() throws Exception {
-        SignUpRequest req = new SignUpRequest();
-        req.setUsername("ann");
-        req.setEmail("ann@example.com");
-        req.setPassword("secret1");       // ≥6 chars
-        req.setFirstName("Anna");         // non-empty
-        req.setLastName("Smith");         // non-empty
+    public void whenSignUp_thenReturnsSuccessWithUserAndToken() throws Exception {
+        // Given
+        SignUpRequest request = new SignUpRequest(USERNAME, EMAIL, PASSWORD, FIRST_NAME, LAST_NAME);
+        AuthResponse authResponse = new AuthResponse(testUserDto, TOKEN);
+        
+        when(authService.signUp(any(SignUpRequest.class))).thenReturn(authResponse);
 
-        UserDto userDto = new UserDto();
-        userDto.setId(5);
-        userDto.setUsername("ann");
-        userDto.setEmail("ann@example.com");
-
-        AuthResponse resp = new AuthResponse();
-        resp.setUser(userDto);
-        resp.setToken("tk-123");
-
-        given(authService.signUp(any(SignUpRequest.class))).willReturn(resp);
-
+        // When & Then
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(mapper.writeValueAsString(req)))
-            .andExpect(status().isCreated())          // expect 201
-            .andExpect(jsonPath("$.message").value("User registered successfully"))
-            .andExpect(jsonPath("$.token").value("tk-123"))
-            .andExpect(jsonPath("$.user.username").value("ann"));
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("User registered successfully"))
+                .andExpect(jsonPath("$.user.username").value(USERNAME))
+                .andExpect(jsonPath("$.user.email").value(EMAIL))
+                .andExpect(jsonPath("$.token").value(TOKEN));
+
+        verify(authService).signUp(any(SignUpRequest.class));
     }
 
     @Test
-    void whenLogIn_thenReturnTokenAndUser() throws Exception {
-        LoginRequest req = new LoginRequest();
-        req.setUsernameOrEmail("joe");
-        req.setPassword("secret");
+    public void whenSignUpWithInvalidData_thenReturnsBadRequest() throws Exception {
+        // Given - invalid data
+        SignUpRequest request = new SignUpRequest();
+        request.setUsername("ab");
+        request.setEmail("invalid-email");
+        request.setPassword("123");
+        request.setFirstName("");
+        request.setLastName("");
 
-        UserDto userDto = new UserDto();
-        userDto.setId(2);
-        userDto.setUsername("joe");
-        userDto.setEmail("joe@example.com");
-
-        AuthResponse resp = new AuthResponse();
-        resp.setUser(userDto);
-        resp.setToken("abc123");
-
-        given(authService.logIn(any(LoginRequest.class))).willReturn(resp);
-
-        mockMvc.perform(post("/api/auth/login")
+        // When & Then
+        mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(mapper.writeValueAsString(req)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.token").value("abc123"))
-            .andExpect(jsonPath("$.user.username").value("joe"));
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).signUp(any(SignUpRequest.class));
     }
 
+    @Test
+    public void whenSignUpWithExistingUsername_thenReturnsInternalServerError() throws Exception {
+        // Given
+        SignUpRequest request = new SignUpRequest(USERNAME, EMAIL, PASSWORD, FIRST_NAME, LAST_NAME);
+        
+        when(authService.signUp(any(SignUpRequest.class)))
+                .thenThrow(new RuntimeException("Username is already taken"));
+
+        // When & Then
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
+                .andExpect(jsonPath("$.message").value("Username is already taken"));
+
+        verify(authService).signUp(any(SignUpRequest.class));
+    }
+
+    @Test
+    public void whenLogin_thenReturnsSuccessWithUserAndToken() throws Exception {
+        // Given
+        LoginRequest request = new LoginRequest(USERNAME, PASSWORD);
+        AuthResponse authResponse = new AuthResponse(testUserDto, TOKEN);
+        
+        when(authService.logIn(any(LoginRequest.class))).thenReturn(authResponse);
+
+        // When & Then
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Login successful"))
+                .andExpect(jsonPath("$.user.username").value(USERNAME))
+                .andExpect(jsonPath("$.token").value(TOKEN));
+
+        verify(authService).logIn(any(LoginRequest.class));
+    }
+
+    @Test
+    public void whenLoginWithInvalidCredentials_thenReturnsInternalServerError() throws Exception {
+        // Given
+        LoginRequest request = new LoginRequest("wronguser", "wrongpass");
+        
+        when(authService.logIn(any(LoginRequest.class)))
+                .thenThrow(new RuntimeException("Invalid credentials"));
+
+        // When & Then
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
+                .andExpect(jsonPath("$.message").value("Invalid credentials"));
+
+        verify(authService).logIn(any(LoginRequest.class));
+    }
+
+    @Test
+    public void whenGetMe_thenReturnsCurrentUser() throws Exception {
+        // When & Then - use authentication header to trigger our custom filter
+        mockMvc.perform(get("/api/auth/me")
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(USERNAME))
+                .andExpect(jsonPath("$.email").value(EMAIL))
+                .andExpect(jsonPath("$.firstName").value(FIRST_NAME));
+    }
+
+    @Test
+    public void whenGetMeWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
+        // When & Then - no authentication provided (no .with() and no Authorization header)
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    public void whenUpdateProfile_thenReturnsUpdatedUser() throws Exception {
+        // Given
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFirstName("UpdatedFirst");
+        request.setLastName("UpdatedLast");
+        
+        UserDto updatedUserDto = new UserDto();
+        updatedUserDto.setId(USER_ID);
+        updatedUserDto.setUsername(USERNAME);
+        updatedUserDto.setFirstName("UpdatedFirst");
+        updatedUserDto.setLastName("UpdatedLast");
+        
+        when(authService.updateProfile(eq(USER_ID), any(UpdateProfileRequest.class)))
+                .thenReturn(updatedUserDto);
+
+        // When & Then
+        mockMvc.perform(put("/api/auth/profile/{userId}", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Profile updated successfully"))
+                .andExpect(jsonPath("$.user.firstName").value("UpdatedFirst"))
+                .andExpect(jsonPath("$.user.lastName").value("UpdatedLast"));
+
+        verify(authService).updateProfile(eq(USER_ID), any(UpdateProfileRequest.class));
+    }
+
+    @Test
+    public void whenUpdateProfileWithWrongUserId_thenReturnsInternalServerError() throws Exception {
+        // Given
+        Integer wrongUserId = 999;
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFirstName("UpdatedFirst");
+
+        // When & Then
+        mockMvc.perform(put("/api/auth/profile/{userId}", wrongUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
+                .andExpect(jsonPath("$.message").value("You are not authorized to update this profile. You can only update your own."));
+
+        verify(authService, never()).updateProfile(any(), any());
+    }
+
+    @Test
+    public void whenUploadAvatar_thenReturnsSuccess() throws Exception {
+        // Given
+        MockMultipartFile avatarFile = new MockMultipartFile(
+                "avatar", 
+                "test-avatar.jpg", 
+                "image/jpeg", 
+                "test image content".getBytes()
+        );
+        
+        UserDto updatedUserDto = new UserDto();
+        updatedUserDto.setId(USER_ID);
+        updatedUserDto.setAvatarUrl("/avatars/avatar_user_1_123456789.jpg");
+        
+        when(authService.updateUserAvatar(eq(USER_ID), anyString()))
+                .thenReturn(updatedUserDto);
+
+        // When & Then
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(avatarFile)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Avatar uploaded successfully"))
+                .andExpect(jsonPath("$.user.avatarUrl").value("/avatars/avatar_user_1_123456789.jpg"));
+
+        verify(authService).updateUserAvatar(eq(USER_ID), anyString());
+    }
+
+    @Test
+    public void whenUploadEmptyAvatar_thenReturnsInternalServerError() throws Exception {
+        // Given
+        MockMultipartFile emptyFile = new MockMultipartFile(
+                "avatar", 
+                "empty.jpg", 
+                "image/jpeg", 
+                new byte[0]
+        );
+
+        // When & Then
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(emptyFile)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
+                .andExpect(jsonPath("$.message").value("No file uploaded"));
+
+        verify(authService, never()).updateUserAvatar(any(), any());
+    }
+
+    @Test
+    public void whenUploadAvatarWithWrongUserId_thenReturnsInternalServerError() throws Exception {
+        // Given
+        Integer wrongUserId = 999;
+        MockMultipartFile avatarFile = new MockMultipartFile(
+                "avatar", 
+                "test.jpg", 
+                "image/jpeg", 
+                "content".getBytes()
+        );
+
+        // When & Then
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", wrongUserId)
+                .file(avatarFile)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
+                .andExpect(jsonPath("$.message").value("You are not authorized to update this profile. You can only update your own."));
+
+        verify(authService, never()).updateUserAvatar(any(), any());
+    }
+
+    @Test
+    public void whenDeleteAvatar_thenReturnsSuccess() throws Exception {
+        // Given
+        UserDto userWithAvatar = new UserDto();
+        userWithAvatar.setId(USER_ID);
+        userWithAvatar.setAvatarUrl("/avatars/current_avatar.jpg");
+        
+        UserDto userWithoutAvatar = new UserDto();
+        userWithoutAvatar.setId(USER_ID);
+        userWithoutAvatar.setAvatarUrl(null);
+        
+        when(authService.getUserById(USER_ID)).thenReturn(userWithAvatar);
+        when(authService.updateUserAvatar(USER_ID, null)).thenReturn(userWithoutAvatar);
+
+        // When & Then
+        mockMvc.perform(delete("/api/auth/profile/{userId}/avatar", USER_ID)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Avatar deleted successfully"))
+                .andExpect(jsonPath("$.user.avatarUrl").isEmpty());
+
+        verify(authService).getUserById(USER_ID);
+        verify(authService).updateUserAvatar(USER_ID, null);
+    }
+
+    @Test
+    public void whenDeleteAvatarWithWrongUserId_thenReturnsInternalServerError() throws Exception {
+        // Given
+        Integer wrongUserId = 999;
+
+        // When & Then
+        mockMvc.perform(delete("/api/auth/profile/{userId}/avatar", wrongUserId)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
+                .andExpect(jsonPath("$.message").value("You are not authorized to update this profile. You can only update your own."));
+
+        verify(authService, never()).getUserById(any());
+        verify(authService, never()).updateUserAvatar(any(), any());
+    }
+
+    @Test
+    public void whenUpdateProfileWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
+        // Given
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFirstName("NewName");
+
+        // When & Then - no authentication provided (no .with() and no Authorization header)
+        mockMvc.perform(put("/api/auth/profile/{userId}", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+
+        verify(authService, never()).updateProfile(any(), any());
+    }
+
+    @Test
+    public void whenUploadAvatarWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
+        // Given
+        MockMultipartFile avatarFile = new MockMultipartFile(
+                "avatar", 
+                "test.jpg", 
+                "image/jpeg", 
+                "content".getBytes()
+        );
+
+        // When & Then - no authentication provided (no .with() and no Authorization header)
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(avatarFile))
+                .andExpect(status().isUnauthorized());
+
+        verify(authService, never()).updateUserAvatar(any(), any());
+    }
+
+    @Test
+    public void whenDeleteAvatarWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
+        // When & Then - no authentication provided (no .with() and no Authorization header)
+        mockMvc.perform(delete("/api/auth/profile/{userId}/avatar", USER_ID))
+                .andExpect(status().isUnauthorized());
+
+        verify(authService, never()).getUserById(any());
+        verify(authService, never()).updateUserAvatar(any(), any());
+    }
+
+    @Test
+    public void whenLoginWithMissingFields_thenReturnsBadRequest() throws Exception {
+        // Given
+        LoginRequest request = new LoginRequest();
+        request.setUsernameOrEmail("");
+        request.setPassword("");
+
+        // When & Then
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).logIn(any(LoginRequest.class));
+    }
+
+    @Test
+    public void whenUpdateProfileWithValidPasswordChange_thenReturnsSuccess() throws Exception {
+        // Given
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setCurrentPassword("oldpassword");
+        request.setNewPassword("newpassword123");
+        
+        when(authService.updateProfile(eq(USER_ID), any(UpdateProfileRequest.class)))
+                .thenReturn(testUserDto);
+
+        // When & Then
+        mockMvc.perform(put("/api/auth/profile/{userId}", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Profile updated successfully"));
+
+        verify(authService).updateProfile(eq(USER_ID), any(UpdateProfileRequest.class));
+    }
+
+    @Test
+    public void whenUpdateProfileWithInvalidData_thenReturnsBadRequest() throws Exception {
+        // Given
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFirstName("A");
+        request.setLastName("B");
+        request.setEmail("invalid-email");
+        request.setUsername("ab");
+        request.setPhoneNumber("123");
+        request.setNewPassword("123");
+
+        // When & Then
+        mockMvc.perform(put("/api/auth/profile/{userId}", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).updateProfile(any(), any());
+    }
+
+    @Test
+    public void whenUpdateProfileWithValidData_thenReturnsSuccess() throws Exception {
+        // Given
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFirstName("UpdatedFirst");
+        request.setLastName("UpdatedLast");
+        request.setEmail("updated@example.com");
+        request.setUsername("updateduser");
+        request.setPhoneNumber("1234567890");
+        
+        UserDto updatedUserDto = new UserDto();
+        updatedUserDto.setId(USER_ID);
+        updatedUserDto.setUsername("updateduser");
+        updatedUserDto.setFirstName("UpdatedFirst");
+        updatedUserDto.setLastName("UpdatedLast");
+        updatedUserDto.setEmail("updated@example.com");
+        updatedUserDto.setPhoneNumber("1234567890");
+        
+        when(authService.updateProfile(eq(USER_ID), any(UpdateProfileRequest.class)))
+                .thenReturn(updatedUserDto);
+
+        // When & Then
+        mockMvc.perform(put("/api/auth/profile/{userId}", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Profile updated successfully"))
+                .andExpect(jsonPath("$.user.firstName").value("UpdatedFirst"))
+                .andExpect(jsonPath("$.user.lastName").value("UpdatedLast"))
+                .andExpect(jsonPath("$.user.email").value("updated@example.com"))
+                .andExpect(jsonPath("$.user.username").value("updateduser"))
+                .andExpect(jsonPath("$.user.phoneNumber").value("1234567890"));
+
+        verify(authService).updateProfile(eq(USER_ID), any(UpdateProfileRequest.class));
+    }
 }

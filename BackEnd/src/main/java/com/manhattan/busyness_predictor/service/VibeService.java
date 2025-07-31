@@ -532,7 +532,7 @@ public class VibeService {
         
         // Try to find similar locations by type and zone
         if (baseType != null && baseZone != null) {
-            similar = locationRepository.findByType(baseType);
+            similar = locationRepository.findByType(baseType.toLowerCase());
             similar = similar.stream()
                     .filter(loc -> !loc.getId().equals(baseLocation.getId()))
                     .limit(limit)
@@ -541,7 +541,7 @@ public class VibeService {
 
         // If no results, try just by type
         if (similar.isEmpty() && baseType != null) {
-            similar = locationRepository.findByType(baseType);
+            similar = locationRepository.findByType(baseType.toLowerCase());
             similar = similar.stream()
                     .filter(loc -> !loc.getId().equals(baseLocation.getId()))
                     .limit(limit)

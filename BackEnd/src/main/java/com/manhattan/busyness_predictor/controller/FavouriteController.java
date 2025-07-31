@@ -21,6 +21,8 @@ import com.manhattan.busyness_predictor.model.Favourite;
 import com.manhattan.busyness_predictor.security.UserPrincipal;
 import com.manhattan.busyness_predictor.service.FavouriteService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/favourites")
 public class FavouriteController {
@@ -41,7 +43,7 @@ public class FavouriteController {
  
     // Add a venue to the user's favourites
     @PostMapping
-    public ResponseEntity<FavouriteDto> likeVenue(@RequestBody FavouriteRequest request, @AuthenticationPrincipal UserPrincipal currentUser) {
+    public ResponseEntity<FavouriteDto> likeVenue(@Valid @RequestBody FavouriteRequest request, @AuthenticationPrincipal UserPrincipal currentUser) {
         Integer venueId = request.getVenueId();
         Integer userId = currentUser.getId();
         System.out.println("🔍 [DEBUG] Adding favourite - User ID: " + userId + ", Venue ID: " + venueId);
