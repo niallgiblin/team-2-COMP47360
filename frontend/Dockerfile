@@ -11,7 +11,10 @@ RUN npm install
 # Copy the rest of your source code
 COPY . .
 
-# Build the app for production
+# Copy environment variables for build
+COPY .env .env
+
+# Build the app for production with environment variables
 RUN npm run build
 
 # ----------------------------------------
