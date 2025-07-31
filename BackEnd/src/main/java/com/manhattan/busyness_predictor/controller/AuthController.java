@@ -119,7 +119,7 @@ public class AuthController {
         }
 
         // Use the correct Docker container path
-        String avatarsDir = "/app/avatars/";
+        String avatarsDir = "/app/backend/avatars/";
         File dir = new File(avatarsDir);
         if (!dir.exists()) {
             boolean created = dir.mkdirs();
