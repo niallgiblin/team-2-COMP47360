@@ -46,6 +46,14 @@ cache_duration = 30 * 60  # 30 minutes cache duration
 pending_request = None
 request_lock = threading.Lock()
 
+@app.route("/ping")
+def ping():
+    """
+    Simple ping endpoint for basic connectivity testing.
+    Always returns 200 if the service is running.
+    """
+    return jsonify({"status": "ok", "message": "pong"}), 200
+
 @app.route("/health")
 def health():
     """
@@ -53,20 +61,28 @@ def health():
     Returns 200 if initialized, 503 otherwise.
     This is used by Docker's healthcheck.
     """
-    if initialized:
-        return jsonify({
-            "status": "healthy",
-            "success": True,
-            "models_loaded": {
-                "dnn": len(dnn_models),
-                "lstm": 1 if busyness_module and busyness_module.final_lstm_model is not None else 0
-            }
-        }), 200
-    else:
+    try:
+        if initialized:
+            return jsonify({
+                "status": "healthy",
+                "success": True,
+                "models_loaded": {
+                    "dnn": len(dnn_models),
+                    "lstm": 1 if busyness_module and busyness_module.final_lstm_model is not None else 0
+                }
+            }), 200
+        else:
+            return jsonify({
+                "status": "unhealthy",
+                "success": False,
+                "error": initialization_error or "Service is initializing."
+            }), 503
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}", exc_info=True)
         return jsonify({
             "status": "unhealthy",
             "success": False,
-            "error": initialization_error or "Service is initializing."
+            "error": f"Health check error: {str(e)}"
         }), 503
 
 @app.route("/busyness", methods=['GET'])
@@ -197,9 +213,17 @@ def initialize_service():
         else:
             initialization_error = "Model loading function failed or loaded no models."
             logger.error("❌ Service initialization failed: %s", initialization_error)
+            # Don't set initialized to False here, let it remain False
     except Exception as e:
         initialization_error = f"Initialization error: {str(e)}"
         logger.error("❌ Service initialization failed: %s", initialization_error, exc_info=True)
+        # Don't set initialized to False here, let it remain False
+    
+    # Log final status
+    if initialized:
+        logger.info("✅ Service is ready to handle requests")
+    else:
+        logger.error("❌ Service is not ready - initialization failed")
 
 # Initialize the service when the module is imported
 if __name__ == "__main__":

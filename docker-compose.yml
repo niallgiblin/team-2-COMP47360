@@ -25,10 +25,19 @@ services:
       - app-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
     volumes:
       - ./BackEnd/avatars:/app/backend/avatars
 
@@ -124,20 +133,19 @@ services:
     networks:
       - app-network
     healthcheck:
-      # Tighter healthcheck to get faster feedback on the crash-loop.
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 6
-      start_period: 15s # Give 15s to start. If it fails after this, we know it's crashing.
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:
-          memory: 3G  # Increased from 2G for TensorFlow models
-          cpus: '2.5'  # Increased from 2.0 for parallel inference
+          memory: 4G
+          cpus: '2.0'
         reservations:
-          memory: 2G  # Guaranteed memory for model loading
-          cpus: '1.0'  # Guaranteed CPU for responsiveness
+          memory: 2G
+          cpus: '1.0'
     restart: unless-stopped
 
 networks:
