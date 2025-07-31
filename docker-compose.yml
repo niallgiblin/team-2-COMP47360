@@ -63,20 +63,18 @@ services:
     build:
       context: ./frontend
     container_name: urban-gala-frontend
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-      - /app/node_modules
-    command: npm run dev
+    ports:
+      - "80:80"
     environment:
-      - HOST=0.0.0.0
       - VITE_GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
       - VITE_API_BASE_URL=/api
       - VITE_LLM_API_URL=/api/chat
     depends_on:
       - backend
+      - llm-service
     networks:
       - app-network
+    restart: unless-stopped
 
   llm-service:
     build:
@@ -140,21 +138,6 @@ services:
         reservations:
           memory: 2G  # Guaranteed memory for model loading
           cpus: '1.0'  # Guaranteed CPU for responsiveness
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    container_name: urban-gala-nginx
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - backend
-      - llm-service
-    networks:
-      - app-network
     restart: unless-stopped
 
 networks:
