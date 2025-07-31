@@ -62,6 +62,14 @@ services:
       retries: 10
       interval: 10s
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
     volumes:
       - db_data:/var/lib/mysql
       - ./BackEnd/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
