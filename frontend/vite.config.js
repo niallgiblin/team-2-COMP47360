@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: true, // Allow connections from network
     port: 5173, // Default vite port
+    allowedHosts: ['frontend', 'localhost', '0.0.0.0'], // Allow nginx container
     proxy: {
       // Proxy LLM service requests FIRST
       '/api/chat': {
