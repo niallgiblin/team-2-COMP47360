@@ -68,31 +68,29 @@ export const BusynessProvider = ({ children }) => {
   const fetchAllData = async () => {
     // If we have recent data (less than 30 minutes old), use cached data
     if (lastFetchTime && Date.now() - lastFetchTime < 30 * 60 * 1000) {
-      
+      console.log('Using cached busyness data (age:', Math.round((Date.now() - lastFetchTime) / 1000), 'seconds)');
       return { busynessData, predictionData, venueData };
     }
 
     // If we're already loading, wait for the existing request
-    if (isLoading) {
-      
-      if (pendingRequestRef.current) {
-        try {
-          const result = await pendingRequestRef.current;
-          return result;
-        } catch (error) {
-          console.error('Error waiting for existing fetch:', error);
-        }
+    if (isLoading && pendingRequestRef.current) {
+      console.log('Waiting for existing busyness fetch to complete');
+      try {
+        const result = await pendingRequestRef.current;
+        return result;
+      } catch (error) {
+        console.error('Error waiting for existing fetch:', error);
       }
     }
 
-    // Check if there's already a pending request
+    // Check if there's already a global pending request
     if (window.venueBusynessFetchPromise) {
-      
+      console.log('Waiting for global busyness fetch to complete');
       try {
         const result = await window.venueBusynessFetchPromise;
         return result;
       } catch (error) {
-        console.error('Error waiting for existing fetch:', error);
+        console.error('Error waiting for global fetch:', error);
       }
     }
 
@@ -121,7 +119,7 @@ export const BusynessProvider = ({ children }) => {
         
 
         
-        // Process busyness data
+        // Process busyness data - backend returns it in 'busyness' field
         let processedBusynessData = [];
         if (busynessData.busyness) {
           processedBusynessData = Object.entries(busynessData.busyness).map(([locationId, busynessValue]) => ({
@@ -130,11 +128,10 @@ export const BusynessProvider = ({ children }) => {
           }));
         }
         
-        // Process prediction data (forecast)
+        // Process prediction data (forecast) - backend returns it in 'predictions' field
         let processedPredictionData = [];
         if (busynessData.predictions) {
           processedPredictionData = busynessData.predictions;
-  
         }
         
         // Process venue data
@@ -205,7 +202,7 @@ export const BusynessProvider = ({ children }) => {
         
         return { 
           busynessData: processedBusynessData, 
-          predictionData: busynessData.predictions || [],
+          predictionData: processedPredictionData,
           venueData: enrichedVenues
         };
       } catch (err) {

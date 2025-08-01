@@ -42,6 +42,8 @@ initialized = False
 initialization_error = None
 cache = None
 cache_timestamp = None
+forecast_cache = None
+forecast_cache_timestamp = None
 cache_duration = 30 * 60  # 30 minutes cache duration
 pending_request = None
 request_lock = threading.Lock()
@@ -53,6 +55,38 @@ def ping():
     Always returns 200 if the service is running.
     """
     return jsonify({"status": "ok", "message": "pong"}), 200
+
+@app.route("/cache/clear", methods=['POST'])
+def clear_cache():
+    """
+    Clear the busyness and forecast cache.
+    This forces the service to regenerate predictions and forecasts on the next request.
+    """
+    global cache, cache_timestamp, forecast_cache, forecast_cache_timestamp
+    cache = None
+    cache_timestamp = None
+    forecast_cache = None
+    forecast_cache_timestamp = None
+    logger.info("Cache cleared - next request will generate fresh predictions and forecasts")
+    return jsonify({"success": True, "message": "Cache cleared successfully"}), 200
+
+@app.route("/cache/status")
+def cache_status():
+    """
+    Get the current cache status.
+    """
+    current_time = time.time()
+    predictions_cached = cache and cache_timestamp and (current_time - cache_timestamp) < cache_duration
+    forecast_cached = forecast_cache and forecast_cache_timestamp and (current_time - forecast_cache_timestamp) < cache_duration
+    
+    return jsonify({
+        "success": True,
+        "predictions_cached": predictions_cached,
+        "forecast_cached": forecast_cached,
+        "cache_duration_seconds": cache_duration,
+        "predictions_cache_age": current_time - cache_timestamp if cache_timestamp else None,
+        "forecast_cache_age": current_time - forecast_cache_timestamp if forecast_cache_timestamp else None
+    }), 200
 
 @app.route("/health")
 def health():
@@ -98,20 +132,26 @@ def get_busyness():
             "details": initialization_error 
         }), 503
 
-    global cache, cache_timestamp, pending_request
+    global cache, cache_timestamp, forecast_cache, forecast_cache_timestamp, pending_request
     
-    # Check if we have valid cached data
+    # Check if we have valid cached data for both predictions and forecast
     current_time = time.time()
-    if cache and cache_timestamp and (current_time - cache_timestamp) < cache_duration:
-        logger.info("Returning cached busyness predictions (cache valid for %d more seconds)", 
+    predictions_cached = cache and cache_timestamp and (current_time - cache_timestamp) < cache_duration
+    forecast_cached = forecast_cache and forecast_cache_timestamp and (current_time - forecast_cache_timestamp) < cache_duration
+    
+    if predictions_cached and forecast_cached:
+        logger.info("Returning cached busyness predictions and forecast (cache valid for %d more seconds)", 
                    cache_duration - (current_time - cache_timestamp))
-        
-        # Also return forecast (not cached for now)
+        return jsonify({"success": True, "predictions": cache, "forecast": forecast_cache, "cached": True})
+    elif predictions_cached:
+        logger.info("Returning cached predictions but generating new forecast")
+        # Generate new forecast
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Returning cached response with forecast: %s", forecast)
+        forecast_cache = forecast
+        forecast_cache_timestamp = current_time
         return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
 
     # Check if there's already a pending request
@@ -168,10 +208,12 @@ def get_busyness():
         cache_timestamp = current_time
         logger.info("Busyness predictions generated and cached for %d seconds", cache_duration)
 
-        # Also return forecast
+        # Generate and cache forecast
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Generated forecast: %s", forecast)
+        forecast_cache = forecast
+        forecast_cache_timestamp = current_time
+        logger.info("🔍 [DEBUG] Generated and cached forecast: %s", forecast)
 
         response = {
             "success": True,

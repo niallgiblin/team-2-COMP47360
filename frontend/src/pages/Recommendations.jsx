@@ -56,7 +56,7 @@ export default function Recommendations() {
     };
 
     loadData();
-  }, [isInitialized, cachedVenues, fetchAllData]);
+  }, [isInitialized, cachedVenues]); // Remove fetchAllData from dependencies
 
   // Update venues when cached data changes
   useEffect(() => {

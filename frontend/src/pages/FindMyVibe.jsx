@@ -73,7 +73,7 @@ export default function FindMyVibe() {
       }
     };
     loadBusynessData();
-  }, [fetchAllData]); // Add fetchAllData to dependencies
+  }, []); // Empty dependency array - only run once on mount
 
 
 

@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,19 +53,23 @@ public class VibeService {
     private final LocationRepository locationRepository;
     private final LocationService locationService;
 
-    // Cache for search results
+    // Enhanced caching with request deduplication
     private final Map<String, CachedSearchResult> searchCache = new ConcurrentHashMap<>();
     private static final long CACHE_DURATION_SECONDS = 300; // 5 minutes
 
-    // Cache for busyness data
+    // Busyness data caching with request deduplication
     private Map<String, Double> busynessCache = new HashMap<>();
     private Instant lastBusynessFetch = null;
     private static final long BUSYNESS_CACHE_DURATION_SECONDS = 600; // 10 minutes
+    private volatile CompletableFuture<Map<String, Double>> pendingBusynessRequest = null;
+    private final Object busynessLock = new Object();
 
-    // Cache for map data
+    // Map data caching with request deduplication
     private VibeSearchResponse cachedMapData = null;
     private Instant lastMapDataFetch = null;
     private static final long MAP_DATA_CACHE_DURATION_SECONDS = 300; // 5 minutes
+    private volatile CompletableFuture<VibeSearchResponse> pendingMapDataRequest = null;
+    private final Object mapDataLock = new Object();
 
     public VibeService(RestTemplateBuilder restTemplateBuilder,
             LocationRepository locationRepository,
@@ -157,46 +162,76 @@ public class VibeService {
             logger.info("Using cached map data");
             return cachedMapData;
         }
-        
-        List<Location> allLocations = locationService.getAllLocations();
 
-        // Fetch the full report including live and forecast data
-        Map<String, Object> busynessReport = fetchBusynessReport();
-        logger.info("🔍 [DEBUG] Raw busyness report: {}", busynessReport);
-
-        // Extract live busyness from the predictions field
-        Map<String, Double> liveBusyness = new HashMap<>();
-        if (busynessReport.containsKey("predictions")) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> predictions = (Map<String, Object>) busynessReport.get("predictions");
-            for (Map.Entry<String, Object> entry : predictions.entrySet()) {
-                if (entry.getValue() instanceof Number) {
-                    liveBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+        // Check if there's already a pending request
+        synchronized (mapDataLock) {
+            if (pendingMapDataRequest != null) {
+                logger.info("Waiting for existing map data request to complete");
+                try {
+                    return pendingMapDataRequest.get();
+                } catch (Exception e) {
+                    logger.error("Error waiting for existing map data request: {}", e.getMessage());
+                    pendingMapDataRequest = null;
                 }
             }
+
+            // Create new request
+            pendingMapDataRequest = CompletableFuture.supplyAsync(() -> {
+                List<Location> allLocations = locationService.getAllLocations();
+
+                // Fetch the full report including live and forecast data
+                Map<String, Object> busynessReport = fetchBusynessReport();
+                logger.info("🔍 [DEBUG] Raw busyness report: {}", busynessReport);
+
+                // Extract live busyness from the predictions field
+                Map<String, Double> liveBusyness = new HashMap<>();
+                if (busynessReport.containsKey("predictions")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> predictions = (Map<String, Object>) busynessReport.get("predictions");
+                    for (Map.Entry<String, Object> entry : predictions.entrySet()) {
+                        if (entry.getValue() instanceof Number) {
+                            liveBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                        }
+                    }
+                }
+                logger.info("🔍 [DEBUG] Extracted live busyness: {}", liveBusyness);
+
+                // Extract forecast (time series) for each zone
+                Object rawForecast = busynessReport.get("forecast");
+                logger.info("🔍 [DEBUG] Raw forecast data: {}", rawForecast);
+                List<Object> predictions = new ArrayList<>();
+                if (rawForecast instanceof List) {
+                    predictions = (List<Object>) rawForecast;
+                    logger.info("🔍 [DEBUG] Processed predictions list: {}", predictions);
+                }
+
+                String explanation = "Complete location data for map view.";
+                double confidence = 1.0;
+
+                VibeSearchResponse response = buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
+                
+                // Cache the response
+                cachedMapData = response;
+                lastMapDataFetch = Instant.now();
+                logger.info("Cached map data for {} seconds", MAP_DATA_CACHE_DURATION_SECONDS);
+                
+                return response;
+            });
+
+            // Clear the pending request after completion
+            pendingMapDataRequest.whenComplete((result, throwable) -> {
+                synchronized (mapDataLock) {
+                    pendingMapDataRequest = null;
+                }
+            });
+
+            try {
+                return pendingMapDataRequest.get();
+            } catch (Exception e) {
+                logger.error("Error in map data request: {}", e.getMessage());
+                return cachedMapData != null ? cachedMapData : new VibeSearchResponse();
+            }
         }
-        logger.info("🔍 [DEBUG] Extracted live busyness: {}", liveBusyness);
-
-        // Extract forecast (time series) for each zone
-        Object rawForecast = busynessReport.get("forecast");
-        logger.info("🔍 [DEBUG] Raw forecast data: {}", rawForecast);
-        List<Object> predictions = new ArrayList<>();
-        if (rawForecast instanceof List) {
-            predictions = (List<Object>) rawForecast;
-            logger.info("🔍 [DEBUG] Processed predictions list: {}", predictions);
-        }
-
-        String explanation = "Complete location data for map view.";
-        double confidence = 1.0;
-
-        VibeSearchResponse response = buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
-        
-        // Cache the response
-        cachedMapData = response;
-        lastMapDataFetch = Instant.now();
-        logger.info("Cached map data for {} seconds", MAP_DATA_CACHE_DURATION_SECONDS);
-        
-        return response;
     }
 
     public Map<String, Double> getLiveBusyness() {
@@ -208,21 +243,57 @@ public class VibeService {
             return busynessCache;
         }
 
-        try {
-            Map<String, Object> report = fetchBusynessReport();
-            if (report != null && report.containsKey("busyness")) {
-                @SuppressWarnings("unchecked")
-                Map<String, Double> newBusyness = (Map<String, Double>) report.get("busyness");
-                busynessCache = newBusyness;
-                lastBusynessFetch = Instant.now();
-                logger.info("Updated busyness cache with {} entries", newBusyness.size());
-                return newBusyness;
+        // Check if there's already a pending request
+        synchronized (busynessLock) {
+            if (pendingBusynessRequest != null) {
+                logger.info("Waiting for existing busyness request to complete");
+                try {
+                    return pendingBusynessRequest.get();
+                } catch (Exception e) {
+                    logger.error("Error waiting for existing busyness request: {}", e.getMessage());
+                    pendingBusynessRequest = null;
+                }
             }
-        } catch (Exception e) {
-            logger.error("Failed to fetch busyness data: {}", e.getMessage());
+
+            // Create new request
+            pendingBusynessRequest = CompletableFuture.supplyAsync(() -> {
+                try {
+                    Map<String, Object> report = fetchBusynessReport();
+                    if (report != null && report.containsKey("predictions")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> predictions = (Map<String, Object>) report.get("predictions");
+                        Map<String, Double> newBusyness = new HashMap<>();
+                        for (Map.Entry<String, Object> entry : predictions.entrySet()) {
+                            if (entry.getValue() instanceof Number) {
+                                newBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                            }
+                        }
+                        busynessCache = newBusyness;
+                        lastBusynessFetch = Instant.now();
+                        logger.info("Updated busyness cache with {} entries", newBusyness.size());
+                        return newBusyness;
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to fetch busyness data: {}", e.getMessage());
+                }
+                
+                return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
+            });
+
+            // Clear the pending request after completion
+            pendingBusynessRequest.whenComplete((result, throwable) -> {
+                synchronized (busynessLock) {
+                    pendingBusynessRequest = null;
+                }
+            });
+
+            try {
+                return pendingBusynessRequest.get();
+            } catch (Exception e) {
+                logger.error("Error in busyness request: {}", e.getMessage());
+                return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
+            }
         }
-        
-        return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
     }
 
     private boolean isMLServiceAvailable() {
