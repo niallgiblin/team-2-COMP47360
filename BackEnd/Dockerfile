@@ -34,6 +34,9 @@ RUN addgroup --system --gid 1001 spring && \
 # Copy the built JAR from the 'builder' stage and set ownership at the same time.
 COPY --from=builder --chown=spring:spring /app/target/*.jar app.jar
 
+# Create avatars directory and set proper permissions
+RUN mkdir -p /app/avatars && chown -R spring:spring /app/avatars && chmod 755 /app/avatars
+
 # Switch to the non-root user for added security.
 USER spring
 

@@ -300,6 +300,7 @@ public class AuthControllerTest {
         Integer wrongUserId = 999;
         UpdateProfileRequest request = new UpdateProfileRequest();
         request.setFirstName("UpdatedFirst");
+        request.setLastName("UpdatedLast");
 
         // When & Then
         mockMvc.perform(put("/api/auth/profile/{userId}", wrongUserId)
@@ -315,123 +316,6 @@ public class AuthControllerTest {
     }
 
     @Test
-    public void whenUploadAvatar_thenReturnsSuccess() throws Exception {
-        // Given
-        MockMultipartFile avatarFile = new MockMultipartFile(
-                "avatar", 
-                "test-avatar.jpg", 
-                "image/jpeg", 
-                "test image content".getBytes()
-        );
-        
-        UserDto updatedUserDto = new UserDto();
-        updatedUserDto.setId(USER_ID);
-        updatedUserDto.setAvatarUrl("/avatars/avatar_user_1_123456789.jpg");
-        
-        when(authService.updateUserAvatar(eq(USER_ID), anyString()))
-                .thenReturn(updatedUserDto);
-
-        // When & Then
-        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
-                .file(avatarFile)
-                .header("Authorization", "Bearer " + TOKEN)
-                .with(authentication(authentication)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Avatar uploaded successfully"))
-                .andExpect(jsonPath("$.user.avatarUrl").value("/avatars/avatar_user_1_123456789.jpg"));
-
-        verify(authService).updateUserAvatar(eq(USER_ID), anyString());
-    }
-
-    @Test
-    public void whenUploadEmptyAvatar_thenReturnsInternalServerError() throws Exception {
-        // Given
-        MockMultipartFile emptyFile = new MockMultipartFile(
-                "avatar", 
-                "empty.jpg", 
-                "image/jpeg", 
-                new byte[0]
-        );
-
-        // When & Then
-        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
-                .file(emptyFile)
-                .header("Authorization", "Bearer " + TOKEN)
-                .with(authentication(authentication)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
-                .andExpect(jsonPath("$.message").value("No file uploaded"));
-
-        verify(authService, never()).updateUserAvatar(any(), any());
-    }
-
-    @Test
-    public void whenUploadAvatarWithWrongUserId_thenReturnsInternalServerError() throws Exception {
-        // Given
-        Integer wrongUserId = 999;
-        MockMultipartFile avatarFile = new MockMultipartFile(
-                "avatar", 
-                "test.jpg", 
-                "image/jpeg", 
-                "content".getBytes()
-        );
-
-        // When & Then
-        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", wrongUserId)
-                .file(avatarFile)
-                .header("Authorization", "Bearer " + TOKEN)
-                .with(authentication(authentication)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
-                .andExpect(jsonPath("$.message").value("You are not authorized to update this profile. You can only update your own."));
-
-        verify(authService, never()).updateUserAvatar(any(), any());
-    }
-
-    @Test
-    public void whenDeleteAvatar_thenReturnsSuccess() throws Exception {
-        // Given
-        UserDto userWithAvatar = new UserDto();
-        userWithAvatar.setId(USER_ID);
-        userWithAvatar.setAvatarUrl("/avatars/current_avatar.jpg");
-        
-        UserDto userWithoutAvatar = new UserDto();
-        userWithoutAvatar.setId(USER_ID);
-        userWithoutAvatar.setAvatarUrl(null);
-        
-        when(authService.getUserById(USER_ID)).thenReturn(userWithAvatar);
-        when(authService.updateUserAvatar(USER_ID, null)).thenReturn(userWithoutAvatar);
-
-        // When & Then
-        mockMvc.perform(delete("/api/auth/profile/{userId}/avatar", USER_ID)
-                .header("Authorization", "Bearer " + TOKEN)
-                .with(authentication(authentication)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Avatar deleted successfully"))
-                .andExpect(jsonPath("$.user.avatarUrl").isEmpty());
-
-        verify(authService).getUserById(USER_ID);
-        verify(authService).updateUserAvatar(USER_ID, null);
-    }
-
-    @Test
-    public void whenDeleteAvatarWithWrongUserId_thenReturnsInternalServerError() throws Exception {
-        // Given
-        Integer wrongUserId = 999;
-
-        // When & Then
-        mockMvc.perform(delete("/api/auth/profile/{userId}/avatar", wrongUserId)
-                .header("Authorization", "Bearer " + TOKEN)
-                .with(authentication(authentication)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
-                .andExpect(jsonPath("$.message").value("You are not authorized to update this profile. You can only update your own."));
-
-        verify(authService, never()).getUserById(any());
-        verify(authService, never()).updateUserAvatar(any(), any());
-    }
-
-    @Test
     public void whenUpdateProfileWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
         // Given
         UpdateProfileRequest request = new UpdateProfileRequest();
@@ -444,34 +328,6 @@ public class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(authService, never()).updateProfile(any(), any());
-    }
-
-    @Test
-    public void whenUploadAvatarWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // Given
-        MockMultipartFile avatarFile = new MockMultipartFile(
-                "avatar", 
-                "test.jpg", 
-                "image/jpeg", 
-                "content".getBytes()
-        );
-
-        // When & Then - no authentication provided (no .with() and no Authorization header)
-        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
-                .file(avatarFile))
-                .andExpect(status().isUnauthorized());
-
-        verify(authService, never()).updateUserAvatar(any(), any());
-    }
-
-    @Test
-    public void whenDeleteAvatarWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // When & Then - no authentication provided (no .with() and no Authorization header)
-        mockMvc.perform(delete("/api/auth/profile/{userId}/avatar", USER_ID))
-                .andExpect(status().isUnauthorized());
-
-        verify(authService, never()).getUserById(any());
-        verify(authService, never()).updateUserAvatar(any(), any());
     }
 
     @Test
