@@ -299,6 +299,7 @@ export default function FindMyVibe() {
         <Box
           component="form"
           onSubmit={handleFormSubmit}
+          data-testid="vibe-search-form"
           sx={{
             display: "flex",
             gap: 2,
@@ -313,6 +314,7 @@ export default function FindMyVibe() {
             variant="outlined"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            data-testid="vibe-input"
             sx={{
               backgroundColor: "#fff",
               borderRadius: 1,
@@ -327,6 +329,7 @@ export default function FindMyVibe() {
             variant="contained"
             type="submit"
             disabled={isLoading}
+            data-testid="search-vibe-button"
             sx={{
               background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
               height: "56px",

@@ -83,7 +83,7 @@ export default function Recommendations() {
 
   return (
     <PageWrapper>
-      <Box sx={{ maxWidth: 1000, mx: 'auto', mb: 10, px: 2 }}>
+      <Box sx={{ maxWidth: 1000, mx: 'auto', mb: 10, px: 2 }} data-testid="recommendations-container">
         <Typography
           variant="h4"
           align="center"
