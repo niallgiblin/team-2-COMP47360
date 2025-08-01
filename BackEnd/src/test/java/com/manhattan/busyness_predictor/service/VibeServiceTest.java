@@ -422,4 +422,4 @@ public class VibeServiceTest {
         assertNull(location);
         verify(locationRepository).findById(999);
     }
-}
+

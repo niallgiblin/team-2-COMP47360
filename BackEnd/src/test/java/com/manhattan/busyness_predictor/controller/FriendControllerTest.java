@@ -442,7 +442,7 @@ public class FriendControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
-
+      
         verify(friendService, never()).addFriendByUsername(any(), any());
     }
 
