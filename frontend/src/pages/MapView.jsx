@@ -1246,6 +1246,7 @@ export default function MapView() {
                 variant="outlined"
                 value={manualStart}
                 onChange={(e) => setManualStart(e.target.value)}
+                data-testid="location-filter"
                 sx={{
                   width: 280,
                   "& .MuiInputBase-input": { color: "white" },
@@ -1453,6 +1454,7 @@ export default function MapView() {
         {/* Map Section */}
         <Box
           ref={mapSectionRef}
+          data-testid="map-container"
           sx={{
             minHeight: "550px",
             flexGrow: 1,

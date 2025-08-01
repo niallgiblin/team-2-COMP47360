@@ -1,0 +1,43 @@
+{
+    "timestamp": "2025-08-01_15-55-27",
+    "project": "Urban Gala",
+    "testResults": {
+        "Cypress E2E Tests": {
+            "status": "PASS",
+            "duration": 35,
+            "totalTests": 6,
+            "passed": 6,
+            "failed": 0,
+            "successRate": 100,
+            "details": "6 tests passed, 0 failed"
+        },
+        "Backend Tests": {
+            "status": "PASS",
+            "duration": 9,
+            "totalTests": 50,
+            "passed": 50,
+            "failed": 0,
+            "successRate": 100,
+            "details": "50 tests passed, 0 failed"
+        },
+        "Frontend Unit Tests": {
+            "status": "PASS",
+            "duration": 9,
+            "totalTests": 15,
+            "passed": 15,
+            "failed": 0,
+            "successRate": 100,
+            "details": "15 tests passed, 0 failed"
+        }
+    },
+    "summary": {
+        "totalSuites": 3,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "totalTests": 71,
+        "totalPassed": 71,
+        "totalFailed": 0,
+        "totalDuration": 53
+    }
+}

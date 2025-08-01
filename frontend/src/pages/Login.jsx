@@ -59,7 +59,7 @@ export default function Login() {
         </Typography>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }} data-testid="error-message">
             {error}
           </Alert>
         )}
@@ -68,6 +68,7 @@ export default function Login() {
           component="form"
           onSubmit={handleSubmit}
           sx={{ display: "flex", flexDirection: "column", gap: 3 }}
+          data-testid="login-form"
         >
           <TextField
             label="Username or Email"
@@ -79,6 +80,7 @@ export default function Login() {
             onChange={handleChange}
             disabled={loading}
             placeholder="Enter your username or email"
+            data-testid="username-input"
           />
 
           <TextField
@@ -91,6 +93,7 @@ export default function Login() {
             onChange={handleChange}
             disabled={loading}
             placeholder="Enter your password"
+            data-testid="password-input"
           />
 
           <Button
@@ -98,6 +101,7 @@ export default function Login() {
             variant="contained"
             size="large"
             disabled={loading}
+            data-testid="login-button"
             sx={{
               background: "linear-gradient(to right, #3ABEFF, #FF4ECD)",
               fontWeight: "bold",

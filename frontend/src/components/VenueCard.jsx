@@ -86,6 +86,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
 
     return (
       <Card
+      data-testid="venue-card"
       sx={{
           position: 'relative',
           overflow: 'visible',
@@ -154,6 +155,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
         {/* Display the venue's name as a heading */}
         <Typography 
           variant="h6" 
+          data-testid="venue-name"
           sx={{ 
             fontSize: '1.25rem',
             lineHeight: variant === 'compact' ? 1.3 : 1.6,
@@ -213,6 +215,7 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                 })}
                 <Typography 
                   variant="body2" 
+                  data-testid="venue-rating"
                   sx={{ 
                     color: '#fff', 
                     ml: 1 

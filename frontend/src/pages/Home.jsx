@@ -15,7 +15,7 @@ export default function Home() {
 
       {/* Main content area */}
       <PageWrapper>
-      <Container sx={{ pt: 2, pb: 8, mt: -8 }}>
+      <Container sx={{ pt: 2, pb: 8, mt: -8 }} data-testid="hero-section">
         <Box
           sx={{
             display: 'flex',

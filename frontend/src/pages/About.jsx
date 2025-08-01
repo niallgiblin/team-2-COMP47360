@@ -56,6 +56,7 @@ function ReadMoreBio({ bio }) {
 export default function About() {
     return (
         <Box
+            data-testid="about-content"
             sx={{
                 backgroundColor: '#000',
                 color: '#fff',

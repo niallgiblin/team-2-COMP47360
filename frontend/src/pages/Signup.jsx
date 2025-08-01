@@ -112,7 +112,7 @@ export default function Signup() {
         </Typography>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
+          <Alert severity="error" sx={{ mb: 3 }} data-testid="error-message">
             {error}
           </Alert>
         )}
@@ -121,6 +121,7 @@ export default function Signup() {
           component="form"
           onSubmit={handleSubmit}
           sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+          data-testid="signup-form"
         >
           {/* Personal Information */}
           <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
@@ -137,6 +138,7 @@ export default function Signup() {
               onChange={handleChange}
               disabled={loading}
               placeholder="Enter your first name"
+              data-testid="firstName-input"
             />
             <TextField
               label="Last Name"
@@ -147,6 +149,7 @@ export default function Signup() {
               onChange={handleChange}
               disabled={loading}
               placeholder="Enter your last name"
+              data-testid="lastName-input"
             />
           </Box>
 
@@ -176,6 +179,7 @@ export default function Signup() {
             disabled={loading}
             placeholder="Choose a unique username"
             helperText="Must be at least 3 characters"
+            data-testid="username-input"
           />
 
           <TextField
@@ -188,6 +192,7 @@ export default function Signup() {
             onChange={handleChange}
             disabled={loading}
             placeholder="Enter your email address"
+            data-testid="email-input"
           />
 
           <TextField
@@ -201,6 +206,7 @@ export default function Signup() {
             disabled={loading}
             placeholder="Create a strong password"
             helperText="Must be at least 6 characters"
+            data-testid="password-input"
           />
 
           <TextField
@@ -213,6 +219,7 @@ export default function Signup() {
             onChange={handleChange}
             disabled={loading}
             placeholder="Confirm your password"
+            data-testid="confirm-password-input"
           />
 
           <Button
@@ -220,6 +227,7 @@ export default function Signup() {
             variant="contained"
             size="large"
             disabled={loading}
+            data-testid="signup-button"
             sx={{
               mt: 2,
               background: 'linear-gradient(to right, #3ABEFF, #FF4ECD)',
