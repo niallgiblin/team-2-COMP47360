@@ -64,7 +64,7 @@ export default function Profile() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ mb: 10 }}>
+    <Container maxWidth="md" sx={{ mb: 10 }} data-testid="profile-form">
       <Paper
         elevation={4}
         sx={{

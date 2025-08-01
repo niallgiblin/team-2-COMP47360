@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+docs/
+README.md
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files (except .env which is needed)
+.env.*
+!.env
+
+# Node modules (if any root-level ones existed)
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp 

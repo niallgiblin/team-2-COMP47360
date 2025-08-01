@@ -41,6 +41,7 @@ export default function NavBar() {
         <>
             <AppBar
                 position="sticky"
+                data-testid="nav-bar"
                 sx={{
                     backgroundColor: '#000000',
                     boxShadow: 'none',
@@ -116,11 +117,35 @@ export default function NavBar() {
                                 flexWrap: 'wrap',
                             }}
                         >
-                            {navItems.map((item) => (
+                            {navItems.map((item) => {
+                                // Create specific test IDs for each nav item
+                                let testId;
+                                switch (item.label) {
+                                    case 'Home':
+                                        testId = 'home-link';
+                                        break;
+                                    case 'Find Your Vibe':
+                                        testId = 'find-vibe-link';
+                                        break;
+                                    case 'What\'s Hot':
+                                        testId = 'recommendations-link';
+                                        break;
+                                    case 'Map View':
+                                        testId = 'map-link';
+                                        break;
+                                    case 'About':
+                                        testId = 'about-link';
+                                        break;
+                                    default:
+                                        testId = `${item.label.toLowerCase().replace(/\s+/g, '-')}-link`;
+                                }
+                                
+                                return (
                                 <Button
                                     key={item.to}
                                     component={Link}
                                     to={item.to}
+                                    data-testid={testId}
                                     sx={{
                                         position: 'relative',
                                         fontWeight: 'bold',
@@ -146,13 +171,15 @@ export default function NavBar() {
                                 >
                                     {item.label}
                                 </Button>
-                            ))}
+                            );
+                        })}
 
                             {isAuthenticated ? (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }} data-testid="user-menu">
                                     <IconButton
                                         component={Link}
                                         to="/profile"
+                                        data-testid="profile-link"
                                         sx={{ color: '#FFFFFF' }}
                                     >
                                         <AccountCircleIcon fontSize="medium" />
@@ -172,6 +199,7 @@ export default function NavBar() {
                                         clearAcceptedFriends();
                                         logout();
                                     }}
+                                    data-testid="logout-button"
                                     sx={{
                                         fontWeight: 'bold',
                                         color: '#FFFFFF',
@@ -191,6 +219,7 @@ export default function NavBar() {
                                     <Button
                                         component={Link}
                                         to="/login"
+                                        data-testid="login-link"
                                         sx={{
                                             fontWeight: 'bold',
                                             textTransform: 'uppercase',
@@ -208,6 +237,7 @@ export default function NavBar() {
                                     <Button
                                         component={Link}
                                         to="/signup"
+                                        data-testid="signup-link"
                                         sx={{
                                             fontWeight: 'bold',
                                             textTransform: 'uppercase',
@@ -260,20 +290,45 @@ export default function NavBar() {
                 }}
             >
                 <List>
-                    {navItems.map((item) => (
-                    <ListItem
-                        button
-                        key={item.to}
-                        component={Link}
-                        to={item.to}
-                        onClick={() => setDrawerOpen(false)}
-                        sx={{ py: 1.5, borderBottom: '1px solid #333' }}
-                    >
-                        <Typography sx={{ ...drawerLinkStyles }}>
-                            {item.label}
-                        </Typography>
-                    </ListItem>
-                    ))}
+                    {navItems.map((item) => {
+                        // Create specific test IDs for each nav item (same as desktop)
+                        let testId;
+                        switch (item.label) {
+                            case 'Home':
+                                testId = 'home-link';
+                                break;
+                            case 'Find Your Vibe':
+                                testId = 'find-vibe-link';
+                                break;
+                            case 'What\'s Hot':
+                                testId = 'recommendations-link';
+                                break;
+                            case 'Map View':
+                                testId = 'map-link';
+                                break;
+                            case 'About':
+                                testId = 'about-link';
+                                break;
+                            default:
+                                testId = `${item.label.toLowerCase().replace(/\s+/g, '-')}-link`;
+                        }
+                        
+                        return (
+                        <ListItem
+                            button
+                            key={item.to}
+                            component={Link}
+                            to={item.to}
+                            data-testid={testId}
+                            onClick={() => setDrawerOpen(false)}
+                            sx={{ py: 1.5, borderBottom: '1px solid #333' }}
+                        >
+                            <Typography sx={{ ...drawerLinkStyles }}>
+                                {item.label}
+                            </Typography>
+                        </ListItem>
+                    );
+                })}
 
                     {isAuthenticated ? (
                         <>
@@ -281,6 +336,7 @@ export default function NavBar() {
                             button
                             component={Link}
                             to="/profile"
+                            data-testid="profile-link"
                             onClick={() => setDrawerOpen(false)}
                             sx={{ py: 1.5, borderBottom: '1px solid #333' }}
                         >
@@ -305,6 +361,7 @@ export default function NavBar() {
 
                         <ListItem
                         button
+                        data-testid="logout-button"
                         onClick={() => {
                             clearLikes();
                             clearPlan();
