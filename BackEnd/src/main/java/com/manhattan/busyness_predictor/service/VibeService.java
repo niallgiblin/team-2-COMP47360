@@ -162,7 +162,6 @@ public class VibeService {
 
         // Fetch the full report including live and forecast data
         Map<String, Object> busynessReport = fetchBusynessReport();
-        logger.info("🔍 [DEBUG] Raw busyness report: {}", busynessReport);
 
         // Extract live busyness from the predictions field
         Map<String, Double> liveBusyness = new HashMap<>();
@@ -175,15 +174,12 @@ public class VibeService {
                 }
             }
         }
-        logger.info("🔍 [DEBUG] Extracted live busyness: {}", liveBusyness);
 
         // Extract forecast (time series) for each zone
         Object rawForecast = busynessReport.get("forecast");
-        logger.info("🔍 [DEBUG] Raw forecast data: {}", rawForecast);
         List<Object> predictions = new ArrayList<>();
         if (rawForecast instanceof List) {
             predictions = (List<Object>) rawForecast;
-            logger.info("🔍 [DEBUG] Processed predictions list: {}", predictions);
         }
 
         String explanation = "Complete location data for map view.";
@@ -210,9 +206,15 @@ public class VibeService {
 
         try {
             Map<String, Object> report = fetchBusynessReport();
-            if (report != null && report.containsKey("busyness")) {
+            if (report != null && report.containsKey("predictions")) {
                 @SuppressWarnings("unchecked")
-                Map<String, Double> newBusyness = (Map<String, Double>) report.get("busyness");
+                Map<String, Object> predictions = (Map<String, Object>) report.get("predictions");
+                Map<String, Double> newBusyness = new HashMap<>();
+                for (Map.Entry<String, Object> entry : predictions.entrySet()) {
+                    if (entry.getValue() instanceof Number) {
+                        newBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                    }
+                }
                 busynessCache = newBusyness;
                 lastBusynessFetch = Instant.now();
                 logger.info("Updated busyness cache with {} entries", newBusyness.size());
@@ -230,7 +232,6 @@ public class VibeService {
             ResponseEntity<String> response = restTemplate.getForEntity(llmServiceUrl + "/health", String.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
-            logger.warn("ML service health check failed: {}", e.getMessage());
             return false;
         }
     }
@@ -246,8 +247,7 @@ public class VibeService {
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
-            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", llmServiceUrl,
-                    vibeDescription, maxResults);
+            // Calling ML service for recommendations
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     llmServiceUrl + "/search",
@@ -257,8 +257,6 @@ public class VibeService {
                     });
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                logger.info("ML service responded with status {} and body: {}", response.getStatusCode(),
-                        response.getBody());
                 List<Location> mlLocations = parseLocationsFromMLResponse(response.getBody());
 
                 // ENRICH: Replace each ML location with the full DB version if available
@@ -273,19 +271,13 @@ public class VibeService {
                             dbLoc.setSimilarity(loc.getSimilarity());
                             enriched.add(dbLoc);
                         } else {
-                            logger.warn("ML location with id {} not found in DB. Using ML version.", locId);
                             enriched.add(loc);
                         }
                     } else {
-                        logger.warn("ML location missing id. Using ML version: {}", loc);
                         enriched.add(loc);
                     }
                 }
-                logger.info("Enriched ML locations with DB data. Returning {} locations.", enriched.size());
                 return enriched;
-            } else {
-                logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}",
-                        response.getStatusCode(), response.getBody());
             }
         } catch (RestClientException e) {
             logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
@@ -296,13 +288,10 @@ public class VibeService {
     // Parses the ML service response map into Location objects
     private List<Location> parseLocationsFromMLResponse(Map<String, Object> mlResponse) {
         if (mlResponse == null || !mlResponse.containsKey("results")) {
-            logger.warn("ML response is null or does not contain 'results' key. Returning empty list.");
             return Collections.emptyList();
         }
         Object resultsObj = mlResponse.get("results");
         if (resultsObj == null || !(resultsObj instanceof List<?>)) {
-            logger.warn("ML response 'results' is not a list. Type: {}. Returning empty list.",
-                    resultsObj == null ? "null" : resultsObj.getClass().getName());
             return Collections.emptyList();
         }
 
@@ -412,25 +401,20 @@ public class VibeService {
 
     private Map<String, Object> fetchBusynessReport() {
         try {
-            String busynessServiceUrl = "http://busyness-service:5000";
-            RestTemplate restTemplate = new RestTemplate();
-            
-            // Use the correct endpoint
+            // Use the existing restTemplate instance instead of creating a new one
             ResponseEntity<Map> response = restTemplate.getForEntity(
                 busynessServiceUrl + "/busyness",
                 Map.class
             );
             
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                logger.info("🔍 [DEBUG] Raw busyness report: {}", body);
-                
-                // The busyness service returns data in the 'predictions' field
+                            Map<String, Object> body = response.getBody();
+            
+            // The busyness service returns data in the 'predictions' field
                 @SuppressWarnings("unchecked")
                 Map<String, Object> predictions = (Map<String, Object>) body.get("predictions");
                 
                 if (predictions != null) {
-                    logger.info("🔍 [DEBUG] Extracted predictions: {}", predictions);
                     return body; // Return the full response including predictions and forecast
                 }
             }
@@ -438,9 +422,6 @@ public class VibeService {
             logger.error("Error fetching busyness report: {}", e.getMessage());
         }
         
-        logger.info("🔍 [DEBUG] Raw busyness report: {}");
-        logger.info("🔍 [DEBUG] Extracted live busyness: {}");
-        logger.info("🔍 [DEBUG] Raw forecast data: null");
         return new HashMap<>();
     }
 
