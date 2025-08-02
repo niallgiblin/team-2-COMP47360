@@ -34,4 +34,4 @@ USER appuser
 
 # Command to run the application using waitress with more workers
 # Use waitress, a production-ready server that is more stable with TensorFlow than Gunicorn.
-CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "--threads=8", "app:app"]
+CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "--threads=32", "--connection-limit=50", "--max-request-body-size=10485760", "app:app"]

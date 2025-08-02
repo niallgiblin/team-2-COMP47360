@@ -4,6 +4,8 @@ import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import threading
+from collections import deque
+import asyncio
 
 # Import and inspect the predictor module
 try:
@@ -37,7 +39,7 @@ logger = logging.getLogger("app")
 app = Flask(__name__)
 CORS(app)
 
-# Global state with improved caching
+# Global state with improved caching and circuit breaker
 initialized = False
 initialization_error = None
 cache = None
@@ -47,6 +49,49 @@ forecast_cache_timestamp = None
 cache_duration = 30 * 60  # 30 minutes cache duration
 pending_request = None
 request_lock = threading.Lock()
+
+# Circuit breaker state
+circuit_breaker_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+circuit_breaker_failures = 0
+circuit_breaker_threshold = 5
+circuit_breaker_timeout = 60  # seconds
+circuit_breaker_last_failure = None
+
+# Request queue management
+request_queue = deque(maxlen=20)  # Limit queue size
+queue_lock = threading.Lock()
+
+def is_circuit_breaker_open():
+    """Check if circuit breaker is open"""
+    global circuit_breaker_state, circuit_breaker_last_failure, circuit_breaker_timeout
+    
+    if circuit_breaker_state == "OPEN":
+        if time.time() - circuit_breaker_last_failure > circuit_breaker_timeout:
+            circuit_breaker_state = "HALF_OPEN"
+            logger.info("Circuit breaker moved to HALF_OPEN state")
+        else:
+            return True
+    return False
+
+def record_circuit_breaker_failure():
+    """Record a failure for circuit breaker"""
+    global circuit_breaker_failures, circuit_breaker_state, circuit_breaker_last_failure
+    
+    circuit_breaker_failures += 1
+    circuit_breaker_last_failure = time.time()
+    
+    if circuit_breaker_failures >= circuit_breaker_threshold:
+        circuit_breaker_state = "OPEN"
+        logger.warning(f"Circuit breaker OPENED after {circuit_breaker_failures} failures")
+    
+def record_circuit_breaker_success():
+    """Record a success for circuit breaker"""
+    global circuit_breaker_failures, circuit_breaker_state
+    
+    circuit_breaker_failures = 0
+    if circuit_breaker_state == "HALF_OPEN":
+        circuit_breaker_state = "CLOSED"
+        logger.info("Circuit breaker CLOSED after successful request")
 
 @app.route("/ping")
 def ping():
@@ -85,7 +130,9 @@ def cache_status():
         "forecast_cached": forecast_cached,
         "cache_duration_seconds": cache_duration,
         "predictions_cache_age": current_time - cache_timestamp if cache_timestamp else None,
-        "forecast_cache_age": current_time - forecast_cache_timestamp if forecast_cache_timestamp else None
+        "forecast_cache_age": current_time - forecast_cache_timestamp if forecast_cache_timestamp else None,
+        "circuit_breaker_state": circuit_breaker_state,
+        "queue_size": len(request_queue)
     }), 200
 
 @app.route("/health")
@@ -103,7 +150,9 @@ def health():
                 "models_loaded": {
                     "dnn": len(dnn_models),
                     "lstm": 1 if busyness_module and busyness_module.final_lstm_model is not None else 0
-                }
+                },
+                "circuit_breaker_state": circuit_breaker_state,
+                "queue_size": len(request_queue)
             }), 200
         else:
             return jsonify({
@@ -132,6 +181,23 @@ def get_busyness():
             "details": initialization_error 
         }), 503
 
+    # Check circuit breaker
+    if is_circuit_breaker_open():
+        return jsonify({
+            "success": False,
+            "error": "Service temporarily unavailable due to high load. Please try again later.",
+            "circuit_breaker_state": circuit_breaker_state
+        }), 503
+
+    # Check queue size
+    with queue_lock:
+        if len(request_queue) >= 15:  # Allow some buffer
+            return jsonify({
+                "success": False,
+                "error": "Service is experiencing high load. Please try again later.",
+                "queue_size": len(request_queue)
+            }), 503
+
     global cache, cache_timestamp, forecast_cache, forecast_cache_timestamp, pending_request
     
     # Check if we have valid cached data for both predictions and forecast
@@ -140,22 +206,29 @@ def get_busyness():
     forecast_cached = forecast_cache and forecast_cache_timestamp and (current_time - forecast_cache_timestamp) < cache_duration
     
     if predictions_cached and forecast_cached:
+        record_circuit_breaker_success()
         return jsonify({"success": True, "predictions": cache, "forecast": forecast_cache, "cached": True})
     elif predictions_cached:
         # Generate new forecast
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
-        from predictor.busyness import forecast_busyness_for_all_zones
-        forecast = forecast_busyness_for_all_zones(lat, lon)
-        forecast_cache = forecast
-        forecast_cache_timestamp = current_time
-        return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
+        try:
+            from predictor.busyness import forecast_busyness_for_all_zones
+            forecast = forecast_busyness_for_all_zones(lat, lon)
+            forecast_cache = forecast
+            forecast_cache_timestamp = current_time
+            record_circuit_breaker_success()
+            return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
+        except Exception as e:
+            record_circuit_breaker_failure()
+            logger.error(f"Error generating forecast: {str(e)}")
+            return jsonify({"success": False, "error": "Failed to generate forecast"}), 500
 
     # Check if there's already a pending request
     with request_lock:
         if pending_request:
             try:
-                result = pending_request.result()
+                result = pending_request.result(timeout=60)  # 60 second timeout
                 return jsonify(result)
             except Exception as e:
                 logger.error("Error waiting for existing request: %s", e)
@@ -218,10 +291,12 @@ def get_busyness():
                 pending_request.set_result(response)
                 pending_request = None
         
+        record_circuit_breaker_success()
         return jsonify(response)
 
     except Exception as e:
         logger.error(f"Error in /busyness endpoint: {str(e)}", exc_info=True)
+        record_circuit_breaker_failure()
         
         # Set the error for any waiting requests
         with request_lock:
