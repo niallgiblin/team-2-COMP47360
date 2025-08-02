@@ -87,40 +87,33 @@ def get_busyness():
     # Check if we have valid cached data
     current_time = time.time()
     if cache and cache_timestamp and (current_time - cache_timestamp) < cache_duration:
-        logger.info("Returning cached busyness predictions (cache valid for %d more seconds)", 
-                   cache_duration - (current_time - cache_timestamp))
-        
         # Also return forecast (not cached for now)
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Returning cached response with forecast: %s", forecast)
         return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
 
-    # Check if there's already a pending request
-    with request_lock:
-        if pending_request:
-            logger.info("Waiting for existing request to complete")
-            try:
-                result = pending_request.result()
-                return jsonify(result)
-            except Exception as e:
-                logger.error("Error waiting for existing request: %s", e)
-                pending_request = None
-        
-        # Create new request
-        import concurrent.futures
-        pending_request = concurrent.futures.Future()
+            # Check if there's already a pending request
+        with request_lock:
+            if pending_request:
+                try:
+                    result = pending_request.result()
+                    return jsonify(result)
+                except Exception as e:
+                    logger.error("Error waiting for existing request: %s", e)
+                    pending_request = None
+            
+            # Create new request
+            import concurrent.futures
+            pending_request = concurrent.futures.Future()
     
     try:
         # Use provided lat/lon or default to a central Manhattan location (Times Square)
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
         
-        logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
         predictions = predict_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Raw predictions from model: %s", predictions)
 
         # Normalize the raw scores to a 0-1 range for frontend display.
         valid_scores = [score for score in predictions.values() if score is not None]
@@ -145,17 +138,13 @@ def get_busyness():
                     # All scores are the same, so they can be considered neutral (0.5)
                     normalized_predictions[location_id] = 0.5
 
-        logger.info("🔍 [DEBUG] Normalized predictions: %s", normalized_predictions)
-
         # Update cache
         cache = normalized_predictions
         cache_timestamp = current_time
-        logger.info("Busyness predictions generated and cached for %d seconds", cache_duration)
 
         # Also return forecast
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Generated forecast: %s", forecast)
 
         response = {
             "success": True,
@@ -163,7 +152,6 @@ def get_busyness():
             "forecast": forecast,
             "cached": False
         }
-        logger.info("🔍 [DEBUG] Final response: %s", response)
         
         # Set the result for any waiting requests
         with request_lock:
