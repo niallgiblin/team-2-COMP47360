@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,19 +56,15 @@ public class VibeService {
     private final Map<String, CachedSearchResult> searchCache = new ConcurrentHashMap<>();
     private static final long CACHE_DURATION_SECONDS = 300; // 5 minutes
 
-    // Busyness data caching with request deduplication
+    // Busyness data caching
     private Map<String, Double> busynessCache = new HashMap<>();
     private Instant lastBusynessFetch = null;
     private static final long BUSYNESS_CACHE_DURATION_SECONDS = 600; // 10 minutes
-    private volatile CompletableFuture<Map<String, Double>> pendingBusynessRequest = null;
-    private final Object busynessLock = new Object();
 
-    // Map data caching with request deduplication
+    // Map data caching
     private VibeSearchResponse cachedMapData = null;
     private Instant lastMapDataFetch = null;
     private static final long MAP_DATA_CACHE_DURATION_SECONDS = 300; // 5 minutes
-    private volatile CompletableFuture<VibeSearchResponse> pendingMapDataRequest = null;
-    private final Object mapDataLock = new Object();
 
     public VibeService(RestTemplateBuilder restTemplateBuilder,
             LocationRepository locationRepository,
