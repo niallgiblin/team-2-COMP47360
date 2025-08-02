@@ -89,7 +89,6 @@ public class VibeService {
         String cacheKey = generateCacheKey(vibeDescription, maxResults);
         CachedSearchResult cached = searchCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
-            logger.info("Returning cached search result for: {}", vibeDescription);
             return cached.getResponse();
         }
 
@@ -153,85 +152,47 @@ public class VibeService {
 
     @SuppressWarnings("unchecked")
     public VibeSearchResponse getMapData() {
-        logger.info("Fetching all locations and busyness data for map.");
-        
         // Check if we have cached map data
         if (lastMapDataFetch != null && 
             Instant.now().isBefore(lastMapDataFetch.plusSeconds(MAP_DATA_CACHE_DURATION_SECONDS)) &&
             cachedMapData != null) {
-            logger.info("Using cached map data");
             return cachedMapData;
         }
+        
+        List<Location> allLocations = locationService.getAllLocations();
 
-        // Check if there's already a pending request
-        synchronized (mapDataLock) {
-            if (pendingMapDataRequest != null) {
-                logger.info("Waiting for existing map data request to complete");
-                try {
-                    return pendingMapDataRequest.get();
-                } catch (Exception e) {
-                    logger.error("Error waiting for existing map data request: {}", e.getMessage());
-                    pendingMapDataRequest = null;
+        // Fetch the full report including live and forecast data
+        Map<String, Object> busynessReport = fetchBusynessReport();
+
+        // Extract live busyness from the predictions field
+        Map<String, Double> liveBusyness = new HashMap<>();
+        if (busynessReport.containsKey("predictions")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> predictions = (Map<String, Object>) busynessReport.get("predictions");
+            for (Map.Entry<String, Object> entry : predictions.entrySet()) {
+                if (entry.getValue() instanceof Number) {
+                    liveBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
                 }
-            }
-
-            // Create new request
-            pendingMapDataRequest = CompletableFuture.supplyAsync(() -> {
-                List<Location> allLocations = locationService.getAllLocations();
-
-                // Fetch the full report including live and forecast data
-                Map<String, Object> busynessReport = fetchBusynessReport();
-                logger.info("🔍 [DEBUG] Raw busyness report: {}", busynessReport);
-
-                // Extract live busyness from the predictions field
-                Map<String, Double> liveBusyness = new HashMap<>();
-                if (busynessReport.containsKey("predictions")) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> predictions = (Map<String, Object>) busynessReport.get("predictions");
-                    for (Map.Entry<String, Object> entry : predictions.entrySet()) {
-                        if (entry.getValue() instanceof Number) {
-                            liveBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
-                        }
-                    }
-                }
-                logger.info("🔍 [DEBUG] Extracted live busyness: {}", liveBusyness);
-
-                // Extract forecast (time series) for each zone
-                Object rawForecast = busynessReport.get("forecast");
-                logger.info("🔍 [DEBUG] Raw forecast data: {}", rawForecast);
-                List<Object> predictions = new ArrayList<>();
-                if (rawForecast instanceof List) {
-                    predictions = (List<Object>) rawForecast;
-                    logger.info("🔍 [DEBUG] Processed predictions list: {}", predictions);
-                }
-
-                String explanation = "Complete location data for map view.";
-                double confidence = 1.0;
-
-                VibeSearchResponse response = buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
-                
-                // Cache the response
-                cachedMapData = response;
-                lastMapDataFetch = Instant.now();
-                logger.info("Cached map data for {} seconds", MAP_DATA_CACHE_DURATION_SECONDS);
-                
-                return response;
-            });
-
-            // Clear the pending request after completion
-            pendingMapDataRequest.whenComplete((result, throwable) -> {
-                synchronized (mapDataLock) {
-                    pendingMapDataRequest = null;
-                }
-            });
-
-            try {
-                return pendingMapDataRequest.get();
-            } catch (Exception e) {
-                logger.error("Error in map data request: {}", e.getMessage());
-                return cachedMapData != null ? cachedMapData : new VibeSearchResponse();
             }
         }
+
+        // Extract forecast (time series) for each zone
+        Object rawForecast = busynessReport.get("forecast");
+        List<Object> predictions = new ArrayList<>();
+        if (rawForecast instanceof List) {
+            predictions = (List<Object>) rawForecast;
+        }
+
+        String explanation = "Complete location data for map view.";
+        double confidence = 1.0;
+
+        VibeSearchResponse response = buildResponse(allLocations, explanation, confidence, liveBusyness, predictions);
+        
+        // Cache the response
+        cachedMapData = response;
+        lastMapDataFetch = Instant.now();
+        
+        return response;
     }
 
     public Map<String, Double> getLiveBusyness() {
@@ -239,61 +200,29 @@ public class VibeService {
         if (lastBusynessFetch != null && 
             Instant.now().isBefore(lastBusynessFetch.plusSeconds(BUSYNESS_CACHE_DURATION_SECONDS)) &&
             !busynessCache.isEmpty()) {
-            logger.info("Using cached busyness data");
             return busynessCache;
         }
 
-        // Check if there's already a pending request
-        synchronized (busynessLock) {
-            if (pendingBusynessRequest != null) {
-                logger.info("Waiting for existing busyness request to complete");
-                try {
-                    return pendingBusynessRequest.get();
-                } catch (Exception e) {
-                    logger.error("Error waiting for existing busyness request: {}", e.getMessage());
-                    pendingBusynessRequest = null;
-                }
-            }
-
-            // Create new request
-            pendingBusynessRequest = CompletableFuture.supplyAsync(() -> {
-                try {
-                    Map<String, Object> report = fetchBusynessReport();
-                    if (report != null && report.containsKey("predictions")) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> predictions = (Map<String, Object>) report.get("predictions");
-                        Map<String, Double> newBusyness = new HashMap<>();
-                        for (Map.Entry<String, Object> entry : predictions.entrySet()) {
-                            if (entry.getValue() instanceof Number) {
-                                newBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
-                            }
-                        }
-                        busynessCache = newBusyness;
-                        lastBusynessFetch = Instant.now();
-                        logger.info("Updated busyness cache with {} entries", newBusyness.size());
-                        return newBusyness;
+        try {
+            Map<String, Object> report = fetchBusynessReport();
+            if (report != null && report.containsKey("predictions")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> predictions = (Map<String, Object>) report.get("predictions");
+                Map<String, Double> newBusyness = new HashMap<>();
+                for (Map.Entry<String, Object> entry : predictions.entrySet()) {
+                    if (entry.getValue() instanceof Number) {
+                        newBusyness.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
                     }
-                } catch (Exception e) {
-                    logger.error("Failed to fetch busyness data: {}", e.getMessage());
                 }
-                
-                return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
-            });
-
-            // Clear the pending request after completion
-            pendingBusynessRequest.whenComplete((result, throwable) -> {
-                synchronized (busynessLock) {
-                    pendingBusynessRequest = null;
-                }
-            });
-
-            try {
-                return pendingBusynessRequest.get();
-            } catch (Exception e) {
-                logger.error("Error in busyness request: {}", e.getMessage());
-                return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
+                busynessCache = newBusyness;
+                lastBusynessFetch = Instant.now();
+                return newBusyness;
             }
+        } catch (Exception e) {
+            logger.error("Failed to fetch busyness data: {}", e.getMessage());
         }
+        
+        return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
     }
 
     private boolean isMLServiceAvailable() {
@@ -317,9 +246,6 @@ public class VibeService {
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
-            logger.info("Calling ML service at {}/search with vibe: '{}' and maxResults: {}", llmServiceUrl,
-                    vibeDescription, maxResults);
-
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     llmServiceUrl + "/search",
                     HttpMethod.POST,
@@ -328,8 +254,6 @@ public class VibeService {
                     });
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                logger.info("ML service responded with status {} and body: {}", response.getStatusCode(),
-                        response.getBody());
                 List<Location> mlLocations = parseLocationsFromMLResponse(response.getBody());
 
                 // ENRICH: Replace each ML location with the full DB version if available
@@ -344,19 +268,13 @@ public class VibeService {
                             dbLoc.setSimilarity(loc.getSimilarity());
                             enriched.add(dbLoc);
                         } else {
-                            logger.warn("ML location with id {} not found in DB. Using ML version.", locId);
                             enriched.add(loc);
                         }
                     } else {
-                        logger.warn("ML location missing id. Using ML version: {}", loc);
                         enriched.add(loc);
                     }
                 }
-                logger.info("Enriched ML locations with DB data. Returning {} locations.", enriched.size());
                 return enriched;
-            } else {
-                logger.warn("ML service call failed or returned empty body. Status: {}, Body: {}",
-                        response.getStatusCode(), response.getBody());
             }
         } catch (RestClientException e) {
             logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
@@ -367,13 +285,10 @@ public class VibeService {
     // Parses the ML service response map into Location objects
     private List<Location> parseLocationsFromMLResponse(Map<String, Object> mlResponse) {
         if (mlResponse == null || !mlResponse.containsKey("results")) {
-            logger.warn("ML response is null or does not contain 'results' key. Returning empty list.");
             return Collections.emptyList();
         }
         Object resultsObj = mlResponse.get("results");
         if (resultsObj == null || !(resultsObj instanceof List<?>)) {
-            logger.warn("ML response 'results' is not a list. Type: {}. Returning empty list.",
-                    resultsObj == null ? "null" : resultsObj.getClass().getName());
             return Collections.emptyList();
         }
 
