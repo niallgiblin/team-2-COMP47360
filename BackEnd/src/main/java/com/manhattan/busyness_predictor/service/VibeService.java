@@ -84,7 +84,6 @@ public class VibeService {
         String cacheKey = generateCacheKey(vibeDescription, maxResults);
         CachedSearchResult cached = searchCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
-            logger.info("Returning cached search result for: {}", vibeDescription);
             return cached.getResponse();
         }
 
@@ -135,7 +134,6 @@ public class VibeService {
     }
 
     public VibeSearchResponse getTrendingWithBusyness() {
-        logger.info("Fetching top 5 trending locations with busyness data.");
         // getTrendingLocations() is already limited to 5 in LocationService
         List<Location> trendingLocations = locationService.getTrendingLocations();
         Map<String, Double> busynessData = getLiveBusyness();
