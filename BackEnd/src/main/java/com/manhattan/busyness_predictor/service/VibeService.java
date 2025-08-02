@@ -483,25 +483,21 @@ public class VibeService {
 
     private Map<String, Object> fetchBusynessReport() {
         try {
-            String busynessServiceUrl = "http://busyness-service:5000";
-            RestTemplate restTemplate = new RestTemplate();
-            
-            // Use the correct endpoint
-            ResponseEntity<Map> response = restTemplate.getForEntity(
-                busynessServiceUrl + "/busyness",
-                Map.class
-            );
-            
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    busynessServiceUrl + "/busyness",
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                logger.info("🔍 [DEBUG] Raw busyness report: {}", body);
                 
                 // The busyness service returns data in the 'predictions' field
                 @SuppressWarnings("unchecked")
                 Map<String, Object> predictions = (Map<String, Object>) body.get("predictions");
                 
                 if (predictions != null) {
-                    logger.info("🔍 [DEBUG] Extracted predictions: {}", predictions);
                     return body; // Return the full response including predictions and forecast
                 }
             }
@@ -509,9 +505,6 @@ public class VibeService {
             logger.error("Error fetching busyness report: {}", e.getMessage());
         }
         
-        logger.info("🔍 [DEBUG] Raw busyness report: {}");
-        logger.info("🔍 [DEBUG] Extracted live busyness: {}");
-        logger.info("🔍 [DEBUG] Raw forecast data: null");
         return new HashMap<>();
     }
 

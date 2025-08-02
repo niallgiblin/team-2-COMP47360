@@ -140,11 +140,8 @@ def get_busyness():
     forecast_cached = forecast_cache and forecast_cache_timestamp and (current_time - forecast_cache_timestamp) < cache_duration
     
     if predictions_cached and forecast_cached:
-        logger.info("Returning cached busyness predictions and forecast (cache valid for %d more seconds)", 
-                   cache_duration - (current_time - cache_timestamp))
         return jsonify({"success": True, "predictions": cache, "forecast": forecast_cache, "cached": True})
     elif predictions_cached:
-        logger.info("Returning cached predictions but generating new forecast")
         # Generate new forecast
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
@@ -157,7 +154,6 @@ def get_busyness():
     # Check if there's already a pending request
     with request_lock:
         if pending_request:
-            logger.info("Waiting for existing request to complete")
             try:
                 result = pending_request.result()
                 return jsonify(result)
@@ -174,9 +170,7 @@ def get_busyness():
         lat = request.args.get('lat', default=40.7580, type=float)
         lon = request.args.get('lon', default=-73.9855, type=float)
         
-        logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
         predictions = predict_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Raw predictions from model: %s", predictions)
 
         # Normalize the raw scores to a 0-1 range for frontend display.
         valid_scores = [score for score in predictions.values() if score is not None]
@@ -201,19 +195,15 @@ def get_busyness():
                     # All scores are the same, so they can be considered neutral (0.5)
                     normalized_predictions[location_id] = 0.5
 
-        logger.info("🔍 [DEBUG] Normalized predictions: %s", normalized_predictions)
-
         # Update cache
         cache = normalized_predictions
         cache_timestamp = current_time
-        logger.info("Busyness predictions generated and cached for %d seconds", cache_duration)
 
         # Generate and cache forecast
         from predictor.busyness import forecast_busyness_for_all_zones
         forecast = forecast_busyness_for_all_zones(lat, lon)
         forecast_cache = forecast
         forecast_cache_timestamp = current_time
-        logger.info("🔍 [DEBUG] Generated and cached forecast: %s", forecast)
 
         response = {
             "success": True,
@@ -221,7 +211,6 @@ def get_busyness():
             "forecast": forecast,
             "cached": False
         }
-        logger.info("🔍 [DEBUG] Final response: %s", response)
         
         # Set the result for any waiting requests
         with request_lock:

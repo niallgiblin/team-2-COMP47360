@@ -32,9 +32,7 @@ public class FavouriteController {
     @GetMapping
     public ResponseEntity<List<FavouriteDto>> getFavourites(@AuthenticationPrincipal UserPrincipal currentUser) {
         Integer userId = currentUser.getId();
-        System.out.println("🔍 [DEBUG] Getting favourites for user ID: " + userId);
         List<Favourite> list = favouriteService.getFavouritesByUser(userId);
-        System.out.println("🔍 [DEBUG] Found " + list.size() + " favourites for user " + userId);
         List<FavouriteDto> dtoList = list.stream().map(FavouriteDto::fromFavourite).collect(Collectors.toList());
         return ResponseEntity.ok(dtoList);
     }
@@ -44,10 +42,8 @@ public class FavouriteController {
     public ResponseEntity<FavouriteDto> likeVenue(@RequestBody FavouriteRequest request, @AuthenticationPrincipal UserPrincipal currentUser) {
         Integer venueId = request.getVenueId();
         Integer userId = currentUser.getId();
-        System.out.println("🔍 [DEBUG] Adding favourite - User ID: " + userId + ", Venue ID: " + venueId);
         Favourite fav = favouriteService.addFavourite(userId, venueId);
         FavouriteDto favDto = FavouriteDto.fromFavourite(fav);
-        System.out.println("🔍 [DEBUG] Successfully added favourite with ID: " + fav.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(favDto);
     }
  
@@ -55,9 +51,7 @@ public class FavouriteController {
     @DeleteMapping("/{venueId}")
     public ResponseEntity<Void> unlikeVenue(@PathVariable Integer venueId, @AuthenticationPrincipal UserPrincipal currentUser) {
         Integer userId = currentUser.getId();
-        System.out.println("🔍 [DEBUG] Removing favourite - User ID: " + userId + ", Venue ID: " + venueId);
         favouriteService.removeFavourite(userId, venueId);
-        System.out.println("🔍 [DEBUG] Successfully removed favourite");
         return ResponseEntity.noContent().build();
     }
 }
