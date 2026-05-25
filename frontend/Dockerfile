@@ -1,36 +1,26 @@
-# Use the official Node image to build the app
+# Stage 1: Build
 FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install dependencies first (using package*.json)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# Copy the rest of your source code
 COPY . .
 
-EXPOSE 5173 24678
+ARG VITE_API_BASE_URL=/api
+ARG VITE_LLM_API_URL=/api/chat
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_LLM_API_URL=$VITE_LLM_API_URL
 
-CMD ["npm", "run", "dev"]
+RUN npm run build
 
-# ----------------------------------------
+# Stage 2: Runtime
+FROM nginx:alpine
 
-# Use a smaller image to run the app
-# FROM node:20-alpine AS runner
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Set working directory
-# WORKDIR /app
+EXPOSE 80
 
-# Install only vite globally to run the preview server
-# RUN npm install -g vite
-
-# Copy built files from the builder stage
-# COPY --from=builder /app/dist ./dist
-
-# Default Vite preview port
-# EXPOSE 4173
-
-# Serve the built app using Vite’s preview server
-# CMD ["vite", "preview", "--host"]
+CMD ["nginx", "-g", "daemon off;"]
