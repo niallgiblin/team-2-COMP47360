@@ -43,10 +43,10 @@ public class VibeService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${llm.service.url:http://llm-service:5000}")
+    @Value("${llm.service.url}")
     private String llmServiceUrl;
 
-    @Value("${busyness.service.url:http://busyness-service:5000}")
+    @Value("${busyness.service.url}")
     private String busynessServiceUrl;
 
     private final LocationRepository locationRepository;
