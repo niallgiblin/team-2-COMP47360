@@ -66,4 +66,42 @@ These placeholders are baseline evidence, not Phase 1 fixes.
 
 ## Requirement Traceability
 
-<!-- Populated in plan 01-03 task 3 -->
+### v0.1 coverage summary
+
+Based on [.planning/REQUIREMENTS.md](../.planning/REQUIREMENTS.md) as of 2026-05-25:
+
+| Metric | Count |
+|--------|-------|
+| **54 total** v0.1 requirements | 54 |
+| **54 mapped** to roadmap phases | 54 |
+| **0 unmapped** | 0 |
+
+Every item in `.planning/codebase/CONCERNS.md` maps to at least one requirement and phase via the traceability table in `.planning/REQUIREMENTS.md` and phase concern coverage in `.planning/ROADMAP.md`.
+
+### Phase 1 plan-to-requirement mapping
+
+| Plan | Deliverable | Requirement IDs |
+|------|-------------|-----------------|
+| `01-01` | Repository metadata ownership (`.gitattributes`, `.gitignore`, `.dockerignore`, `scripts/run-tests.sh` redirect) | ART-01, TEST-01 |
+| `01-02` | Artifact manifest (`docs/artifacts.md`), checksum verifier (`scripts/verify-artifacts.sh`), setup links | ART-02, ART-03, ART-04 |
+| `01-03` | Baseline verification matrix (`docs/baseline-verification.md`) and traceability policy | ART-01, ART-02, ART-03, ART-04, TEST-01, TEST-06 |
+
+### Concern coverage (Phase 1)
+
+| Concern area (from `.planning/codebase/CONCERNS.md`) | Phase 1 response | Requirement IDs |
+|------------------------------------------------------|------------------|-----------------|
+| Large generated and model artifacts in the working tree | Git LFS policy, artifact manifest, checksum table, metadata gate checks | ART-01, ART-02, ART-03, ART-04 |
+| Missing baseline test matrix before remediation | Tiered matrix in this document (required metadata vs known gaps vs manual vs placeholders) | TEST-01 |
+| Missing full concern-to-phase traceability | 54/54 requirement mapping preserved; summary policy below | TEST-06 |
+
+### Plan summary writing policy (D-15)
+
+Every `*-SUMMARY.md` written by GSD plan executors **must** include:
+
+1. **Requirement IDs actually changed** — copy from the plan's `requirements` frontmatter and note which IDs were verified vs merely referenced.
+2. **Commands run** — list verification commands executed (prefer `rtk`-prefixed project form) with pass/fail outcome.
+3. **Known gaps observed** — document any failing or skipped checks from this baseline matrix without reclassifying them as passing Phase 1 gates.
+4. **Links to changed files** — reference generated documentation, metadata files, or scripts created or modified (e.g. `docs/artifacts.md`, `.gitattributes`).
+
+Summaries are the audit trail from planning requirements through execution evidence to downstream phases.
+
