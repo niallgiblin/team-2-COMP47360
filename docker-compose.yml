@@ -1,7 +1,7 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: ./BackEnd
       args:
         BUILDKIT_INLINE_CACHE: 1
     container_name: urban-gala-backend
@@ -31,7 +31,7 @@ services:
       retries: 5
       start_period: 60s
     volumes:
-      - ./backend/avatars:/app/avatars
+      - ./BackEnd/avatars:/app/avatars
 
   db:
     image: mysql:8
@@ -55,7 +55,7 @@ services:
       start_period: 40s
     volumes:
       - db_data:/var/lib/mysql
-      - ./backend/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
+      - ./BackEnd/docker/db-config/${MYSQL_CONFIG_FILE:-my.cnf}:/etc/mysql/conf.d/my.cnf:ro
     networks:
       - app-network
 
@@ -99,13 +99,13 @@ services:
 
   llm-service:
     build:
-      context: ./backend/llm-service
+      context: ./BackEnd/llm-service
     container_name: urban-gala-llm
     ports:
       - "5001:5000"
     # Mount the entire data directory, which now includes the CSV file
     volumes:
-      - ./backend/llm-service/data:/app/data:ro
+      - ./BackEnd/llm-service/data:/app/data:ro
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformers
@@ -135,7 +135,7 @@ services:
 
   busyness-service:
     build:
-      context: ./backend/busyness-service
+      context: ./BackEnd/busyness-service
     container_name: urban-gala-busyness
     ports:
       - "5002:5000"
