@@ -7,6 +7,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './vitest.setup.js',
 
+    env: { unstubEnvs: true },
 
     include: ['**/*.{test,spec}.{js,jsx,ts,tsx}'],
 
