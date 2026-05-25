@@ -200,7 +200,7 @@ team-2-COMP47360/
 ├── frontend/
 │   ├── Dockerfile             # Frontend container setup
 │   └── [frontend files]
-├── backend/
+├── BackEnd/
 │   ├── Dockerfile             # Backend container setup
 │   └── [backend files]
 └── README.md                  # This file
