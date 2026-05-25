@@ -6,6 +6,8 @@ mkdir -p "$REPORT_DIR"
 echo "🧪 Running Test Suite..."
 echo "========================"
 
+failed=0
+
 # Run Backend Tests
 echo "Running Backend Tests..."
 cd BackEnd
@@ -13,6 +15,7 @@ if mvn test -q; then
     echo "✅ Backend tests completed"
 else
     echo "❌ Backend tests failed"
+    failed=1
 fi
 cd ..
 
@@ -24,6 +27,7 @@ if npm test -- --silent; then
     echo "✅ Frontend tests completed"
 else
     echo "❌ Frontend tests failed"
+    failed=1
 fi
 cd ..
 
@@ -60,11 +64,10 @@ echo "${FRONTEND_TESTS}" > "${REPORT_DIR}/frontend-tests.txt"
 echo ""
 echo "✅ Test metrics saved to ${REPORT_DIR}/"
 echo ""
-echo "🎯 Key Achievements:"
-echo "==================="
-echo "• 100% Backend Controller Coverage"
-echo "• 80% Backend Service Coverage"
-echo "• 30% Frontend Component Coverage"
-echo "• Comprehensive Error Handling Tests"
-echo "• User Interaction Testing"
-echo "• Performance Validation" 
+echo "🎯 Summary:"
+echo "==========="
+echo "• Backend Controller Coverage: ${CONTROLLER_COVERAGE}%"
+echo "• Backend Service Coverage: ${SERVICE_COVERAGE}%"
+echo "• Frontend Component Tests: ${FRONTEND_TESTS}"
+
+exit "$failed"
