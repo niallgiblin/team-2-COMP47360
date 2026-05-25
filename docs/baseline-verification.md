@@ -27,15 +27,42 @@ Checks expected to pass for the Phase 1 gate. These validate repository metadata
 
 ## Known Application Gaps
 
-<!-- Populated in plan 01-03 task 2 -->
+Executable application checks that are baseline candidates but **not** Phase 1 required gates. Current outcomes recorded from the 2026-05-25 research audit (D-13, D-14, D-16).
+
+| Command | Current outcome | Owner file | Requirement IDs | Phase 1 gate |
+|---------|-----------------|------------|-----------------|--------------|
+| `rtk proxy sh -lc 'cd BackEnd && ./mvnw test'` | Compiles then fails **211/211** tests — Mockito mock maker initialization fails under the active JVM (inline mock maker / agent attachment) | `BackEnd/pom.xml`, `BackEnd/src/test/**` | TEST-01 | **Not required** (known gap) |
+| `rtk proxy sh -lc 'cd frontend && npm test -- --run'` | Fails **14/27** Vitest tests — includes missing `../MapView` import, `localStorage.clear` mock issue, and missing `scrollIntoView` in JSDOM | `frontend/package.json`, `frontend/vitest.config.js` | TEST-01 | **Not required** (known gap) |
+| `rtk proxy sh -lc 'cd frontend && npm run lint'` | Fails with **234 errors and 21 warnings** — Cypress/Vitest globals, unused variables, and legacy lint debt | `frontend/package.json`, ESLint config | TEST-01 | **Not required** (known gap) |
+
+Remediation for these failures is assigned to later phases; Phase 1 documents the honest baseline only.
 
 ## Manual and Slow Checks
 
-<!-- Populated in plan 01-03 task 2 -->
+Checks that require a running Docker daemon, browser automation, or full stack startup. Document command names and prerequisites only — do not paste expanded Compose config or `.env` values (T-01-11).
+
+| Command | Prerequisites | Expected outcome (when prerequisites met) | Owner file | Requirement IDs | Phase 1 gate |
+|---------|---------------|-------------------------------------------|------------|-----------------|--------------|
+| `rtk proxy sh -lc 'cd frontend && npm run cypress:run'` | Frontend dev server or Docker frontend reachable; Cypress 14.x installed | E2E specs under `frontend/cypress/e2e/` execute in headless browser | `frontend/package.json`, `frontend/cypress.config.js` | TEST-01 | **Not required** (manual/slow) |
+| `rtk proxy sh -lc 'cd frontend && npm run test:e2e'` | Same as Cypress run (alias) | Same as `cypress:run` | `frontend/package.json` | TEST-01 | **Not required** (manual/slow) |
+| `rtk docker info` | **Docker daemon running** and accessible to the Docker CLI | Server section reports running daemon | Docker Desktop / engine | TEST-01, TEST-05 | **Not required** (prerequisite check) |
+| `rtk docker compose -f docker-compose.yml up -d --build` | Docker daemon available; `.env` populated with required secrets (names only in docs) | Services start with healthcheck-gated dependencies | `docker-compose.yml` | TEST-01, TEST-05 | **Not required** (manual/slow) |
+| `rtk proxy sh -lc 'curl -sf http://localhost:8080/actuator/health'` | Compose stack up; backend healthy | HTTP 200 from Spring Actuator | `docker-compose.yml` (backend healthcheck) | TEST-05 | **Not required** (manual/slow) |
+| `rtk proxy sh -lc 'curl -sf http://localhost:5001/health'` | Compose stack up; LLM service healthy | HTTP 200 from Flask LLM `/health` | `BackEnd/llm-service/app.py` | TEST-05, ML-01 | **Not required** (manual/slow) |
+| `rtk proxy sh -lc 'curl -sf http://localhost:5002/health'` | Compose stack up; busyness service healthy | HTTP 200 from Flask busyness `/health` | `BackEnd/busyness-service/app.py` | TEST-05, ML-02 | **Not required** (manual/slow) |
+
+**Current environment gap:** `docker info` fails when the Docker daemon is not running. Record this as a known prerequisite gap; smoke commands above are intended for daemon-enabled machines.
 
 ## Missing Test Placeholders
 
-<!-- Populated in plan 01-03 task 2 -->
+Python ML service smoke tests are **not implemented** in the repository today. Phase 1 does not add them.
+
+| Placeholder | Assigned phase | Requirement IDs | Notes |
+|-------------|----------------|-----------------|-------|
+| LLM service smoke tests (startup, `/health`, `/search`, `/api/chat`) | Phase 5 (ML-01) | ML-01, TEST-04 | No Python tests detected under `BackEnd/llm-service/` |
+| Busyness service smoke tests (startup, `/health`, `/busyness`, forecast, normalization) | Phase 6 (ML-02) | ML-02, TEST-04 | No Python tests detected under `BackEnd/busyness-service/` |
+
+These placeholders are baseline evidence, not Phase 1 fixes.
 
 ## Requirement Traceability
 
