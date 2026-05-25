@@ -388,9 +388,8 @@ def vibe_search():
     except Exception as e:
         logger.error(f"ML Service: Error in /search: {str(e)}", exc_info=True)
         return jsonify({
-            'success': False, 
-            'error': 'Internal server error', 
-            'message': str(e)
+            'success': False,
+            'error': 'Internal server error'
         }), 500
 
 @app.errorhandler(Exception)
