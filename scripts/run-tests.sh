@@ -1,5 +1,8 @@
 #!/bin/bash
 
+REPORT_DIR="test-reports"
+mkdir -p "$REPORT_DIR"
+
 echo "🧪 Running Test Suite..."
 echo "========================"
 
@@ -50,12 +53,12 @@ echo "Backend Service Coverage: ${SERVICE_COVERAGE}%"
 echo "Frontend Component Tests:        ${FRONTEND_TESTS}"
 
 # Save metrics
-echo "${CONTROLLER_COVERAGE}" > docs/controller-coverage.txt
-echo "${SERVICE_COVERAGE}" > docs/service-coverage.txt
-echo "${FRONTEND_TESTS}" > docs/frontend-tests.txt
+echo "${CONTROLLER_COVERAGE}" > "${REPORT_DIR}/controller-coverage.txt"
+echo "${SERVICE_COVERAGE}" > "${REPORT_DIR}/service-coverage.txt"
+echo "${FRONTEND_TESTS}" > "${REPORT_DIR}/frontend-tests.txt"
 
 echo ""
-echo "✅ Test metrics saved to docs/"
+echo "✅ Test metrics saved to ${REPORT_DIR}/"
 echo ""
 echo "🎯 Key Achievements:"
 echo "==================="
