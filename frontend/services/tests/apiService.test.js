@@ -1,5 +1,5 @@
-import { authAPI, apiService } from '../apiService'
-import { vi, describe, test, expect, beforeEach } from 'vitest'
+import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest'
+import { authAPI, apiService, planAPI, vibeAPI, chatAPI, joinApiPath, resolveApiBaseUrl } from '../apiService'
 
 global.fetch = vi.fn()
 
@@ -24,10 +24,15 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
+  vi.unstubAllEnvs()
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('authAPI', () => {
-  test('login calls correct endpoint and returns data', async () => {
+  test('login calls correct relative endpoint and returns data', async () => {
     const fakeResponse = { token: 'abc123', user: { id: 1, name: 'Test User' } }
     fetch.mockResolvedValueOnce({
       ok: true,
@@ -37,7 +42,7 @@ describe('authAPI', () => {
     const result = await authAPI.login('test@example.com', 'password123')
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/auth/login',
+      '/api/auth/login',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -51,7 +56,7 @@ describe('authAPI', () => {
     expect(result).toEqual(fakeResponse)
   })
 
-  test('signup sends data and returns result', async () => {
+  test('signup sends data to relative endpoint and returns result', async () => {
     const signupData = { username: 'newuser', email: 'user@example.com', password: 'pass' }
     const fakeResponse = { success: true, userId: 5 }
 
@@ -63,7 +68,7 @@ describe('authAPI', () => {
     const result = await authAPI.signup(signupData)
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/auth/signup',
+      '/api/auth/signup',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify(signupData)
@@ -83,7 +88,7 @@ describe('authAPI', () => {
     await expect(authAPI.login('wronguser', 'badpass')).rejects.toThrow('Invalid credentials')
   })
 
-  test('getProfile returns user data', async () => {
+  test('getProfile returns user data from relative endpoint', async () => {
     const fakeUser = { id: 1, name: 'User One' }
     fetch.mockResolvedValueOnce({
       ok: true,
@@ -93,7 +98,7 @@ describe('authAPI', () => {
     const result = await authAPI.getProfile(1)
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/auth/profile?userId=1',
+      '/api/auth/profile?userId=1',
       expect.objectContaining({
         headers: expect.objectContaining({ 'Content-Type': 'application/json' })
       })
@@ -113,7 +118,7 @@ describe('authAPI', () => {
     await expect(authAPI.getProfile(1)).rejects.toThrow('Unauthorized')
   })
 
-  test('updateProfile updates user and localStorage', async () => {
+  test('updateProfile updates user via relative endpoint', async () => {
     const userData = { id: 1, name: 'Updated User' }
     fetch.mockResolvedValueOnce({
       ok: true,
@@ -123,7 +128,7 @@ describe('authAPI', () => {
     const result = await authAPI.updateProfile(1, userData)
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/auth/profile/1',
+      '/api/auth/profile/1',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify(userData),
@@ -168,5 +173,88 @@ describe('apiService helpers', () => {
 
     expect(localStorage.getItem('token')).toBe(null)
     expect(localStorage.getItem('user')).toBe(null)
+  })
+})
+
+describe('production-style relative routes', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_API_BASE_URL', '/api')
+    vi.stubEnv('VITE_LLM_API_URL', '/api/chat')
+  })
+
+  test('planAPI.getPlans calls /api/plans', async () => {
+    const fakePlans = [{ id: 1, name: 'Weekend plan' }]
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => fakePlans })
+
+    const result = await planAPI.getPlans()
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/plans',
+      expect.objectContaining({ headers: expect.objectContaining({ 'Content-Type': 'application/json' }) })
+    )
+    expect(result).toEqual(fakePlans)
+  })
+
+  test('planAPI share path resolves to /api/plans/:id', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 42 }) })
+    await planAPI.getPlanById(42)
+    expect(fetch).toHaveBeenCalledWith('/api/plans/42', expect.anything())
+  })
+
+  test('favourites path resolves to /api/favourites via joinApiPath', () => {
+    const base = resolveApiBaseUrl()
+    expect(joinApiPath(base, '/favourites')).toBe('/api/favourites')
+  })
+
+  test('favourites toggle path resolves to /api/favourites/:id via joinApiPath', () => {
+    const base = resolveApiBaseUrl()
+    expect(joinApiPath(base, '/favourites/7')).toBe('/api/favourites/7')
+  })
+
+  test('vibeAPI.searchUrl resolves to /api/vibe/search', () => {
+    expect(vibeAPI.searchUrl()).toBe('/api/vibe/search')
+  })
+
+  test('vibeAPI.mapDataUrl resolves to /api/vibe/map-data', () => {
+    expect(vibeAPI.mapDataUrl()).toBe('/api/vibe/map-data')
+  })
+
+  test('vibeAPI.trendingUrl resolves to /api/vibe/trending', () => {
+    expect(vibeAPI.trendingUrl()).toBe('/api/vibe/trending')
+  })
+
+  test('chatAPI.sendMessage POSTs to /api/chat with message in body (D-16)', async () => {
+    const fakeReply = { response: 'Hello!' }
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => fakeReply })
+
+    const result = await chatAPI.sendMessage('find me jazz bars', [])
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/chat',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        body: expect.stringContaining('"message":"find me jazz bars"')
+      })
+    )
+    expect(result).toEqual(fakeReply)
+  })
+
+  test('chatAPI.sendMessage does not send Authorization header (D-15)', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ response: 'ok' }) })
+    await chatAPI.sendMessage('hello', [])
+    const callArgs = fetch.mock.calls[0][1]
+    expect(callArgs.headers).not.toHaveProperty('Authorization')
+  })
+
+  test('friends call with token asserts Authorization Bearer header', async () => {
+    localStorage.setItem('token', 'tok_abc')
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ friends: [] }) })
+
+    const { friendsAPI } = await import('../apiService')
+    await friendsAPI.getFriendsList(1)
+
+    const callArgs = fetch.mock.calls[0][1]
+    expect(callArgs.headers['Authorization']).toBe('Bearer tok_abc')
   })
 })
