@@ -75,6 +75,124 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 docker-compose up
 ```
 
+## Secret Rotation
+
+### Historical exposure (mandatory before production)
+
+Credentials that have ever appeared in git history — including a database password exposed in commit `79f93214` — must be treated as **compromised**. Rotation is **required** before any production or staging deployment; it is not optional cleanup.
+
+### Secrets in scope
+
+Rotate all of the following before deploying to shared or production environments:
+
+| Secret | Environment variable(s) | Affected services |
+|--------|-------------------------|-------------------|
+| MySQL root password | `MYSQL_ROOT_PASSWORD` | `db`, `backend` |
+| Application DB password | `MYSQL_PASSWORD`, `SPRING_DATASOURCE_PASSWORD` | `db`, `backend` |
+| JWT signing key | `APP_JWT_SECRET` | `backend` |
+| Hugging Face token | `HF_TOKEN` | `llm-service` |
+| Google Maps API key | `VITE_GOOGLE_API_KEY` | `frontend`, `frontend-prod` |
+
+### Pre-rotation checklist
+
+1. Back up your current `.env` file to a secure location outside the repository.
+2. Note which services are running (`docker compose ps`).
+3. Schedule a maintenance window — some rotations invalidate active sessions or require database restarts.
+4. Ensure you can access provider consoles (Google Cloud, Hugging Face) for key revocation after rotation.
+
+### General rotation procedure
+
+For every secret below, follow this pattern:
+
+1. **Generate** a new value (or create a new key at the provider).
+2. **Update** the root `.env` file with the new value.
+3. **Restart** affected Docker Compose services (see per-secret steps).
+4. **Verify** health endpoints respond successfully.
+5. **Revoke or disable** the old credential at the provider where applicable.
+
+### MySQL root password (`MYSQL_ROOT_PASSWORD`)
+
+1. Generate a strong password (12+ characters; use a password manager).
+2. Connect to the running database container:
+   ```bash
+   docker compose exec db mysql -u root -p
+   ```
+   Enter the current root password when prompted.
+3. Change the root password:
+   ```sql
+   ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password_here';
+   ALTER USER 'root'@'%' IDENTIFIED BY 'your_new_password_here';
+   FLUSH PRIVILEGES;
+   ```
+4. Update `MYSQL_ROOT_PASSWORD=your_new_password_here` in `.env`.
+5. Restart database and backend:
+   ```bash
+   docker compose restart db backend
+   ```
+6. Verify: `docker compose exec db mysqladmin ping -h localhost -u root -p`
+
+### Application DB user (`MYSQL_PASSWORD`)
+
+1. Generate a strong password distinct from the root password.
+2. Connect as root:
+   ```bash
+   docker compose exec db mysql -u root -p
+   ```
+3. Rotate the application user (replace `urbanuser` with your `MYSQL_USER` value if different):
+   ```sql
+   ALTER USER 'urbanuser'@'%' IDENTIFIED BY 'your_new_password_here';
+   FLUSH PRIVILEGES;
+   ```
+4. Update `MYSQL_PASSWORD=your_new_password_here` in `.env` (this also feeds `SPRING_DATASOURCE_PASSWORD`).
+5. Restart backend:
+   ```bash
+   docker compose restart backend
+   ```
+6. Verify: `curl -f http://localhost:8080/actuator/health`
+
+### JWT signing key (`APP_JWT_SECRET`)
+
+1. Generate a new secret:
+   ```bash
+   openssl rand -base64 32
+   ```
+2. Update `APP_JWT_SECRET=your_new_jwt_secret_here` in `.env`.
+3. Restart backend:
+   ```bash
+   docker compose restart backend
+   ```
+4. Verify: `curl -f http://localhost:8080/actuator/health`
+5. **Session impact:** All active JWT sessions are invalidated immediately. Every user must log in again after this rotation.
+
+### Hugging Face token (`HF_TOKEN`)
+
+1. Create a new read token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+2. Update `HF_TOKEN=your_new_hf_token_here` in `.env`.
+3. Restart the LLM service:
+   ```bash
+   docker compose restart llm-service
+   ```
+4. Verify: `curl -f http://localhost:5001/health`
+5. Revoke the old token in the Hugging Face console.
+
+### Google Maps API key (`VITE_GOOGLE_API_KEY`)
+
+1. Create a new API key in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (restrict by HTTP referrer or IP as appropriate).
+2. Update `VITE_GOOGLE_API_KEY=your_new_google_api_key_here` in `.env`.
+3. Restart the dev frontend:
+   ```bash
+   docker compose restart frontend
+   ```
+4. For production static images, rebuild so build-time args pick up the new key:
+   ```bash
+   docker compose --profile prod build frontend-prod
+   docker compose --profile prod up -d frontend-prod
+   ```
+5. Verify the map loads in the browser.
+6. Disable or delete the old API key in Google Cloud Console.
+
+> **Never include real secret values in documentation or commit messages.** Use placeholders such as `your_new_password_here` and `your_new_jwt_secret_here` only.
+
 ## Authentication & Authorization
 
 ### JWT-Based Authentication
