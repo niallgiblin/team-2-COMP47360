@@ -2,6 +2,7 @@ package com.manhattan.busyness_predictor.controller;
 
 import java.io.File;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
@@ -15,11 +16,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/avatars")
 public class AvatarController {
 
+    @Value("${app.avatars.dir}")
+    private String avatarsDir;
+
     // Serve avatar files
     @GetMapping("/{filename:.+}")
     public ResponseEntity<Resource> serveAvatar(@PathVariable String filename) {
         try {
-            File avatarFile = new File("/app/avatars/" + filename);
+            File avatarFile = new File(avatarsDir, filename);
             if (!avatarFile.exists()) {
                 return ResponseEntity.notFound().build();
             }
