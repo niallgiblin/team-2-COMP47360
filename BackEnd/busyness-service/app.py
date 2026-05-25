@@ -206,8 +206,8 @@ def initialize_service():
             initialization_error = "Model loading function failed or loaded no models."
             logger.error("❌ Service initialization failed: %s", initialization_error)
     except Exception as e:
-        initialization_error = f"Initialization error: {str(e)}"
-        logger.error("❌ Service initialization failed: %s", initialization_error, exc_info=True)
+        initialization_error = "Initialization error during model loading"
+        logger.error("Service initialization failed: %s", e, exc_info=True)
 
 # Initialize the service when the module is imported
 if __name__ == "__main__":
