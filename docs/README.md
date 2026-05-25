@@ -57,8 +57,9 @@ The application requires API keys to function correctly. You'll need to create a
 
 1.  **Create the `.env` file** by copying the example file:
     ```bash
-    cp .env.example .env
+    cp env.example .env
     ```
+    See [`env.example`](../env.example) in the repository root for all supported variables, including optional local-development path overrides.
 
 2.  **Edit the `.env` file** and add your keys:
     ```

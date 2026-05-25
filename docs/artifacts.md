@@ -95,12 +95,12 @@ Docker Compose (`llm-service` service) sets these environment variables and moun
 
 ### Busyness service (`BackEnd/busyness-service/predictor/busyness.py`)
 
-| Runtime path | Repository source | Consumer | Configurable |
-|--------------|-------------------|----------|--------------|
-| `/app/models/DNNs` | `BackEnd/busyness-service/models/DNNs/` | `initialize_busyness_models()` — loads all `.keras`/`.h5` files | **Hard-coded** (no env var in Phase 1) |
-| `/app/models/LSTMs/Fin.keras` | `BackEnd/busyness-service/models/LSTMs/Fin.keras` | `initialize_busyness_models()` — final LSTM model | **Hard-coded** (no env var in Phase 1) |
+| Variable | Default runtime path (Compose) | Repository source | Consumer |
+|----------|-------------------------------|-------------------|----------|
+| `MODEL_PATH` | `/app/models/DNNs` | `BackEnd/busyness-service/models/DNNs/` | `initialize_busyness_models()`, `verify_file_paths()` |
+| `LSTM_MODEL_PATH` | `/app/models/LSTMs/Fin.keras` | `BackEnd/busyness-service/models/LSTMs/Fin.keras` | `initialize_busyness_models()`, `verify_file_paths()` |
 
-Path configuration refactor for the busyness service is out of scope for Phase 1; this document records current assumptions only.
+Docker Compose sets explicit `/app/...` paths for the `busyness-service` container. For local Python development without Compose, pathlib-anchored defaults apply (see commented overrides in [`env.example`](../env.example)).
 
 ## Generated Output Ownership
 
