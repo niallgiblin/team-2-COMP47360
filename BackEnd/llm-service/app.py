@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from sentence_transformers import SentenceTransformer, util
 import os
+from pathlib import Path
 import logging
 import time
 import threading
@@ -13,6 +14,9 @@ import sys
 import requests
 import hashlib
 import pickle
+
+# Anchor: BackEnd/llm-service/ from app.py (D-10)
+_LLM_SERVICE_DIR = Path(__file__).parent.resolve()
 
 # Helper function for safe type conversion
 def _safe_to_int(value, default=0):
@@ -86,9 +90,9 @@ def cleanup_cache():
 
 def verify_file_paths():
     """Verify that all required files exist before attempting to load them"""
-    model_path = os.getenv('MODEL_PATH', '/app/models/sentence-transformers')
-    data_path = os.getenv('DATA_PATH', '/app/data/locations.csv')
-    embeddings_path = os.getenv('EMBEDDINGS_PATH', '/app/data/location_embeddings.npy')
+    model_path = os.getenv('MODEL_PATH', str(_LLM_SERVICE_DIR / 'models' / 'sentence-transformers'))
+    data_path = os.getenv('DATA_PATH', str(_LLM_SERVICE_DIR / 'data' / 'locations.csv'))
+    embeddings_path = os.getenv('EMBEDDINGS_PATH', str(_LLM_SERVICE_DIR / 'data' / 'location_embeddings.npy'))
     
     missing_files = []
     
@@ -112,7 +116,7 @@ def load_model():
     """Load the sentence transformer model"""
     global model
     try:
-        model_path = os.getenv('MODEL_PATH', '/app/models/sentence-transformers')
+        model_path = os.getenv('MODEL_PATH', str(_LLM_SERVICE_DIR / 'models' / 'sentence-transformers'))
         logger.info(f"Loading model from {model_path}")
         
         # Check if model files exist
@@ -142,8 +146,8 @@ def load_data():
     """Load location data and pre-computed embeddings"""
     global df, location_embeddings
     try:
-        data_path = os.getenv('DATA_PATH', '/app/data/locations.csv')
-        embeddings_path = os.getenv('EMBEDDINGS_PATH', '/app/data/location_embeddings.npy')
+        data_path = os.getenv('DATA_PATH', str(_LLM_SERVICE_DIR / 'data' / 'locations.csv'))
+        embeddings_path = os.getenv('EMBEDDINGS_PATH', str(_LLM_SERVICE_DIR / 'data' / 'location_embeddings.npy'))
         
         logger.info(f"Loading data from {data_path}")
         df = pd.read_csv(data_path)
