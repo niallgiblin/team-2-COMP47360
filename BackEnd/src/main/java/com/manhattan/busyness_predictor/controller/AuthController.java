@@ -1,10 +1,15 @@
 package com.manhattan.busyness_predictor.controller;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+
+import javax.imageio.ImageIO;
 
 import jakarta.validation.Valid;
 
@@ -38,6 +43,9 @@ import com.manhattan.busyness_predictor.service.AuthService;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final Set<String> ALLOWED_AVATAR_EXTENSIONS =
+            Set.of(".jpg", ".jpeg", ".png", ".webp");
 
     @Autowired
     private AuthService authService;
@@ -130,17 +138,25 @@ public class AuthController {
             }
         }
 
-        // Validate file type
-        String contentType = avatarFile.getContentType();
-        if (contentType == null || (!contentType.startsWith("image/"))) {
-            throw new RuntimeException("File must be an image");
+        // Validate extension allowlist and image content (magic bytes via ImageIO)
+        String original = avatarFile.getOriginalFilename();
+        if (original == null || !original.contains(".")) {
+            throw new RuntimeException("File must have a valid image extension");
+        }
+        String ext = original.substring(original.lastIndexOf('.')).toLowerCase();
+        if (!ALLOWED_AVATAR_EXTENSIONS.contains(ext)) {
+            throw new RuntimeException("File must be a JPG, PNG, or WebP image");
         }
 
-        String original = avatarFile.getOriginalFilename();
-        String ext = (original != null && original.contains("."))
-                   ? original.substring(original.lastIndexOf('.'))
-                   : ".jpg";
-        
+        try (InputStream is = avatarFile.getInputStream()) {
+            BufferedImage image = ImageIO.read(is);
+            if (image == null) {
+                throw new RuntimeException("File must be a valid image");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to validate image file");
+        }
+
         String filename = "avatar_user_" + userId + "_" + System.currentTimeMillis() + ext;
         File dest = new File(dir, filename);
         
