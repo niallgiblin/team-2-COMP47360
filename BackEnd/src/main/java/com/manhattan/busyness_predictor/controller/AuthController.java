@@ -9,6 +9,7 @@ import java.util.Map;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,9 @@ public class AuthController {
 
     @Autowired
     private AuthService authService;
+
+    @Value("${app.avatars.dir}")
+    private String avatarsDir;
 
     @PostMapping("/signup")
     public ResponseEntity<Map<String, Object>> signUp(
@@ -118,8 +122,6 @@ public class AuthController {
             throw new RuntimeException("No file uploaded");
         }
 
-        // Use the correct Docker container path
-        String avatarsDir = "/app/avatars/";
         File dir = new File(avatarsDir);
         if (!dir.exists()) {
             boolean created = dir.mkdirs();
@@ -176,7 +178,7 @@ public class AuthController {
         // Delete the file if it exists
         if (currentAvatarUrl != null && currentAvatarUrl.startsWith("/avatars/")) {
             String filename = currentAvatarUrl.substring("/avatars/".length());
-            File avatarFile = new File("/app/avatars/" + filename);
+            File avatarFile = new File(avatarsDir, filename);
             if (avatarFile.exists()) {
                 boolean deleted = avatarFile.delete();
                 if (!deleted) {
