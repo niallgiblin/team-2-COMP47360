@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { chatAPI } from '../../services/apiService';
 import './AIChatWidget.css'; // Ensure this CSS file is also named correctly
 
 // Simple SVG icons for the widget
@@ -47,19 +48,8 @@ const AIChatWidget = () => {
     setInput('');
     setIsLoading(true);
 
-    // Use env variable or fallback to EC2 IP
-    const LLM_API_URL = import.meta.env.VITE_LLM_API_URL;
-
     try {
-      const response = await fetch(LLM_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input, history: messages }),
-      });
-
-      if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
-
-      const data = await response.json();
+      const data = await chatAPI.sendMessage(input, messages);
       const botMessage = { text: data.response, sender: 'bot' };
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {

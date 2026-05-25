@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { vibeAPI } from '../../services/apiService';
 
 const BusynessContext = createContext();
 
@@ -106,8 +107,8 @@ export const BusynessProvider = ({ children }) => {
         
         // Fetch both busyness and venue data in parallel
         const [busynessResponse, venueResponse] = await Promise.all([
-          fetch('/api/vibe/map-data'),
-          fetch('/api/vibe/trending')
+          fetch(vibeAPI.mapDataUrl()),
+          fetch(vibeAPI.trendingUrl())
         ]);
         
         if (!busynessResponse.ok || !venueResponse.ok) {

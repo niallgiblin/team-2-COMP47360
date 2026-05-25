@@ -18,6 +18,7 @@ import TrendingVenueCard from "../components/TrendingVenueCard";
 import { useNavigate } from "react-router-dom";
 import PlanSummary from "../components/PlanSummary";
 import { useBusyness } from "../context/BusynessContext";
+import { vibeAPI } from "../../services/apiService";
 // Turf imports for data enrichment
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
@@ -139,7 +140,7 @@ export default function FindMyVibe() {
         maxResults: 5, 
       };
 
-      const res = await fetch(`/api/vibe/search`, {
+      const res = await fetch(vibeAPI.searchUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),

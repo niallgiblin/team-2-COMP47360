@@ -33,6 +33,7 @@ import CompactSharedPlans from "../components/CompactSharedPlans";
 import { usePlan } from "../context/PlanContext";
 import { useBusyness } from "../context/BusynessContext";
 import { STORAGE_KEYS } from "../utils/storageUtils";
+import { vibeAPI } from "../../services/apiService";
 
 // External libraries, utilities for directions and geo-calculations
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
@@ -316,7 +317,7 @@ export default function MapView() {
 
       setLoading(true);
       try {
-        const res = await fetch(`/api/vibe/map-data`);
+        const res = await fetch(vibeAPI.mapDataUrl());
         if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
         const venuesData = data.locations || [];

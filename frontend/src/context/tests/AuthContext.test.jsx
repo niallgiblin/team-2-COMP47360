@@ -61,6 +61,50 @@ const TestComponent = ({ action }) => {
 };
 
 describe('AuthContext', () => {
+  test('makeAuthenticatedRequest 401 clears localStorage and sets isAuthenticated false (D-17, D-20)', async () => {
+    // Seed localStorage with existing session
+    store['token'] = 'valid-token'
+    store['user'] = JSON.stringify({ id: 1, name: 'Test' })
+
+    let capturedAuth
+    const action = (auth) => { capturedAuth = auth }
+
+    render(
+      <AuthProvider>
+        <TestComponent action={action} />
+      </AuthProvider>
+    )
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    // Stub a 401 response
+    fetch.mockResolvedValueOnce({
+      status: 401,
+      ok: false,
+      json: async () => ({}),
+    })
+
+    // Call makeAuthenticatedRequest and expect it to throw + clear auth
+    await act(async () => {
+      try {
+        await capturedAuth.makeAuthenticatedRequest('/api/plans')
+      } catch (_) {
+        // Expected throw on 401
+      }
+    })
+
+    // Auth state cleared from localStorage (D-20)
+    expect(store['token']).toBeUndefined()
+    expect(store['user']).toBeUndefined()
+
+    // isAuthenticated is false
+    await waitFor(() => {
+      expect(capturedAuth.isAuthenticated).toBe(false)
+    })
+  })
+
   test('login sets user, token, and localStorage', async () => {
     const fakeUser = { id: 1, name: 'Test' };
     const fakeToken = 'abc123';
