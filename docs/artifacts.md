@@ -91,7 +91,7 @@ Services load artifacts from container paths. Repository paths above are bind-mo
 | `DATA_PATH` | `/app/data/locations.csv` | `BackEnd/llm-service/data/locations.csv` | `load_data()`, `verify_file_paths()` |
 | `EMBEDDINGS_PATH` | `/app/data/location_embeddings.npy` | `BackEnd/llm-service/data/location_embeddings.npy` | `load_data()`, `verify_file_paths()` |
 
-Docker Compose (`llm-service` service) sets these environment variables and mounts `./backend/llm-service/data` to `/app/data`. Model files are baked into the image from the build context.
+Docker Compose (`llm-service` service) sets these environment variables and mounts `./BackEnd/llm-service/data` to `/app/data`. Model files are baked into the image from the build context.
 
 ### Busyness service (`BackEnd/busyness-service/predictor/busyness.py`)
 
