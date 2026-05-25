@@ -240,14 +240,15 @@ def _create_location_dto(loc_series, similarity_score=None):
         'similarity': float(similarity_score) if similarity_score is not None else None
     }
 
-@app.route('/locations/all', methods=['GET'])
-def get_all_locations():
-    """Get all locations (for debugging)"""
-    if not initialized:
-        return jsonify({'error': 'Service not initialized'}), 503
-    
-    locations = [df.iloc[i].to_dict() for i in range(len(df))]
-    return jsonify({'locations': locations})
+if os.environ.get('FLASK_ENV') == 'development':
+    @app.route('/locations/all', methods=['GET'])
+    def get_all_locations():
+        """Get all locations (for debugging; development only)"""
+        if not initialized:
+            return jsonify({'error': 'Service not initialized'}), 503
+
+        locations = [df.iloc[i].to_dict() for i in range(len(df))]
+        return jsonify({'locations': locations})
 
 @app.route('/search', methods=['POST'])
 def vibe_search():
