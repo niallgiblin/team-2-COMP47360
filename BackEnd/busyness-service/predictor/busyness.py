@@ -1,6 +1,7 @@
 # /Users/ng/Desktop/team-2-COMP47360/backend/busyness-service/predictor/busyness.py
 import logging
 import os
+from pathlib import Path
 import sys
 import requests
 import numpy as np
@@ -12,6 +13,9 @@ from tensorflow import keras
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import custom_object_scope
 import warnings
+
+# Anchor: predictor/busyness.py → BackEnd/busyness-service/
+_BUSYNESS_SERVICE_DIR = Path(__file__).parent.parent.resolve()
 
 # Suppress TensorFlow warnings and configure for CPU
 warnings.filterwarnings('ignore')
@@ -46,6 +50,32 @@ def load_model_with_fallback(model_path):
                 logger.error(f"All loading attempts failed for {model_path}: {str(e)}")
                 return None
 
+def verify_file_paths():
+    """Verify required model paths exist before attempting to load them.
+
+    Returns (success: bool, missing: list[str]) where `missing` contains
+    canonical var-name strings only — never resolved filesystem paths
+    (D-08: avoid path disclosure through /health responses).
+    """
+    dnn_path  = os.getenv('MODEL_PATH',
+        str(_BUSYNESS_SERVICE_DIR / 'models' / 'DNNs'))
+    lstm_path = os.getenv('LSTM_MODEL_PATH',
+        str(_BUSYNESS_SERVICE_DIR / 'models' / 'LSTMs' / 'Fin.keras'))
+
+    missing = []
+    if not os.path.isdir(dnn_path):
+        missing.append("MODEL_PATH (DNN models directory)")
+    if not os.path.isfile(lstm_path):
+        missing.append("LSTM_MODEL_PATH (Fin.keras)")
+
+    if missing:
+        for m in missing:
+            logger.error("Missing required model path: %s", m)
+        return False, missing
+
+    logger.info("All required model paths found.")
+    return True, []
+
 def initialize_busyness_models():
     """Initializes all DNN and the final LSTM models from disk."""
     global dnn_models, final_lstm_model
@@ -53,8 +83,10 @@ def initialize_busyness_models():
     keras.config.enable_unsafe_deserialization()
     logger.info("Starting model initialization...")
     
-    dnn_models_path = '/app/models/DNNs'
-    lstm_model_path = '/app/models/LSTMs/Fin.keras' # Path to the single final LSTM model
+    dnn_models_path = os.getenv('MODEL_PATH',
+        str(_BUSYNESS_SERVICE_DIR / 'models' / 'DNNs'))
+    lstm_model_path = os.getenv('LSTM_MODEL_PATH',
+        str(_BUSYNESS_SERVICE_DIR / 'models' / 'LSTMs' / 'Fin.keras'))
     
     # Load DNN models
     if os.path.exists(dnn_models_path):
