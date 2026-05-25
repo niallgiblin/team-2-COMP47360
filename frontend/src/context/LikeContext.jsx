@@ -3,12 +3,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useBusyness } from './BusynessContext';
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 
 const LikeContext = createContext();
 
 export const useLike = () => useContext(LikeContext);
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 export const LikeProvider = ({ children }) => {
     const [likedVenues, setLikedVenues] = useState([]);
@@ -21,7 +20,7 @@ export const LikeProvider = ({ children }) => {
         const fetchLikes = async () => {
             if (!isAuthenticated) return;
             try {
-                const res = await makeAuthenticatedRequest(`${API_BASE_URL}/favourites`);
+                const res = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/favourites'));
                 if (!res.ok) throw new Error('Failed to fetch');
                 const data = await res.json();
 
@@ -165,8 +164,8 @@ export const LikeProvider = ({ children }) => {
             // If authenticated, also update backend
             if (isAuthenticated) {
                 const endpoint = isLiked
-                    ? `${API_BASE_URL}/favourites/${canonicalId}` // Endpoint for DELETE
-                    : `${API_BASE_URL}/favourites`;           // Endpoint for POST
+                    ? joinApiPath(resolveApiBaseUrl(), `/favourites/${canonicalId}`)
+                    : joinApiPath(resolveApiBaseUrl(), '/favourites');
                 const method = isLiked ? 'DELETE' : 'POST';
 
                 const response = await makeAuthenticatedRequest(endpoint, {

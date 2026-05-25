@@ -16,10 +16,7 @@ import {
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '../hooks/useAuth'; // custom context for auth/user management
-
-// Get the API base URL from environment
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+import { resolveAvatarUrl } from '../../services/apiUrls';
 
 // Main profile form component
 export default function ProfileForm() {
@@ -191,30 +188,10 @@ export default function ProfileForm() {
     }
   };
 
-  // Get the correct avatar URL with better debugging
+  // Get the correct avatar URL
   const getAvatarUrl = () => {
-    // If we have a preview, use it (for newly selected images)
-    if (preview) {
-      console.log('Using preview URL:', preview);
-      return preview;
-    }
-    
-    // If user has an avatar URL, use it
-    if (user?.avatarUrl) {
-      console.log('User avatarUrl:', user.avatarUrl);
-      // If the avatarUrl already includes the full URL, use it as is
-      if (user.avatarUrl.startsWith('http')) {
-        console.log('Using full URL:', user.avatarUrl);
-        return user.avatarUrl;
-      }
-      // Otherwise, construct the full URL
-      const fullUrl = `${BACKEND_URL}${user.avatarUrl}`;
-      console.log('Constructed URL:', fullUrl);
-      return fullUrl;
-    }
-    
-    console.log('No avatar URL available');
-    return null;
+    if (preview) return preview;
+    return resolveAvatarUrl(user?.avatarUrl);
   };
 
   // Validate the form fields before submission

@@ -1,10 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 
 export const AuthContext = createContext(null);
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
@@ -31,7 +29,7 @@ export const AuthProvider = ({ children }) => {
       const savedToken = localStorage.getItem("token");
       if (savedToken) {
         try {
-          const response = await fetch(`${API_BASE_URL}/auth/me`, {
+          const response = await fetch(joinApiPath(resolveApiBaseUrl(), '/auth/me'), {
             headers: { Authorization: `Bearer ${savedToken}` },
           });
 
@@ -79,7 +77,7 @@ export const AuthProvider = ({ children }) => {
 
   // Login function
   const login = async (usernameOrEmail, password) => {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await fetch(joinApiPath(resolveApiBaseUrl(), '/auth/login'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ usernameOrEmail, password }),
@@ -97,7 +95,7 @@ export const AuthProvider = ({ children }) => {
 
   // Signup function
   const signup = async (userData) => {
-    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+    const response = await fetch(joinApiPath(resolveApiBaseUrl(), '/auth/signup'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(userData),
@@ -116,7 +114,7 @@ export const AuthProvider = ({ children }) => {
   // Update user profile (text data)
   const updateProfile = async (userId, updateData) => {
     const response = await makeAuthenticatedRequest(
-      `${API_BASE_URL}/auth/profile/${userId}`,
+      joinApiPath(resolveApiBaseUrl(), `/auth/profile/${userId}`),
       {
         method: "PUT",
         body: JSON.stringify(updateData),
@@ -137,7 +135,7 @@ export const AuthProvider = ({ children }) => {
     formData.append("avatar", file);
     
     const response = await makeAuthenticatedRequest(
-      `${API_BASE_URL}/auth/profile/${userId}/avatar`,
+      joinApiPath(resolveApiBaseUrl(), `/auth/profile/${userId}/avatar`),
       {
         method: "POST",
         body: formData,
@@ -165,7 +163,7 @@ export const AuthProvider = ({ children }) => {
   // Delete user avatar
   const deleteAvatar = async (userId) => {
     const response = await makeAuthenticatedRequest(
-      `${API_BASE_URL}/auth/profile/${userId}/avatar`,
+      joinApiPath(resolveApiBaseUrl(), `/auth/profile/${userId}/avatar`),
       {
         method: "DELETE",
       }

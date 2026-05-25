@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from "../hooks/useAuth";
-
-// Base URL for API requests
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 
 // Create context and custom hook
 const PlanContext = createContext();
@@ -31,7 +29,7 @@ export function PlanProvider({ children }) {
     if (!token) return;
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`);
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans'));
       const data = await response.json();
       setSavedPlans(data.plans || []);
     } catch (error) {
@@ -46,7 +44,7 @@ export function PlanProvider({ children }) {
     if (!token) return;
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans/shared-with-me`);
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans/shared-with-me'));
       const data = await response.json();
       let shared = data.sharedPlans || [];
 
@@ -88,7 +86,7 @@ export function PlanProvider({ children }) {
     };
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`, {
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans'), {
         method: 'POST',
         body: JSON.stringify(createPlanRequest),
       });
@@ -114,7 +112,7 @@ export function PlanProvider({ children }) {
     };
 
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans`, {
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans'), {
         method: 'POST',
         body: JSON.stringify(createPlanRequest),
       });
@@ -143,7 +141,7 @@ export function PlanProvider({ children }) {
   const loadPlanById = async (id) => {
     if (!token) return;
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/plans/${id}`);
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), `/plans/${id}`));
       const data = await response.json();
       setPlan(data.plan.venues || []);
     } catch (error) {
@@ -155,7 +153,7 @@ export function PlanProvider({ children }) {
   const deletePlan = async (id) => {
     if (!token) return;
     try {
-      await makeAuthenticatedRequest(`${API_BASE_URL}/plans/${id}`, { method: 'DELETE' });
+      await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), `/plans/${id}`), { method: 'DELETE' });
       setSavedPlans((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
       console.error('Failed to delete plan:', error);
