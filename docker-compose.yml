@@ -21,6 +21,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-urban_gala}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-urbanuser}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      APP_AVATARS_DIR: /app/avatars
     networks:
       - app-network
     healthcheck:
@@ -141,6 +142,8 @@ services:
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/models/DNNs
+      - LSTM_MODEL_PATH=/app/models/LSTMs/Fin.keras
     networks:
       - app-network
     healthcheck:
