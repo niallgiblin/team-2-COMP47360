@@ -33,6 +33,8 @@ Follow these instructions to set up and run the project locally.
 -   **Docker Desktop:** Download and install. This includes Docker Compose.
 -   **Git LFS:** Required for handling large model files. Install from here.
 
+Before starting services, read [Runtime Artifact Policy](artifacts.md) for **runtime model artifacts** — expected repository paths, ownership (Git LFS vs source-owned metadata), and manual checksum verification with `scripts/verify-artifacts.sh`.
+
 ### 1. Clone the Repository
 
 First, install Git LFS on your machine to ensure the machine learning models are downloaded correctly.
@@ -46,6 +48,8 @@ git clone https://github.com/niallgiblin/team-2-COMP47360
 cd team-2-COMP47360
 ```
 *Note: If you cloned the repository before installing Git LFS, you may need to run `git lfs pull` inside the project directory to download the model files.*
+
+After pulling LFS objects, verify runtime binaries with `./scripts/verify-artifacts.sh` (see [artifacts.md](artifacts.md) for the full manifest and checksum table).
 
 ### 2. Configure Environment Variables
 
