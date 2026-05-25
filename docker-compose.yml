@@ -80,6 +80,22 @@ services:
     networks:
       - app-network
 
+  frontend-prod:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_LLM_API_URL: /api/chat
+    container_name: urban-gala-frontend-prod
+    profiles: ["prod"]
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - llm-service
+    networks:
+      - app-network
+
   llm-service:
     build:
       context: ./backend/llm-service

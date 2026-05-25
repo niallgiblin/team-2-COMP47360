@@ -105,3 +105,40 @@ Every `*-SUMMARY.md` written by GSD plan executors **must** include:
 
 Summaries are the audit trail from planning requirements through execution evidence to downstream phases.
 
+## Phase 2 Verification Gates
+
+Added by Phase 2 Plan 01 (`02-01`). Covers production frontend container and Nginx proxy path correctness.
+
+Related requirements: DEP-01, DEP-02.
+
+### Required source checks (automated)
+
+| Command | Expected outcome | Owner file | Requirement IDs | Phase 2 gate |
+|---------|------------------|------------|-----------------|--------------|
+| `rtk rg -n "nginx:alpine\|npm ci\|npm run build\|VITE_API_BASE_URL\|VITE_LLM_API_URL" frontend/Dockerfile` | All 5 patterns found | `frontend/Dockerfile` | DEP-01 | **Required** |
+| `rtk rg -n "location /api/chat\|proxy_pass http://llm-service:5000" frontend/nginx.conf nginx/nginx.conf` | Both files have non-stripping chat proxy | `frontend/nginx.conf`, `nginx/nginx.conf` | DEP-02 | **Required** |
+| `rtk rg -n "profiles:\|prod\|frontend-prod\|VITE_API_BASE_URL\|VITE_LLM_API_URL" docker-compose.yml` | Prod profile service present with build args | `docker-compose.yml` | DEP-01, DEP-02 | **Required** |
+| `rtk rg -n "location /avatars/" frontend/nginx.conf nginx/nginx.conf` | Avatar proxy in both nginx configs | `frontend/nginx.conf`, `nginx/nginx.conf` | DEP-02 | **Required** |
+
+### Manual smoke checks (require Docker daemon)
+
+| Command | Prerequisites | Expected outcome | Owner file | Phase 2 gate |
+|---------|---------------|------------------|------------|--------------|
+| `rtk docker compose --profile prod build frontend-prod` | Docker daemon running | Build succeeds; final stage is `nginx:alpine` | `frontend/Dockerfile`, `docker-compose.yml` | **Not required** (manual/slow) |
+| `rtk proxy sh -lc 'docker run --rm -v "$(pwd)/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:alpine nginx -t'` | Docker daemon running | `nginx -t` syntax check passes | `frontend/nginx.conf` | **Not required** (manual/slow) |
+| `curl -I http://localhost:80` | Prod profile stack up (`docker compose --profile prod up -d`) | HTTP 200 with Nginx headers; no `X-Powered-By: Vite` | `docker-compose.yml` | **Not required** (manual/slow) |
+
+### Required application gate (after Plan 03)
+
+| Command | Expected outcome | Owner file | Requirement IDs | Phase 2 gate |
+|---------|------------------|------------|-----------------|--------------|
+| `rtk proxy sh -lc 'cd frontend && npm test -- --run services/tests/apiService.test.js'` | apiService unit tests pass with relative `/api` base URL | `frontend/src/services/tests/apiService.test.js` | DEP-02, TEST-01 | **Required after Plan 03** |
+
+### Phase 2 plan-to-requirement mapping
+
+| Plan | Deliverable | Requirement IDs |
+|------|-------------|-----------------|
+| `02-01` | Multi-stage `frontend/Dockerfile`, nginx proxy configs, Compose `prod` profile, env docs | DEP-01, DEP-02 |
+| `02-02` | API client service (relative URLs, axios instance) | DEP-02 |
+| `02-03` | Baseline-verification update and integration test gates | DEP-01, DEP-02, TEST-01 |
+
