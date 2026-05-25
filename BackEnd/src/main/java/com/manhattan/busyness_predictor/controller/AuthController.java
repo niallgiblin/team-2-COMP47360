@@ -178,13 +178,24 @@ public class AuthController {
         // Delete the file if it exists
         if (currentAvatarUrl != null && currentAvatarUrl.startsWith("/avatars/")) {
             String filename = currentAvatarUrl.substring("/avatars/".length());
-            File avatarFile = new File(avatarsDir, filename);
-            if (avatarFile.exists()) {
-                boolean deleted = avatarFile.delete();
-                if (!deleted) {
-                    // Log the failure but don't throw an exception
-                    System.err.println("Failed to delete avatar file: " + avatarFile.getAbsolutePath());
+            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+                return ResponseEntity.badRequest().build();
+            }
+            try {
+                File baseDir = new File(avatarsDir).getCanonicalFile();
+                File avatarFile = new File(baseDir, filename).getCanonicalFile();
+                if (!avatarFile.getPath().startsWith(baseDir.getPath() + File.separator)
+                        && !avatarFile.getPath().equals(baseDir.getPath())) {
+                    return ResponseEntity.notFound().build();
                 }
+                if (avatarFile.exists()) {
+                    boolean deleted = avatarFile.delete();
+                    if (!deleted) {
+                        System.err.println("Failed to delete avatar file: " + avatarFile.getAbsolutePath());
+                    }
+                }
+            } catch (IOException e) {
+                return ResponseEntity.notFound().build();
             }
         }
 

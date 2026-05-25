@@ -1,6 +1,7 @@
 package com.manhattan.busyness_predictor.controller;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -23,8 +24,16 @@ public class AvatarController {
     @GetMapping("/{filename:.+}")
     public ResponseEntity<Resource> serveAvatar(@PathVariable String filename) {
         try {
-            File avatarFile = new File(avatarsDir, filename);
-            if (!avatarFile.exists()) {
+            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+                return ResponseEntity.badRequest().build();
+            }
+            File baseDir = new File(avatarsDir).getCanonicalFile();
+            File avatarFile = new File(baseDir, filename).getCanonicalFile();
+            if (!avatarFile.getPath().startsWith(baseDir.getPath() + File.separator)
+                    && !avatarFile.getPath().equals(baseDir.getPath())) {
+                return ResponseEntity.notFound().build();
+            }
+            if (!avatarFile.exists() || !avatarFile.isFile()) {
                 return ResponseEntity.notFound().build();
             }
 
@@ -46,7 +55,7 @@ public class AvatarController {
             } else {
                 return ResponseEntity.notFound().build();
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             return ResponseEntity.notFound().build();
         }
     }
