@@ -97,16 +97,22 @@ def verify_file_paths():
     missing_files = []
     
     if not os.path.exists(model_path):
-        missing_files.append(f"Model path: {model_path}")
+        missing_files.append("MODEL_PATH")
     if not os.path.exists(data_path):
-        missing_files.append(f"Data path: {data_path}")
+        missing_files.append("DATA_PATH")
     if not os.path.exists(embeddings_path):
-        missing_files.append(f"Embeddings path: {embeddings_path}")
+        missing_files.append("EMBEDDINGS_PATH")
     
     if missing_files:
         logger.error("Missing required files:")
         for missing in missing_files:
-            logger.error(f"  - {missing}")
+            logger.error("  - %s", missing)
+        logger.debug(
+            "Resolved paths: MODEL_PATH=%s DATA_PATH=%s EMBEDDINGS_PATH=%s",
+            model_path,
+            data_path,
+            embeddings_path,
+        )
         return False, missing_files
     
     logger.info("All required files found")
