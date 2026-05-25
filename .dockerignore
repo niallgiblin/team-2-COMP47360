@@ -26,4 +26,12 @@ node_modules/
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+# Generated outputs (build artifacts and test metrics)
+test-reports/
+frontend/dist/
+.vite/
+docs/controller-coverage.txt
+docs/service-coverage.txt
+docs/frontend-tests.txt

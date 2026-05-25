@@ -17,3 +17,9 @@ Desktop.ini
 *.log
 .env
 *.pem
+
+# Generated outputs (build artifacts and test metrics)
+test-reports/
+docs/controller-coverage.txt
+docs/service-coverage.txt
+docs/frontend-tests.txt
