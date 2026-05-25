@@ -10,6 +10,7 @@ try:
     from predictor.busyness import (
         initialize_busyness_models,
         predict_busyness_for_all_zones,
+        verify_file_paths,
         dnn_models
     )
     from predictor import busyness as busyness_module
@@ -23,6 +24,8 @@ except Exception as e:
     busyness_module = None
     def initialize_busyness_models() -> bool:
         return False
+    def verify_file_paths():
+        return False, ["predictor.busyness import failed"]
     def predict_busyness_for_all_zones(lat, lon) -> dict:
         return {}
 
@@ -189,6 +192,11 @@ def initialize_service():
     global initialized, initialization_error
     logger.info("Starting synchronous model initialization...")
     try:
+        paths_ok, missing = verify_file_paths()
+        if not paths_ok:
+            initialization_error = f"Missing model paths: {missing}"
+            logger.error("Service initialization failed: %s", initialization_error)
+            return
         # The logic in busyness.py requires both DNNs and the final LSTM to be loaded.
         success = initialize_busyness_models()
         if success and len(dnn_models) > 0 and busyness_module and busyness_module.final_lstm_model is not None:
