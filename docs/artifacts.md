@@ -71,10 +71,13 @@ Small configuration and tokenizer files under the sentence-transformers model di
 
 | Path | Producer | Notes |
 |------|----------|-------|
-| `test-reports/` | `run-tests.sh` | Timestamped HTML, JSON, metrics, and manual test artifacts |
-| `docs/controller-coverage.txt` | `scripts/run-tests.sh` | Generated metric snapshot; target for ignore/redirect in later phases |
-| `docs/service-coverage.txt` | `scripts/run-tests.sh` | Generated metric snapshot |
-| `docs/frontend-tests.txt` | `scripts/run-tests.sh` | Generated metric snapshot |
+| `test-reports/` | `scripts/run-tests.sh` | Timestamped HTML, JSON, metrics, and manual test artifacts |
+| `test-reports/controller-coverage.txt` | `scripts/run-tests.sh` | Generated controller coverage metric snapshot |
+| `test-reports/service-coverage.txt` | `scripts/run-tests.sh` | Generated service coverage metric snapshot |
+| `test-reports/frontend-tests.txt` | `scripts/run-tests.sh` | Generated frontend test count snapshot |
+| `docs/controller-coverage.txt` | — | Legacy path; ignored by `.gitignore` (superseded by `test-reports/`) |
+| `docs/service-coverage.txt` | — | Legacy path; ignored by `.gitignore` (superseded by `test-reports/`) |
+| `docs/frontend-tests.txt` | — | Legacy path; ignored by `.gitignore` (superseded by `test-reports/`) |
 
 ## Runtime Path Expectations
 
@@ -105,7 +108,7 @@ Generated outputs must not be confused with authored documentation or runtime ML
 
 - **Build outputs** (`BackEnd/target/`, `frontend/dist/`, `.vite/`) are produced by build tools and excluded from normal source review.
 - **Test reports** under `test-reports/` are produced by `run-tests.sh` and may remain tracked until an explicit cleanup plan removes them from Git.
-- **Metric snapshots** under `docs/*.txt` from `scripts/run-tests.sh` are generated counts, not curated documentation.
+- **Metric snapshots** under `test-reports/*.txt` from `scripts/run-tests.sh` are generated counts, not curated documentation. Legacy `docs/*.txt` paths remain in `.gitignore` only.
 
 Do not commit fresh build or report output unless deliberately curating a snapshot for documentation.
 
