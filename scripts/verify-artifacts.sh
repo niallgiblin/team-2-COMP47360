@@ -6,10 +6,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if ! command -v shasum >/dev/null 2>&1; then
-  echo "ERROR: shasum not found. On Linux, compare files manually with sha256sum." >&2
-  exit 1
-fi
+hash_cmd() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    echo "ERROR: need shasum or sha256sum" >&2
+    exit 1
+  fi
+}
 
 echo "Verifying runtime artifact checksums..."
 echo "======================================"
@@ -29,7 +35,7 @@ verify_file() {
   fi
 
   local actual
-  actual="$(shasum -a 256 "$file" | awk '{print $1}')"
+  actual="$(hash_cmd "$file")"
   checked=$((checked + 1))
 
   if [ "$actual" = "$expected" ]; then
