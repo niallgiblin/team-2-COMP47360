@@ -1,3 +1,17 @@
+# Dev: Vite HMR (docker-compose default frontend service)
+FROM node:20-alpine AS dev
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 5173 24678
+
+CMD ["npm", "run", "dev"]
+
 # Stage 1: Build
 FROM node:20-alpine AS builder
 
