@@ -65,7 +65,7 @@ def _env_int(name, default):
 # Global state with bounded process-local caching
 initialized = False
 initialization_error = None
-pending_request = None
+inflight_requests = {}
 request_lock = threading.Lock()
 LIVE_CACHE_TTL_SECONDS = _env_int("BUSYNESS_LIVE_CACHE_TTL_SECONDS", 30 * 60)
 FORECAST_CACHE_TTL_SECONDS = _env_int("BUSYNESS_FORECAST_CACHE_TTL_SECONDS", 30 * 60)
@@ -232,50 +232,51 @@ def get_busyness():
             "error": "Service is not ready. Please try again later."
         }), 503
 
-    global pending_request
-    
-    # Check if there's already a pending request
+    lat = request.args.get('lat', default=40.7580, type=float)
+    lon = request.args.get('lon', default=-73.9855, type=float)
+    cache_key = build_live_cache_key(lat, lon)
+
     with request_lock:
-        if pending_request:
-            logger.info("Waiting for existing request to complete")
-            try:
-                result = pending_request.result()
-                return jsonify(result)
-            except Exception as e:
-                logger.error("Error waiting for existing request: %s", e)
-                pending_request = None
-        
-        # Create new request
-        import concurrent.futures
-        pending_request = concurrent.futures.Future()
-    
+        existing = inflight_requests.get(cache_key)
+        if existing is not None:
+            logger.info("Waiting for existing request for cache key %s", cache_key)
+            waiter_future = existing
+        else:
+            inflight_requests[cache_key] = concurrent.futures.Future()
+            waiter_future = None
+
+    if waiter_future is not None:
+        try:
+            return jsonify(waiter_future.result())
+        except Exception as e:
+            logger.error("Error waiting for existing request: %s", e)
+            return jsonify({"success": False, "error": "Internal server error"}), 500
+
     try:
-        # Use provided lat/lon or default to a central Manhattan location (Times Square)
-        lat = request.args.get('lat', default=40.7580, type=float)
-        lon = request.args.get('lon', default=-73.9855, type=float)
-        
         logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
         response = build_busyness_response(lat, lon)
         logger.info("Final busyness response generated; cached=%s", response["cached"])
-        
-        # Set the result for any waiting requests
+
         with request_lock:
-            if pending_request:
-                pending_request.set_result(response)
-                pending_request = None
-        
+            pending = inflight_requests.get(cache_key)
+            if pending is not None:
+                pending.set_result(response)
+
         return jsonify(response)
 
     except Exception as e:
         logger.error(f"Error in /busyness endpoint: {str(e)}", exc_info=True)
-        
-        # Set the error for any waiting requests
+
         with request_lock:
-            if pending_request:
-                pending_request.set_exception(e)
-                pending_request = None
-        
+            pending = inflight_requests.get(cache_key)
+            if pending is not None:
+                pending.set_exception(e)
+
         return jsonify({"success": False, "error": "Internal server error"}), 500
+
+    finally:
+        with request_lock:
+            inflight_requests.pop(cache_key, None)
 
 def initialize_service():
     """Synchronously initialize the service by loading all models."""
