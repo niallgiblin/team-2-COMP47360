@@ -10,3 +10,4 @@ scikit-learn==1.6.1
 python-dotenv==1.1.1
 requests==2.32.4
 psutil==7.0.0
+PyJWT==2.10.1
