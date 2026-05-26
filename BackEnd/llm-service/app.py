@@ -425,16 +425,21 @@ if not initialization_success:
 # --- Chatbot Logic (Merged) ---
 
 CHAT_API_URL = "https://router.huggingface.co/together/v1/chat/completions"
+DEFAULT_HF_CHAT_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
+HF_CHAT_MODEL = os.environ.get("HF_CHAT_MODEL", DEFAULT_HF_CHAT_MODEL)
 HF_HEADERS = {
     "Authorization": f"Bearer {os.environ.get('HF_TOKEN')}",
 }
 
-def huggingface_chat_api_call(messages, model="meta-llama/Llama-3.2-3B-Instruct-Turbo"):
+def huggingface_chat_api_call(messages, model=None):
     """Make a call to the Hugging Face chat completions API"""
     token = os.environ.get('HF_TOKEN')
     if not token or token == "your-hugging-face-api-token":
         logger.error("CRITICAL: HF_TOKEN environment variable is not set or is using a placeholder value.")
         raise ValueError("Hugging Face API token is missing or invalid.")
+
+    if model is None:
+        model = HF_CHAT_MODEL
 
     logger.info("Making request to Hugging Face API...")
     payload = {"messages": messages, "model": model, "max_tokens": 400, "temperature": 0.4, "top_p": 0.9}
@@ -472,7 +477,8 @@ def most_similar_locs_for_chat(query):
         loc_info_parts = []
         for _, idx in zip(top_results.values, top_results.indices):
             loc = df.iloc[idx.item()]
-            loc_info_parts.append(f"- {loc['name']} ({loc['zone']}): {loc['type']}")
+            loc_type = loc.get("loc_type", "") if hasattr(loc, "get") else loc["loc_type"]
+            loc_info_parts.append(f"- {loc['name']} ({loc['zone']}): {loc_type}")
         
         return "Here are some similar locations:\n" + "\n".join(loc_info_parts)
     except Exception as e:
