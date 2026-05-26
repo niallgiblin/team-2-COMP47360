@@ -240,11 +240,12 @@ describe('production-style relative routes', () => {
     expect(result).toEqual(fakeReply)
   })
 
-  test('chatAPI.sendMessage does not send Authorization header (D-15)', async () => {
+  test('chatAPI.sendMessage sends Authorization header when token exists (D-01)', async () => {
+    localStorage.setItem('token', 'chat_tok_abc')
     fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ response: 'ok' }) })
     await chatAPI.sendMessage('hello', [])
     const callArgs = fetch.mock.calls[0][1]
-    expect(callArgs.headers).not.toHaveProperty('Authorization')
+    expect(callArgs.headers.Authorization).toBe('Bearer chat_tok_abc')
   })
 
   test('friends call with token asserts Authorization Bearer header', async () => {

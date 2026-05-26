@@ -6,6 +6,7 @@ import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.service.VibeService;
+import com.manhattan.busyness_predictor.security.RateLimitService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -50,6 +53,9 @@ class VibeControllerTest {
 
     @org.springframework.boot.test.mock.mockito.MockBean
     private VibeService vibeService;
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private RateLimitService rateLimitService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -159,6 +165,58 @@ class VibeControllerTest {
     }
 
     @Test
+    @DisplayName("Search rejects maxResults below minimum")
+    void searchLocations_ShouldRejectMaxResultsBelowMinimum() throws Exception {
+        VibeSearchRequest request = new VibeSearchRequest();
+        request.setVibeDescription("happy");
+        request.setMaxResults(0);
+
+        mockMvc.perform(post("/api/vibe/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        verify(vibeService, never()).findLocationsByVibe(any(VibeSearchRequest.class));
+    }
+
+    @Test
+    @DisplayName("Search rejects maxResults above maximum")
+    void searchLocations_ShouldRejectMaxResultsAboveMaximum() throws Exception {
+        VibeSearchRequest request = new VibeSearchRequest();
+        request.setVibeDescription("happy");
+        request.setMaxResults(26);
+
+        mockMvc.perform(post("/api/vibe/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        verify(vibeService, never()).findLocationsByVibe(any(VibeSearchRequest.class));
+    }
+
+    @Test
+    @DisplayName("Similar locations rejects limit below minimum")
+    void similarLocations_ShouldRejectLimitBelowMinimum() throws Exception {
+        mockMvc.perform(post("/api/vibe/similar")
+                .param("locationId", "1")
+                .param("limit", "0"))
+            .andExpect(status().isBadRequest());
+
+        verify(vibeService, never()).findSimilarLocations(any(), any());
+    }
+
+    @Test
+    @DisplayName("Similar locations rejects limit above maximum")
+    void similarLocations_ShouldRejectLimitAboveMaximum() throws Exception {
+        mockMvc.perform(post("/api/vibe/similar")
+                .param("locationId", "1")
+                .param("limit", "26"))
+            .andExpect(status().isBadRequest());
+
+        verify(vibeService, never()).findSimilarLocations(any(), any());
+    }
+
+    @Test
     @DisplayName("Trending locations should return trending locations")
     void trendingLocations_ShouldReturnTrendingLocations() throws Exception {
         // Arrange
@@ -264,4 +322,3 @@ class VibeControllerTest {
             .andExpect(jsonPath("$.busyness.zone2").value(3.5));
     }
 }
-

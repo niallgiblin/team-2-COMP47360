@@ -39,14 +39,14 @@ public class AvatarController {
 
             Resource resource = new UrlResource(avatarFile.toURI());
             if (resource.exists() && resource.isReadable()) {
-                // Determine content type based on file extension
-                String contentType = "image/jpeg"; // default
-                if (filename.toLowerCase().endsWith(".png")) {
+                String lowerFilename = filename.toLowerCase();
+                String contentType;
+                if (lowerFilename.endsWith(".jpg") || lowerFilename.endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (lowerFilename.endsWith(".png")) {
                     contentType = "image/png";
-                } else if (filename.toLowerCase().endsWith(".gif")) {
-                    contentType = "image/gif";
-                } else if (filename.toLowerCase().endsWith(".webp")) {
-                    contentType = "image/webp";
+                } else {
+                    return ResponseEntity.notFound().build();
                 }
 
                 return ResponseEntity.ok()

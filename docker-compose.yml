@@ -102,8 +102,8 @@ services:
     build:
       context: ./BackEnd/llm-service
     container_name: urban-gala-llm
-    ports:
-      - "5001:5000"
+    expose:
+      - "5000"
     # Mount the entire data directory, which now includes the CSV file
     volumes:
       - ./BackEnd/llm-service/data:/app/data:ro
@@ -112,6 +112,8 @@ services:
       - MODEL_PATH=/app/models/sentence-transformers
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - HF_TOKEN=${HF_TOKEN}
+      - APP_JWT_SECRET=${APP_JWT_SECRET}
+      - FLASK_CORS_ALLOWED_ORIGINS=${FLASK_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
       - DATA_PATH=/app/data/locations.csv
       - PYTHONUNBUFFERED=1
     networks:
@@ -138,13 +140,14 @@ services:
     build:
       context: ./BackEnd/busyness-service
     container_name: urban-gala-busyness
-    ports:
-      - "5002:5000"
+    expose:
+      - "5000"
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
       - MODEL_PATH=/app/models/DNNs
       - LSTM_MODEL_PATH=/app/models/LSTMs/Fin.keras
+      - FLASK_CORS_ALLOWED_ORIGINS=${FLASK_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
     networks:
       - app-network
     healthcheck:

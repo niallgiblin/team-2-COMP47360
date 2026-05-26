@@ -79,6 +79,9 @@ public class VibeController {
     public ResponseEntity<Map<String, Object>> findSimilarLocations(
             @RequestParam Integer locationId,
             @RequestParam(defaultValue = "5") Integer limit) {
+        if (limit < 1 || limit > 25) {
+            throw new IllegalArgumentException("limit must be between 1 and 25");
+        }
         List<LocationDto> similarLocations = vibeService.findSimilarLocations(locationId, limit);
 
         Map<String, Object> response = new HashMap<>();

@@ -79,6 +79,7 @@ python-dateutil==2.9.0.post0
     # via pandas
 python-dotenv==1.1.1
     # via -r requirements.in
+PyJWT==2.10.1
 pytz==2025.2
     # via pandas
 pyyaml==6.0.2

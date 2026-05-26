@@ -256,9 +256,33 @@ spring.datasource.password=${MYSQL_PASSWORD}
 
 ### Rate Limiting
 
-- **API Rate Limits**: Implemented to prevent abuse
-- **Request Throttling**: Automatic throttling of excessive requests
-- **DDoS Protection**: Basic protection against distributed attacks
+Phase 04 uses bounded in-process Bucket4j-style buckets for expensive Spring routes. These limits are single-instance controls: quota state is per JVM, counters reset on restart, and multiple backend replicas do not share quota state.
+
+Configuration:
+
+```bash
+APP_RATE_LIMIT_EXPENSIVE_CAPACITY=30
+APP_RATE_LIMIT_EXPENSIVE_REFILL_SECONDS=60
+APP_RATE_LIMIT_EXPENSIVE_MAX_BUCKETS=10000
+```
+
+For multi-instance staging or production abuse prevention, use Redis-backed Bucket4j or an API gateway/Nginx rate-limit layer with user-aware keys. Do not treat the Phase 04 in-process limiter as distributed DDoS protection.
+
+### Flask Service Exposure
+
+The Flask work endpoints `/search`, `/api/chat`, `/busyness`, and prediction work reached through `/busyness` are private service surfaces. Docker Compose keeps `llm-service` and `busyness-service` on the internal Docker network with `expose: ["5000"]`; direct host port publishing is dev-only and must not be used for staging or production.
+
+`/api/chat` is the only browser-reachable Flask work route through Nginx. It requires the same `APP_JWT_SECRET` signing secret used by Spring, and requests without a valid Bearer JWT fail before LLM prompt construction, similarity search, model work, or Hugging Face calls.
+
+### Flask CORS
+
+Both Flask services read `FLASK_CORS_ALLOWED_ORIGINS`. The local default is:
+
+```bash
+FLASK_CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+```
+
+Credentials are disabled by default. Production and staging must set explicit frontend origins and must not use wildcard `*` for Flask CORS.
 
 ## Frontend Security
 

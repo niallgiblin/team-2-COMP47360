@@ -1,5 +1,7 @@
 package com.manhattan.busyness_predictor.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -9,6 +11,8 @@ public class VibeSearchRequest {
     @Size(max = 500, message = "Vibe description cannot exceed 500 characters")
     private String vibeDescription;
 
+    @Min(value = 1, message = "maxResults must be at least 1")
+    @Max(value = 25, message = "maxResults must not exceed 25")
     private Integer maxResults = 10;
     
     private String location; // Optional: "Manhattan", "Downtown", etc.

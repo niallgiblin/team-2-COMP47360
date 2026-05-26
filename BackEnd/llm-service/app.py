@@ -14,6 +14,8 @@ import sys
 import requests
 import hashlib
 import pickle
+import jwt
+from jwt import InvalidTokenError
 
 # Anchor: BackEnd/llm-service/ from app.py (D-10)
 _LLM_SERVICE_DIR = Path(__file__).parent.resolve()
@@ -46,7 +48,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+
+def _parse_allowed_origins():
+    configured = os.getenv("FLASK_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+CORS(app, origins=_parse_allowed_origins(), supports_credentials=False)
 
 # Global variables
 model: Optional[SentenceTransformer] = None
@@ -496,6 +503,10 @@ def get_ai_response(query, previous_questions):
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
     """Chat endpoint for AI interactions"""
+    auth_error = validate_chat_jwt()
+    if auth_error is not None:
+        return auth_error
+
     if not request.is_json:
         return jsonify({'error': 'Content-Type must be application/json'}), 415
     
@@ -512,6 +523,34 @@ def chat_endpoint():
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+
+def validate_chat_jwt():
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return chat_auth_error()
+
+    token = auth_header[len("Bearer "):].strip()
+    if not token:
+        return chat_auth_error()
+
+    secret = os.getenv("APP_JWT_SECRET")
+    if not secret:
+        logger.error("APP_JWT_SECRET is required for /api/chat JWT validation")
+        return chat_auth_error()
+
+    try:
+        jwt.decode(token, secret, algorithms=["HS256"])
+        return None
+    except InvalidTokenError:
+        return chat_auth_error()
+
+def chat_auth_error():
+    return jsonify({
+        "error": "Authentication required",
+        "message": "Authentication required",
+        "status": 401,
+        "code": "AUTHENTICATION_REQUIRED"
+    }), 401
 
 if __name__ == '__main__':
     # Development server

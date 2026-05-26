@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -45,7 +45,10 @@ import com.manhattan.busyness_predictor.service.AuthService;
 public class AuthController {
 
     private static final Set<String> ALLOWED_AVATAR_EXTENSIONS =
-            Set.of(".jpg", ".jpeg", ".png", ".webp");
+            Set.of(".jpg", ".jpeg", ".png");
+
+    private static final byte[] PNG_SIGNATURE =
+            new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
     @Autowired
     private AuthService authService;
@@ -127,7 +130,7 @@ public class AuthController {
             throw new RuntimeException("You are not authorized to update this profile. You can only update your own.");
         }
         if (avatarFile.isEmpty()) {
-            throw new RuntimeException("No file uploaded");
+            throw new IllegalArgumentException("No file uploaded");
         }
 
         File dir = new File(avatarsDir);
@@ -138,26 +141,32 @@ public class AuthController {
             }
         }
 
-        // Validate extension allowlist and image content (magic bytes via ImageIO)
+        // Validate extension allowlist and image content (magic bytes plus ImageIO decode).
         String original = avatarFile.getOriginalFilename();
         if (original == null || !original.contains(".")) {
-            throw new RuntimeException("File must have a valid image extension");
+            throw new IllegalArgumentException("File must have a valid image extension");
         }
         String ext = original.substring(original.lastIndexOf('.')).toLowerCase();
         if (!ALLOWED_AVATAR_EXTENSIONS.contains(ext)) {
-            throw new RuntimeException("File must be a JPG, PNG, or WebP image");
+            throw new IllegalArgumentException("File must be a JPG or PNG image");
+        }
+
+        byte[] bytes = avatarFile.getBytes();
+        String detectedExtension = detectImageExtension(bytes);
+        if (detectedExtension == null || !extensionMatchesContent(ext, detectedExtension)) {
+            throw new IllegalArgumentException("File content does not match a supported image type");
         }
 
         try (InputStream is = avatarFile.getInputStream()) {
             BufferedImage image = ImageIO.read(is);
             if (image == null) {
-                throw new RuntimeException("File must be a valid image");
+                throw new IllegalArgumentException("File must be a valid image");
             }
         } catch (IOException e) {
-            throw new RuntimeException("Failed to validate image file");
+            throw new IllegalArgumentException("Failed to validate image file");
         }
 
-        String filename = "avatar_user_" + userId + "_" + System.currentTimeMillis() + ext;
+        String filename = "avatar_user_" + userId + "_" + System.currentTimeMillis() + detectedExtension;
         File dest = new File(dir, filename);
         
         try {
@@ -174,6 +183,27 @@ public class AuthController {
         response.put("user", updatedUser);
 
         return ResponseEntity.ok(response);
+    }
+
+    private String detectImageExtension(byte[] bytes) {
+        if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xD8
+                && (bytes[2] & 0xFF) == 0xFF) {
+            return ".jpg";
+        }
+        if (bytes.length >= PNG_SIGNATURE.length
+                && Arrays.equals(Arrays.copyOf(bytes, PNG_SIGNATURE.length), PNG_SIGNATURE)) {
+            return ".png";
+        }
+        return null;
+    }
+
+    private boolean extensionMatchesContent(String extension, String detectedExtension) {
+        if (".jpg".equals(detectedExtension)) {
+            return ".jpg".equals(extension) || ".jpeg".equals(extension);
+        }
+        return detectedExtension.equals(extension);
     }
 
     @DeleteMapping("/profile/{userId}/avatar")

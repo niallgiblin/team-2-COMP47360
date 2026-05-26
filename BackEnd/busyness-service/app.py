@@ -4,6 +4,7 @@ import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import threading
+import os
 
 # Import and inspect the predictor module
 try:
@@ -38,7 +39,12 @@ logging.basicConfig(
 logger = logging.getLogger("app")
 
 app = Flask(__name__)
-CORS(app)
+
+def _parse_allowed_origins():
+    configured = os.getenv("FLASK_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+CORS(app, origins=_parse_allowed_origins(), supports_credentials=False)
 
 # Global state with improved caching
 initialized = False

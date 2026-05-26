@@ -127,12 +127,17 @@ export const vibeAPI = {
   trendingUrl: () => joinApiPath(resolveApiBaseUrl(), '/vibe/trending'),
 };
 
-// Chat API — unauthenticated POST per D-15; no Bearer token required
+// Chat API — proxied Flask route requires the same Bearer JWT boundary as Spring.
 export const chatAPI = {
   sendMessage: async (message, history) => {
+    const token = getAuthToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(resolveLlmApiUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ message, history }),
     });
     if (!response.ok) {

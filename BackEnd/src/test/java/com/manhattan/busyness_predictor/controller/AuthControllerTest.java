@@ -1,9 +1,15 @@
 package com.manhattan.busyness_predictor.controller;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.nio.file.Path;
 import java.util.List;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,6 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.util.ReflectionTestUtils;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -61,6 +68,9 @@ public class AuthControllerTest {
     private UserDto testUserDto;
     private UserPrincipal userPrincipal;
     private TestingAuthenticationToken authentication;
+
+    @TempDir
+    private Path avatarsDir;
 
     @BeforeEach
     public void setup() {
@@ -119,6 +129,7 @@ public class AuthControllerTest {
                 .build();
         
         objectMapper = new ObjectMapper();
+        ReflectionTestUtils.setField(authController, "avatarsDir", avatarsDir.toString());
     }
 
     // Test-specific global exception handler
@@ -136,6 +147,16 @@ public class AuthControllerTest {
             errorDetails.put("error", "An unexpected internal server error has occurred.");
             errorDetails.put("message", ex.getMessage());
             return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)
+        public org.springframework.http.ResponseEntity<?> handleIllegalArgumentException(IllegalArgumentException ex) {
+            java.util.Map<String, Object> errorDetails = new java.util.HashMap<>();
+            errorDetails.put("error", "Bad request");
+            errorDetails.put("message", ex.getMessage());
+            errorDetails.put("status", 400);
+            errorDetails.put("code", "BAD_REQUEST");
+            return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.BAD_REQUEST);
         }
         
         @org.springframework.web.bind.annotation.ExceptionHandler(Exception.class)
@@ -426,5 +447,88 @@ public class AuthControllerTest {
                 .andExpect(jsonPath("$.user.phoneNumber").value("1234567890"));
 
         verify(authService).updateProfile(eq(USER_ID), any(UpdateProfileRequest.class));
+    }
+
+    @Test
+    public void whenAvatarUploadHasSpoofedContentType_thenReturnsBadRequest() throws Exception {
+        MockMultipartFile spoofed = new MockMultipartFile(
+                "avatar", "profile.jpg", "image/jpeg", "not-an-image".getBytes());
+
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(spoofed)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).updateUserAvatar(any(), anyString());
+    }
+
+    @Test
+    public void whenAvatarUploadHasMismatchedExtension_thenReturnsBadRequest() throws Exception {
+        MockMultipartFile mismatched = new MockMultipartFile(
+                "avatar", "profile.gif", "image/png", imageBytes("png"));
+
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(mismatched)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).updateUserAvatar(any(), anyString());
+    }
+
+    @Test
+    public void whenValidJpegAvatarUploaded_thenUsesGeneratedNameWithoutOriginalBasename() throws Exception {
+        UserDto updated = new UserDto();
+        updated.setId(USER_ID);
+        updated.setUsername(USERNAME);
+        updated.setAvatarUrl("/avatars/avatar_user_1_123.jpg");
+        when(authService.updateUserAvatar(eq(USER_ID), anyString())).thenReturn(updated);
+
+        MockMultipartFile jpeg = new MockMultipartFile(
+                "avatar", "my-face.jpg", "application/octet-stream", imageBytes("jpg"));
+
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(jpeg)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<String> avatarUrl = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(authService).updateUserAvatar(eq(USER_ID), avatarUrl.capture());
+        org.assertj.core.api.Assertions.assertThat(avatarUrl.getValue()).startsWith("/avatars/avatar_user_1_");
+        org.assertj.core.api.Assertions.assertThat(avatarUrl.getValue()).endsWith(".jpg");
+        org.assertj.core.api.Assertions.assertThat(avatarUrl.getValue()).doesNotContain("my-face");
+    }
+
+    @Test
+    public void whenValidPngAvatarUploaded_thenUsesPngGeneratedName() throws Exception {
+        UserDto updated = new UserDto();
+        updated.setId(USER_ID);
+        updated.setUsername(USERNAME);
+        updated.setAvatarUrl("/avatars/avatar_user_1_123.png");
+        when(authService.updateUserAvatar(eq(USER_ID), anyString())).thenReturn(updated);
+
+        MockMultipartFile png = new MockMultipartFile(
+                "avatar", "original.png", "image/jpeg", imageBytes("png"));
+
+        mockMvc.perform(multipart("/api/auth/profile/{userId}/avatar", USER_ID)
+                .file(png)
+                .header("Authorization", "Bearer " + TOKEN)
+                .with(authentication(authentication)))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<String> avatarUrl = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(authService).updateUserAvatar(eq(USER_ID), avatarUrl.capture());
+        org.assertj.core.api.Assertions.assertThat(avatarUrl.getValue()).startsWith("/avatars/avatar_user_1_");
+        org.assertj.core.api.Assertions.assertThat(avatarUrl.getValue()).endsWith(".png");
+        org.assertj.core.api.Assertions.assertThat(avatarUrl.getValue()).doesNotContain("original");
+    }
+
+    private byte[] imageBytes(String format) throws Exception {
+        BufferedImage image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(image, format, output);
+        return output.toByteArray();
     }
 }
