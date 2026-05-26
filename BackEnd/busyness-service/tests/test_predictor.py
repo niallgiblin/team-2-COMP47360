@@ -103,6 +103,18 @@ def test_normalize_predictions_edge_cases(monkeypatch, tmp_path):
     assert app_module.normalize_predictions({"100 NET": None}) == {"100": 0.0}
 
 
+def test_normalize_predictions_uses_full_zone_name_on_prefix_collision(monkeypatch, tmp_path):
+    from conftest import load_busyness_app
+
+    app_module = load_busyness_app(monkeypatch, tmp_path)
+
+    result = app_module.normalize_predictions({"100 NET": 0.0, "100 BUS": 1.0})
+
+    assert set(result.keys()) == {"100 NET", "100 BUS"}
+    assert result["100 NET"] == 0.0
+    assert result["100 BUS"] == 1.0
+
+
 def test_weather_fallbacks_return_default_rows(monkeypatch, tmp_path):
     busyness, _env, _unsafe_calls = _import_busyness(monkeypatch, tmp_path)
     hours = [datetime(2026, 1, 1, hour) for hour in range(12)]

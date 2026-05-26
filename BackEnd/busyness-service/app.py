@@ -121,19 +121,36 @@ live_cache = BoundedTTLCache(BUSYNESS_CACHE_MAX_ENTRIES, LIVE_CACHE_TTL_SECONDS)
 forecast_cache = BoundedTTLCache(BUSYNESS_CACHE_MAX_ENTRIES, FORECAST_CACHE_TTL_SECONDS)
 
 
+def _prediction_key(zone_name, zone_names):
+    """Map a model zone name to an API prediction dict key.
+
+    Uses the numeric LocationID prefix (e.g. ``100`` from ``100 NET``) when
+    prefixes are unique across the artifact set. Falls back to the full zone
+    name when a prefix collision would silently overwrite another zone.
+    """
+    prefix = zone_name.split()[0]
+    prefixes = [name.split()[0] for name in zone_names]
+    if prefixes.count(prefix) > 1:
+        return zone_name
+    return prefix
+
+
 def normalize_predictions(predictions):
     if not predictions:
         return {}
+    zone_names = list(predictions.keys())
     valid_scores = [score for score in predictions.values() if score is not None]
     if not valid_scores:
-        return {zone.split()[0]: 0.0 for zone in predictions.keys()}
+        return {
+            _prediction_key(zone, zone_names): 0.0 for zone in zone_names
+        }
 
     min_score = min(valid_scores)
     max_score = max(valid_scores)
     score_range = max_score - min_score
     normalized_predictions = {}
     for zone_name, busyness_score in predictions.items():
-        location_id = zone_name.split()[0]
+        location_id = _prediction_key(zone_name, zone_names)
         if busyness_score is None:
             normalized_predictions[location_id] = 0.0
         elif score_range > 0:
