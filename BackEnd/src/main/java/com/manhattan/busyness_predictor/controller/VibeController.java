@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.manhattan.busyness_predictor.dto.LocationDto;
+import com.manhattan.busyness_predictor.dto.SimilarLocationsResult;
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.service.VibeService;
@@ -82,13 +82,14 @@ public class VibeController {
         if (limit < 1 || limit > 25) {
             throw new IllegalArgumentException("limit must be between 1 and 25");
         }
-        List<LocationDto> similarLocations = vibeService.findSimilarLocations(locationId, limit);
+        SimilarLocationsResult result = vibeService.findSimilarLocations(locationId, limit);
 
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Similar locations found successfully");
         response.put("baseLocationId", locationId);
-        response.put("similarLocations", similarLocations);
-        response.put("totalResults", similarLocations.size());
+        response.put("similarLocations", result.getLocations());
+        response.put("source", result.getSource());
+        response.put("totalResults", result.getLocations().size());
 
         return ResponseEntity.ok(response);
     }

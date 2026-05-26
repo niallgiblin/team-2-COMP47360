@@ -2,6 +2,7 @@ package com.manhattan.busyness_predictor.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manhattan.busyness_predictor.dto.LocationDto;
+import com.manhattan.busyness_predictor.dto.SimilarLocationsResult;
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.model.Location;
@@ -91,7 +92,7 @@ class VibeControllerTest {
 
         // Mock service behavior
         when(vibeService.findSimilarLocations(1, 2))
-            .thenReturn(List.of(dto1, dto2));
+            .thenReturn(new SimilarLocationsResult(List.of(dto1, dto2), "ml"));
 
         // Execute and verify response
         mockMvc.perform(post("/api/vibe/similar")
@@ -104,7 +105,30 @@ class VibeControllerTest {
                .andExpect(jsonPath("$.similarLocations[0].name").value("Cafe B"))
                .andExpect(jsonPath("$.similarLocations[0].type").value("Restaurant"))
                .andExpect(jsonPath("$.similarLocations.length()").value(2))
-               .andExpect(jsonPath("$.totalResults").value(2));
+               .andExpect(jsonPath("$.totalResults").value(2))
+               .andExpect(jsonPath("$.source").value("ml"));
+    }
+
+    @Test
+    void findSimilarLocations_CategoryFallback() throws Exception {
+        Location loc = new Location();
+        loc.setId(3);
+        loc.setName("Fallback Bar");
+        loc.setLat(0.0);
+        loc.setLng(0.0);
+        loc.setAddress("789 Ave");
+        loc.setIsBar(true);
+        LocationDto dto = LocationDto.fromLocation(loc);
+
+        when(vibeService.findSimilarLocations(1, 5))
+            .thenReturn(new SimilarLocationsResult(List.of(dto), "category"));
+
+        mockMvc.perform(post("/api/vibe/similar")
+                .param("locationId", "1")
+                .param("limit", "5"))
+               .andExpect(status().isOk())
+               .andExpect(jsonPath("$.source").value("category"))
+               .andExpect(jsonPath("$.similarLocations[0].name").value("Fallback Bar"));
     }
 
     @Test
