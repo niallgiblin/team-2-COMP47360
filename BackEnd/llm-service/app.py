@@ -247,6 +247,41 @@ def _create_location_dto(loc_series, similarity_score=None):
         'similarity': float(similarity_score) if similarity_score is not None else None
     }
 
+
+def find_similar_by_embedding(query_text, exclude_names=None, limit=5, candidate_indices=None):
+    """Find top similar locations by cosine similarity on precomputed embeddings."""
+    exclude_names = exclude_names or []
+    exclude_lower = {str(n).lower().strip() for n in exclude_names if n}
+
+    query_embedding = model.encode(query_text, convert_to_tensor=True).cpu()
+    similarities = util.cos_sim(query_embedding, location_embeddings)[0]
+    similarity_scores = similarities.cpu().numpy()
+
+    if candidate_indices is not None:
+        scored = [(idx, similarity_scores[idx]) for idx in candidate_indices]
+        scored.sort(key=lambda x: float(x[1]), reverse=True)
+        iter_pairs = scored
+    else:
+        k = min(len(df), max(limit + len(exclude_lower), limit * 2))
+        top_results = torch.topk(similarities, k=k)
+        iter_pairs = [
+            (idx.item(), val.item())
+            for val, idx in zip(top_results.values, top_results.indices)
+        ]
+
+    results = []
+    for idx, score in iter_pairs:
+        if len(results) >= limit:
+            break
+        loc = df.iloc[idx]
+        name = str(loc.get('name', ''))
+        if name.lower() in exclude_lower:
+            continue
+        results.append(_create_location_dto(loc, score))
+
+    confidence = float(results[0]['similarity']) if results else 0.0
+    return results, confidence
+
 if os.environ.get('FLASK_ENV') == 'development':
     @app.route('/locations/all', methods=['GET'])
     def get_all_locations():
@@ -313,12 +348,6 @@ def vibe_search():
                 'error': 'vibeDescription is required'
             }), 400
 
-        # Encode vibe description
-        logger.info(f"Encoding query: {vibe_desc}")
-        query_embedding = model.encode(vibe_desc, convert_to_tensor=True).cpu()
-        similarities = util.cos_sim(query_embedding, location_embeddings)[0]
-        similarity_scores = similarities.cpu().numpy()
-
         # Start with all data
         filtered_df = df.copy()
 
@@ -365,21 +394,12 @@ def vibe_search():
             
             return jsonify(response)
 
-        # Get similarity scores for filtered indices
-        filtered_scores = [(idx, similarity_scores[idx]) for idx in filtered_indices]
-        filtered_scores.sort(key=lambda x: float(x[1]), reverse=True)
-
-        # Get top results
-        top_results = filtered_scores[:max_results]
-
-        # Build response
-        results = []
-        for idx, score in top_results:
-            loc = df.iloc[idx]
-            results.append(_create_location_dto(loc, score))
-
-        # Determine confidence score from the top result's similarity score
-        confidence_score = float(top_results[0][1]) if top_results else 0.0
+        logger.info(f"Encoding query: {vibe_desc}")
+        results, confidence_score = find_similar_by_embedding(
+            vibe_desc,
+            limit=max_results,
+            candidate_indices=filtered_indices,
+        )
 
         response = {
             'success': True,
