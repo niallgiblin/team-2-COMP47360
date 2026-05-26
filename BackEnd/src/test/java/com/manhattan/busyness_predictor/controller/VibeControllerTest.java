@@ -62,7 +62,7 @@ class VibeControllerTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void findSimilarLocations_Ok() throws Exception {
+    void findSimilarLocations_includesSourceMl() throws Exception {
         // Prepare sample locations and DTOs
         Location loc1 = new Location();
         loc1.setId(2);
@@ -110,7 +110,7 @@ class VibeControllerTest {
     }
 
     @Test
-    void findSimilarLocations_CategoryFallback() throws Exception {
+    void findSimilarLocations_includesSourceCategory() throws Exception {
         Location loc = new Location();
         loc.setId(3);
         loc.setName("Fallback Bar");
@@ -127,8 +127,12 @@ class VibeControllerTest {
                 .param("locationId", "1")
                 .param("limit", "5"))
                .andExpect(status().isOk())
-               .andExpect(jsonPath("$.source").value("category"))
-               .andExpect(jsonPath("$.similarLocations[0].name").value("Fallback Bar"));
+               .andExpect(jsonPath("$.message").value("Similar locations found successfully"))
+               .andExpect(jsonPath("$.baseLocationId").value(1))
+               .andExpect(jsonPath("$.similarLocations", hasSize(1)))
+               .andExpect(jsonPath("$.similarLocations[0].name").value("Fallback Bar"))
+               .andExpect(jsonPath("$.totalResults").value(1))
+               .andExpect(jsonPath("$.source").value("category"));
     }
 
     @Test
@@ -140,7 +144,7 @@ class VibeControllerTest {
         request.setMaxResults(3);
 
         VibeSearchResponse response = new VibeSearchResponse();
-        
+
         Location loc3 = new Location();
         loc3.setId(4);
         loc3.setName("locA");
@@ -185,7 +189,10 @@ class VibeControllerTest {
             .andExpect(jsonPath("$.locations[0].type").value("Bar"))
             .andExpect(jsonPath("$.locations[1].id").value(5))
             .andExpect(jsonPath("$.locations[1].name").value("locB"))
-            .andExpect(jsonPath("$.locations[1].type").value("Restaurant"));
+            .andExpect(jsonPath("$.locations[1].type").value("Restaurant"))
+            .andExpect(jsonPath("$.llmExplanation")
+                .value("ML-powered recommendations based on your vibe description"))
+            .andExpect(jsonPath("$.totalResults").value(2));
     }
 
     @Test
