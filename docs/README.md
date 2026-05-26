@@ -33,7 +33,7 @@ Follow these instructions to set up and run the project locally.
 -   **Docker Desktop:** Download and install. This includes Docker Compose.
 -   **Git LFS:** Required for handling large model files. Install from here.
 
-Before starting services, read [Runtime Artifact Policy](artifacts.md) for **runtime model artifacts** — expected repository paths, ownership (Git LFS vs source-owned metadata), and manual checksum verification with `scripts/verify-artifacts.sh`.
+Before starting services, read [Runtime Artifact Policy](artifacts.md) for **runtime model artifacts** — expected repository paths, ownership (Git LFS vs source-owned metadata), manual checksum verification with `scripts/verify-artifacts.sh`, busyness startup checksum enforcement, and process-local busyness cache behavior.
 
 ### 1. Clone the Repository
 

@@ -5,10 +5,12 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import threading
 import os
+from collections import OrderedDict
 
 # Import and inspect the predictor module
 try:
     from predictor.busyness import (
+        forecast_busyness_for_all_zones,
         initialize_busyness_models,
         predict_busyness_for_all_zones,
         verify_file_paths,
@@ -29,6 +31,8 @@ except Exception as e:
         return False, ["predictor.busyness import failed"]
     def predict_busyness_for_all_zones(lat, lon) -> dict:
         return {}
+    def forecast_busyness_for_all_zones(lat, lon) -> list:
+        return []
 
 # Configure logging with more detailed output
 logging.basicConfig(
@@ -46,14 +50,134 @@ def _parse_allowed_origins():
 
 CORS(app, origins=_parse_allowed_origins(), supports_credentials=False)
 
-# Global state with improved caching
+# Global state with bounded process-local caching
 initialized = False
 initialization_error = None
-cache = None
-cache_timestamp = None
-cache_duration = 30 * 60  # 30 minutes cache duration
 pending_request = None
 request_lock = threading.Lock()
+LIVE_CACHE_TTL_SECONDS = int(os.getenv("BUSYNESS_LIVE_CACHE_TTL_SECONDS", str(30 * 60)))
+FORECAST_CACHE_TTL_SECONDS = int(os.getenv("BUSYNESS_FORECAST_CACHE_TTL_SECONDS", str(30 * 60)))
+BUSYNESS_CACHE_MAX_ENTRIES = int(os.getenv("BUSYNESS_CACHE_MAX_ENTRIES", "512"))
+CACHE_COORDINATE_PRECISION = 3
+CACHE_BUCKET_SECONDS = 60 * 60
+
+
+class BoundedTTLCache:
+    def __init__(self, max_entries, ttl_seconds, now_func=time.time):
+        self.max_entries = max_entries
+        self.ttl_seconds = ttl_seconds
+        self.now_func = now_func
+        self._items = OrderedDict()
+
+    def get(self, key):
+        self._cleanup_expired()
+        item = self._items.get(key)
+        if item is None:
+            return None
+        timestamp, value = item
+        if self.now_func() - timestamp >= self.ttl_seconds:
+            self._items.pop(key, None)
+            return None
+        self._items.move_to_end(key)
+        return value
+
+    def set(self, key, value):
+        self._cleanup_expired()
+        self._items[key] = (self.now_func(), value)
+        self._items.move_to_end(key)
+        while len(self._items) > self.max_entries:
+            self._items.popitem(last=False)
+
+    def clear(self):
+        self._items.clear()
+
+    def _cleanup_expired(self):
+        now = self.now_func()
+        expired = [
+            key for key, (timestamp, _value) in self._items.items()
+            if now - timestamp >= self.ttl_seconds
+        ]
+        for key in expired:
+            self._items.pop(key, None)
+
+
+live_cache = BoundedTTLCache(BUSYNESS_CACHE_MAX_ENTRIES, LIVE_CACHE_TTL_SECONDS)
+forecast_cache = BoundedTTLCache(BUSYNESS_CACHE_MAX_ENTRIES, FORECAST_CACHE_TTL_SECONDS)
+
+
+def normalize_predictions(predictions):
+    if not predictions:
+        return {}
+    valid_scores = [score for score in predictions.values() if score is not None]
+    if not valid_scores:
+        return {zone.split()[0]: 0.0 for zone in predictions.keys()}
+
+    min_score = min(valid_scores)
+    max_score = max(valid_scores)
+    score_range = max_score - min_score
+    normalized_predictions = {}
+    for zone_name, busyness_score in predictions.items():
+        location_id = zone_name.split()[0]
+        if busyness_score is None:
+            normalized_predictions[location_id] = 0.0
+        elif score_range > 0:
+            normalized_predictions[location_id] = (busyness_score - min_score) / score_range
+        else:
+            normalized_predictions[location_id] = 0.5
+    return normalized_predictions
+
+
+def _cache_bucket(now):
+    timestamp = time.time() if now is None else now
+    return int(timestamp // CACHE_BUCKET_SECONDS)
+
+
+def build_live_cache_key(lat, lon, now=None):
+    return (
+        round(float(lat), CACHE_COORDINATE_PRECISION),
+        round(float(lon), CACHE_COORDINATE_PRECISION),
+        _cache_bucket(now),
+    )
+
+
+def build_forecast_cache_key(lat, lon, now=None):
+    return (
+        round(float(lat), CACHE_COORDINATE_PRECISION),
+        round(float(lon), CACHE_COORDINATE_PRECISION),
+        _cache_bucket(now),
+    )
+
+
+def get_live_predictions(lat, lon, now=None):
+    key = build_live_cache_key(lat, lon, now)
+    cached = live_cache.get(key)
+    if cached is not None:
+        return cached, True
+    raw_predictions = predict_busyness_for_all_zones(lat, lon)
+    normalized = normalize_predictions(raw_predictions)
+    live_cache.set(key, normalized)
+    return normalized, False
+
+
+def get_forecast_predictions(lat, lon, now=None):
+    key = build_forecast_cache_key(lat, lon, now)
+    cached = forecast_cache.get(key)
+    if cached is not None:
+        return cached, True
+    forecast = forecast_busyness_for_all_zones(lat, lon)
+    forecast_cache.set(key, forecast)
+    return forecast, False
+
+
+def build_busyness_response(lat, lon, now=None):
+    predictions, live_cached = get_live_predictions(lat, lon, now)
+    forecast, forecast_cached = get_forecast_predictions(lat, lon, now)
+    return {
+        "success": True,
+        "predictions": predictions,
+        "forecast": forecast,
+        "cached": live_cached and forecast_cached,
+    }
 
 @app.route("/health")
 def health():
@@ -89,26 +213,11 @@ def get_busyness():
     if not initialized:
         return jsonify({
             "success": False, 
-            "error": "Service is not ready. Please try again later.",
-            "details": initialization_error 
+            "error": "Service is not ready. Please try again later."
         }), 503
 
-    global cache, cache_timestamp, pending_request
+    global pending_request
     
-    # Check if we have valid cached data
-    current_time = time.time()
-    if cache and cache_timestamp and (current_time - cache_timestamp) < cache_duration:
-        logger.info("Returning cached busyness predictions (cache valid for %d more seconds)", 
-                   cache_duration - (current_time - cache_timestamp))
-        
-        # Also return forecast (not cached for now)
-        lat = request.args.get('lat', default=40.7580, type=float)
-        lon = request.args.get('lon', default=-73.9855, type=float)
-        from predictor.busyness import forecast_busyness_for_all_zones
-        forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Returning cached response with forecast: %s", forecast)
-        return jsonify({"success": True, "predictions": cache, "forecast": forecast, "cached": True})
-
     # Check if there's already a pending request
     with request_lock:
         if pending_request:
@@ -130,51 +239,8 @@ def get_busyness():
         lon = request.args.get('lon', default=-73.9855, type=float)
         
         logger.info(f"Received /busyness request for lat={lat}, lon={lon}")
-        predictions = predict_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Raw predictions from model: %s", predictions)
-
-        # Normalize the raw scores to a 0-1 range for frontend display.
-        valid_scores = [score for score in predictions.values() if score is not None]
-        if not valid_scores:
-            # If all scores are None, return a dict of zeros
-            normalized_predictions = {zone.split()[0]: 0.0 for zone in predictions.keys()}
-        else:
-            min_score = min(valid_scores)
-            max_score = max(valid_scores)
-            score_range = max_score - min_score
-
-            normalized_predictions = {}
-            for zone_name, busyness_score in predictions.items():
-                location_id = zone_name.split()[0]
-                if busyness_score is None:
-                    normalized_predictions[location_id] = 0.0
-                elif score_range > 0:
-                    # Apply Min-Max scaling to get a value between 0 and 1
-                    normalized_score = (busyness_score - min_score) / score_range
-                    normalized_predictions[location_id] = normalized_score
-                else:
-                    # All scores are the same, so they can be considered neutral (0.5)
-                    normalized_predictions[location_id] = 0.5
-
-        logger.info("🔍 [DEBUG] Normalized predictions: %s", normalized_predictions)
-
-        # Update cache
-        cache = normalized_predictions
-        cache_timestamp = current_time
-        logger.info("Busyness predictions generated and cached for %d seconds", cache_duration)
-
-        # Also return forecast
-        from predictor.busyness import forecast_busyness_for_all_zones
-        forecast = forecast_busyness_for_all_zones(lat, lon)
-        logger.info("🔍 [DEBUG] Generated forecast: %s", forecast)
-
-        response = {
-            "success": True,
-            "predictions": normalized_predictions,
-            "forecast": forecast,
-            "cached": False
-        }
-        logger.info("🔍 [DEBUG] Final response: %s", response)
+        response = build_busyness_response(lat, lon)
+        logger.info("Final busyness response generated; cached=%s", response["cached"])
         
         # Set the result for any waiting requests
         with request_lock:

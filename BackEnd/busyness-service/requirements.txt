@@ -38,6 +38,8 @@ holidays==0.53
     # via -r requirements.in
 idna==3.7
     # via requests
+iniconfig==2.3.0
+    # via pytest
 importlib-metadata==7.2.1
     # via flask
 itsdangerous==2.2.0
@@ -77,8 +79,14 @@ pandas==2.2.2
     # via -r requirements.in
 protobuf==4.25.3
     # via tensorflow
+pluggy==1.6.0
+    # via pytest
 pygments==2.18.0
-    # via rich
+    # via
+    #   pytest
+    #   rich
+pytest==9.0.3
+    # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via
     #   holidays

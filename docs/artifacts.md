@@ -19,7 +19,7 @@ Urban Gala uses a **hybrid artifact policy**:
 
 **Release/object storage** (GitHub Releases, S3, or similar) is a documented future migration path. Phase 1 does **not** implement automatic downloads, provisioning scripts, or startup fetches from external storage.
 
-Services treat runtime binaries as **trusted artifacts**. Manual SHA-256 verification is available before deployment; startup checksum enforcement is deferred to later phases.
+Services treat runtime binaries as **trusted artifacts**. Manual SHA-256 verification is available before deployment. The busyness service also enforces its own startup checksum manifest at `BackEnd/busyness-service/models/checksums.sha256`.
 
 ## Runtime Artifact Manifest
 
@@ -99,8 +99,28 @@ Docker Compose (`llm-service` service) sets these environment variables and moun
 |----------|-------------------------------|-------------------|----------|
 | `MODEL_PATH` | `/app/models/DNNs` | `BackEnd/busyness-service/models/DNNs/` | `initialize_busyness_models()`, `verify_file_paths()` |
 | `LSTM_MODEL_PATH` | `/app/models/LSTMs/Fin.keras` | `BackEnd/busyness-service/models/LSTMs/Fin.keras` | `initialize_busyness_models()`, `verify_file_paths()` |
+| `MODEL_CHECKSUMS_PATH` | `/app/models/checksums.sha256` | `BackEnd/busyness-service/models/checksums.sha256` | `verify_model_checksums()`, `verify_file_paths()` |
 
 Docker Compose sets explicit `/app/...` paths for the `busyness-service` container. For local Python development without Compose, pathlib-anchored defaults apply (see commented overrides in [`env.example`](../env.example)).
+
+Busyness startup requires the model directories, `Fin.keras`, and the checksum manifest to be present. A missing manifest, missing entry, malformed entry, or checksum mismatch keeps `/health` unhealthy and blocks model loading before Keras deserializes artifacts. Unsafe Keras deserialization is disabled by default and may only be enabled by the named trusted legacy fallback after checksum verification succeeds for the configured artifacts.
+
+Refresh the busyness checksum manifest from the service directory after intentionally updating model files:
+
+```bash
+cd BackEnd/busyness-service
+shasum -a 256 models/DNNs/*.keras models/DNNs/*.h5 models/LSTMs/Fin.keras > models/checksums.sha256
+```
+
+Linux users may use `sha256sum` with the same relative paths.
+
+The busyness `/busyness` live and forecast caches are process-local, bounded, TTL-based, and request-triggered. Phase 6 does not add Redis, Memcached, a distributed cache, or scheduled forecast precompute. Tune the local process cache with `BUSYNESS_LIVE_CACHE_TTL_SECONDS`, `BUSYNESS_FORECAST_CACHE_TTL_SECONDS`, and `BUSYNESS_CACHE_MAX_ENTRIES`.
+
+Optional real-artifact verification can be run locally:
+
+```bash
+cd BackEnd/busyness-service && .venv-test/bin/python -m pytest tests/ -m artifact -q
+```
 
 ## Generated Output Ownership
 
@@ -118,7 +138,7 @@ Required runtime artifacts must be present before ML services initialize success
 
 1. **Clone setup:** Install Git LFS (`git lfs install`), clone the repository, and run `git lfs pull` if model files are pointer stubs or missing.
 2. **LLM service:** `verify_file_paths()` checks `MODEL_PATH`, `DATA_PATH`, and `EMBEDDINGS_PATH` and fails initialization with logged errors when files are absent. The service does not auto-download artifacts.
-3. **Busyness service:** `initialize_busyness_models()` logs errors and returns `False` when DNN or LSTM model paths are missing or unloadable.
+3. **Busyness service:** `verify_file_paths()` checks DNN path, LSTM path, and `MODEL_CHECKSUMS_PATH`; missing or mismatched checksums keep `/health` unhealthy and `initialize_busyness_models()` returns `False` before loading models.
 4. **No automatic downloads:** Phase 1 does not add startup fetches from Hugging Face, GitHub Releases, or object storage for production model artifacts (note: the LLM service retains an existing Hugging Face fallback for the sentence-transformer model only when local load fails — that is legacy runtime behavior, not Phase 1 provisioning).
 
 If artifacts are missing, fix the working tree with Git LFS and refer to [README.md](README.md) setup steps. Do not expect services to self-heal by downloading weights.
