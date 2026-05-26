@@ -1,6 +1,7 @@
 package com.manhattan.busyness_predictor.config;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.manhattan.busyness_predictor.controller.AuthController;
 import com.manhattan.busyness_predictor.controller.AvatarController;
 import com.manhattan.busyness_predictor.controller.VibeController;
+import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.dto.AuthResponse;
 import com.manhattan.busyness_predictor.dto.UserDto;
 import com.manhattan.busyness_predictor.model.User;
@@ -136,5 +138,28 @@ class SecurityBoundaryTest {
                 .andExpect(jsonPath("$.message").value("Too many requests"))
                 .andExpect(jsonPath("$.status").value(429))
                 .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+    }
+
+    @Test
+    void trailingSlashOnExpensiveRouteStillAppliesRateLimit() throws Exception {
+        User user = new User();
+        user.setId(7);
+        user.setUsername("rate-limited");
+        user.setPassword("password");
+        when(jwtTokenProvider.validateToken("good.token")).thenReturn(true);
+        when(jwtTokenProvider.getUserIdFromJWT("good.token")).thenReturn(7);
+        when(customUserDetailsService.loadUserById(7)).thenReturn(UserPrincipal.create(user));
+        when(rateLimitService.consume(anyString())).thenReturn(RateLimitResult.denied(15));
+        when(vibeService.findLocationsByVibe(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new VibeSearchResponse());
+
+        mockMvc.perform(post("/api/vibe/search/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"vibeDescription\":\"jazz\",\"maxResults\":5}")
+                        .header("Authorization", "Bearer good.token"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+
+        verify(rateLimitService).consume(org.mockito.ArgumentMatchers.contains("vibe-search"));
     }
 }

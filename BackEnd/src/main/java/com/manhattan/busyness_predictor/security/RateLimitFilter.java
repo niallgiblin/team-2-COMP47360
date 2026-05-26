@@ -46,7 +46,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String routeGroup = EXPENSIVE_ROUTES.get(request.getMethod() + " " + request.getRequestURI());
+        String routeGroup = resolveRouteGroup(request);
         if (routeGroup == null) {
             filterChain.doFilter(request, response);
             return;
@@ -68,6 +68,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 "Too many requests",
                 HttpStatus.TOO_MANY_REQUESTS.value(),
                 "RATE_LIMITED"));
+    }
+
+    private String resolveRouteGroup(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        if (path.endsWith("/") && path.length() > 1) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return EXPENSIVE_ROUTES.get(request.getMethod() + " " + path);
     }
 
     private String rateLimitKey(HttpServletRequest request, String routeGroup) {
