@@ -248,6 +248,21 @@ describe('production-style relative routes', () => {
     expect(callArgs.headers.Authorization).toBe('Bearer chat_tok_abc')
   })
 
+  test('chatAPI.sendMessage sends previous_questions not history', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ response: 'ok' }) })
+
+    await chatAPI.sendMessage('second question', [
+      { text: 'first', sender: 'user' },
+      { text: 'bot reply', sender: 'bot' },
+    ])
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(body.message).toBe('second question')
+    expect(body.previous_questions).toEqual(['first'])
+    expect(body).not.toHaveProperty('history')
+    expect(JSON.stringify(body)).not.toContain('"history"')
+  })
+
   test('friends call with token asserts Authorization Bearer header', async () => {
     localStorage.setItem('token', 'tok_abc')
     fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ friends: [] }) })
