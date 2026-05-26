@@ -425,6 +425,82 @@ def vibe_search():
             'error': 'Internal server error'
         }), 500
 
+@app.route('/similar', methods=['POST'])
+def similar_locations():
+    """Find locations similar to a venue by name, zone, and type attributes."""
+    if not initialized:
+        return jsonify({
+            'success': False,
+            'error': 'Service not initialized',
+            'details': initialization_error
+        }), 503
+
+    if model is None or df is None or location_embeddings is None:
+        return jsonify({
+            'success': False,
+            'error': 'Service components not properly loaded'
+        }), 503
+
+    if not request.is_json:
+        return jsonify({
+            'success': False,
+            'error': 'Content-Type must be application/json'
+        }), 415
+
+    try:
+        data = request.get_json()
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'name is required'
+            }), 400
+
+        zone = (data.get('zone') or '').strip()
+        loc_type = (data.get('loc_type') or '').strip()
+        summary = (data.get('summary') or '').strip()
+        tags = data.get('tags')
+
+        limit = data.get('limit', 5)
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'limit must be an integer'}), 400
+        limit = max(1, min(limit, 25))
+
+        query_parts = [name]
+        if zone:
+            query_parts.append(zone)
+        if loc_type:
+            query_parts.append(loc_type)
+        if summary:
+            query_parts.append(summary)
+        if tags:
+            if isinstance(tags, list):
+                query_parts.extend(str(t).strip() for t in tags if t)
+            elif isinstance(tags, str) and tags.strip():
+                query_parts.append(tags.strip())
+
+        query_text = ' '.join(query_parts)
+        results, confidence = find_similar_by_embedding(
+            query_text,
+            exclude_names=[name],
+            limit=limit,
+        )
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'confidence': confidence,
+        })
+
+    except Exception as e:
+        logger.error(f"ML Service: Error in /similar: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Global exception handler"""
