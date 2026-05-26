@@ -7,10 +7,26 @@ import com.manhattan.busyness_predictor.dto.ApiErrorResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 
 class GlobalExceptionHandlerTest {
 
     private static final String SENTINEL = "secret-stacktrace-sentinel-must-not-leak";
+
+    @Test
+    void accessDeniedExceptionUsesForbiddenEnvelope() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleAccessDenied(
+                new AccessDeniedException("You are not authorized to update this profile."));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getError()).isEqualTo("Access denied");
+        assertThat(response.getBody().getMessage()).isEqualTo("You are not authorized to perform this action");
+        assertThat(response.getBody().getStatus()).isEqualTo(403);
+        assertThat(response.getBody().getCode()).isEqualTo("ACCESS_DENIED");
+    }
 
     @Test
     void unexpectedExceptionUsesSafeEnvelopeWithoutRawMessage() {

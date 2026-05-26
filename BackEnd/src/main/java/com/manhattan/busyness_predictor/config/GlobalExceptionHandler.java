@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,15 @@ public class GlobalExceptionHandler {
                 message,
                 HttpStatus.BAD_REQUEST.value(),
                 "VALIDATION_FAILED"));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiErrorResponse.of(
+                "Access denied",
+                "You are not authorized to perform this action",
+                HttpStatus.FORBIDDEN.value(),
+                "ACCESS_DENIED"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

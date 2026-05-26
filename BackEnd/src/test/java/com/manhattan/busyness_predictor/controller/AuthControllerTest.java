@@ -141,6 +141,17 @@ public class AuthControllerTest {
             return new org.springframework.http.ResponseEntity<>("Validation failed", org.springframework.http.HttpStatus.BAD_REQUEST);
         }
         
+        @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+        public org.springframework.http.ResponseEntity<?> handleAccessDeniedException(
+                org.springframework.security.access.AccessDeniedException ex) {
+            java.util.Map<String, Object> errorDetails = new java.util.HashMap<>();
+            errorDetails.put("error", "Access denied");
+            errorDetails.put("message", "You are not authorized to perform this action");
+            errorDetails.put("status", 403);
+            errorDetails.put("code", "ACCESS_DENIED");
+            return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.FORBIDDEN);
+        }
+
         @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
         public org.springframework.http.ResponseEntity<?> handleRuntimeException(RuntimeException ex) {
             java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
@@ -316,7 +327,7 @@ public class AuthControllerTest {
     }
 
     @Test
-    public void whenUpdateProfileWithWrongUserId_thenReturnsInternalServerError() throws Exception {
+    public void whenUpdateProfileWithWrongUserId_thenReturnsForbidden() throws Exception {
         // Given
         Integer wrongUserId = 999;
         UpdateProfileRequest request = new UpdateProfileRequest();
@@ -329,9 +340,10 @@ public class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(request))
                 .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
-                .andExpect(jsonPath("$.message").value("You are not authorized to update this profile. You can only update your own."));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("Access denied"))
+                .andExpect(jsonPath("$.message").value("You are not authorized to perform this action"))
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
         verify(authService, never()).updateProfile(any(), any());
     }

@@ -20,6 +20,7 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,7 +106,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         if (!currentUser.getId().equals(userId)) {
-            throw new RuntimeException("You are not authorized to update this profile. You can only update your own.");
+            throw new AccessDeniedException("You are not authorized to update this profile. You can only update your own.");
         }
 
         UserDto updatedUser = authService.updateProfile(userId, request);
@@ -127,7 +128,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         if (!currentUser.getId().equals(userId)) {
-            throw new RuntimeException("You are not authorized to update this profile. You can only update your own.");
+            throw new AccessDeniedException("You are not authorized to update this profile. You can only update your own.");
         }
         if (avatarFile.isEmpty()) {
             throw new IllegalArgumentException("No file uploaded");
@@ -215,7 +216,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         if (!currentUser.getId().equals(userId)) {
-            throw new RuntimeException("You are not authorized to update this profile. You can only update your own.");
+            throw new AccessDeniedException("You are not authorized to update this profile. You can only update your own.");
         }
 
         UserDto user = authService.getUserById(userId);
