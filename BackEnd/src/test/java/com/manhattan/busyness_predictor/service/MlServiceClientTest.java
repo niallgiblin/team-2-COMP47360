@@ -3,6 +3,7 @@ package com.manhattan.busyness_predictor.service;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,18 +53,27 @@ class MlServiceClientTest {
     void search_postsToCorrectUrlAndDeserializesFixture() throws Exception {
         MlSearchResponse fixture = loadFixture("contract-fixtures/llm/search-success.json", MlSearchResponse.class);
 
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+
         when(restTemplate.exchange(
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
-                any(HttpEntity.class),
+                entityCaptor.capture(),
                 eq(MlSearchResponse.class)))
                 .thenReturn(ResponseEntity.ok(fixture));
 
-        MlSearchResponse result = mlServiceClient.search("jazz bars", 10);
+        MlSearchResponse result = mlServiceClient.search("jazz bars", 10, "Downtown", "mid");
 
         assertNotNull(result);
         assertEquals(2, result.getResults().size());
         assertEquals("Blue Note Jazz Club", result.getResults().get(0).getName());
+        Map<String, Object> body = entityCaptor.getValue().getBody();
+        assertNotNull(body);
+        assertEquals("jazz bars", body.get("vibeDescription"));
+        assertEquals(10, body.get("maxResults"));
+        assertEquals("Downtown", body.get("location"));
+        assertEquals("mid", body.get("priceRange"));
 
         verify(restTemplate).exchange(
                 eq("http://llm-service:5000/search"),
@@ -126,6 +136,23 @@ class MlServiceClientTest {
         verify(restTemplate).getForEntity(
                 eq("http://busyness-service:5000/busyness"),
                 eq(BusynessReportDto.class));
+    }
+
+    @Test
+    void fetchBusynessReport_returnsForecastOnlyBody() {
+        BusynessReportDto forecastOnly = new BusynessReportDto();
+        forecastOnly.setSuccess(true);
+        forecastOnly.setForecast(List.of(Map.of("zone", "zone-1", "value", 0.72)));
+
+        when(restTemplate.getForEntity(
+                eq("http://busyness-service:5000/busyness"),
+                eq(BusynessReportDto.class)))
+                .thenReturn(ResponseEntity.ok(forecastOnly));
+
+        BusynessReportDto result = mlServiceClient.fetchBusynessReport();
+
+        assertNotNull(result);
+        assertEquals(1, result.getForecast().size());
     }
 
     @Test

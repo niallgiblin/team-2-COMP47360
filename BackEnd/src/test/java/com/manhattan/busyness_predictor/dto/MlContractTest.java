@@ -125,6 +125,23 @@ class MlContractTest {
     }
 
     @Test
+    void mapSymbolicPricesToIntegerTiers() {
+        MlLocationDto dto = new MlLocationDto();
+        dto.setId(99);
+        dto.setName("Luxury Lounge");
+        dto.setPrice("$$$");
+        dto.setType("Bar");
+
+        MlSearchResponse response = new MlSearchResponse();
+        response.setResults(List.of(dto));
+
+        List<Location> locations = mapper.toLocations(response);
+
+        assertEquals(1, locations.size());
+        assertEquals(3, locations.get(0).getPrice());
+    }
+
+    @Test
     void mapBusynessFixtureToPredictionsAndForecast() throws Exception {
         BusynessReportDto report = loadFixture(
                 "contract-fixtures/busyness/report-minimal.json",

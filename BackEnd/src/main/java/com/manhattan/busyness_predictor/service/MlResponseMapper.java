@@ -121,8 +121,33 @@ public class MlResponseMapper {
         if (priceObj instanceof Number number) {
             return number.intValue();
         }
+        String value = priceObj.toString().trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+        if (value.matches("^\\$+$")) {
+            return Math.min(value.length(), 5);
+        }
+
+        String lowerValue = value.toLowerCase();
+        if (lowerValue.contains("very cheap")) {
+            return 1;
+        }
+        if (lowerValue.contains("cheap")) {
+            return 2;
+        }
+        if (lowerValue.contains("moderate") || lowerValue.contains("mid")) {
+            return 3;
+        }
+        if (lowerValue.contains("very expensive") || lowerValue.contains("luxury")) {
+            return 5;
+        }
+        if (lowerValue.contains("expensive")) {
+            return 4;
+        }
+
         try {
-            return Integer.parseInt(priceObj.toString());
+            return Integer.parseInt(value);
         } catch (NumberFormatException e) {
             return null;
         }

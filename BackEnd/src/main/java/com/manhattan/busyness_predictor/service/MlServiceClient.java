@@ -1,5 +1,6 @@
 package com.manhattan.busyness_predictor.service;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -45,13 +46,23 @@ public class MlServiceClient {
     }
 
     public MlSearchResponse search(String vibeDescription, int maxResults) {
+        return search(vibeDescription, maxResults, null, null);
+    }
+
+    public MlSearchResponse search(String vibeDescription, int maxResults, String location, String priceRange) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            Map<String, Object> payload = Map.of(
-                    "vibeDescription", vibeDescription,
-                    "maxResults", maxResults);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("vibeDescription", vibeDescription);
+            payload.put("maxResults", maxResults);
+            if (location != null && !location.isBlank()) {
+                payload.put("location", location);
+            }
+            if (priceRange != null && !priceRange.isBlank()) {
+                payload.put("priceRange", priceRange);
+            }
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
 
@@ -100,7 +111,7 @@ public class MlServiceClient {
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 BusynessReportDto body = response.getBody();
-                if (body.getPredictions() != null) {
+                if (body.getPredictions() != null || (body.getForecast() != null && !body.getForecast().isEmpty())) {
                     return body;
                 }
             }

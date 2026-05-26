@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -115,7 +116,7 @@ public class VibeServiceTest {
     void fetchMLRecommendations_usesSearchFixtureShape() throws Exception {
         MlSearchResponse mlResponse = loadSearchFixture("contract-fixtures/llm/search-success.json");
 
-        when(mlServiceClient.search(anyString(), anyInt())).thenReturn(mlResponse);
+        when(mlServiceClient.search(anyString(), anyInt(), any(), any())).thenReturn(mlResponse);
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
 
         Location blueNote = fixtureLocation(1, "Blue Note Jazz Club");
@@ -182,7 +183,7 @@ public class VibeServiceTest {
         MlSearchResponse mlResponse = mlSearchResponseWithLocation(
                 1, "Cozy Coffee Shop", "123 Main St", 40.7128, -74.0060, 0.85);
 
-        when(mlServiceClient.search("cozy coffee shop with good vibes", 10)).thenReturn(mlResponse);
+        when(mlServiceClient.search("cozy coffee shop with good vibes", 10, null, null)).thenReturn(mlResponse);
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
 
         // Mock database lookup for enrichment
@@ -198,12 +199,35 @@ public class VibeServiceTest {
         assertEquals("Found locations using AI-powered semantic search.", response.getExplanation());
         assertEquals(0.85, response.getConfidence());
 
-        verify(mlServiceClient).search("cozy coffee shop with good vibes", 10);
+        verify(mlServiceClient).search("cozy coffee shop with good vibes", 10, null, null);
+    }
+
+    @Test
+    public void whenFindLocationsByVibe_withFilters_thenForwardsFiltersToMLService() {
+        searchRequest.setLocation("Downtown");
+        searchRequest.setPriceRange("mid");
+
+        MlSearchResponse mlResponse = mlSearchResponseWithLocation(
+                1, "Cozy Coffee Shop", "123 Main St", 40.7128, -74.0060, 0.85);
+
+        when(mlServiceClient.search(anyString(), anyInt(), any(), any())).thenReturn(mlResponse);
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+        when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
+
+        VibeSearchResponse response = vibeService.findLocationsByVibe(searchRequest);
+
+        assertNotNull(response);
+        assertEquals(1, response.getLocations().size());
+        verify(mlServiceClient).search(
+                eq("cozy coffee shop with good vibes"),
+                eq(10),
+                eq("Downtown"),
+                eq("mid"));
     }
 
     @Test
     public void whenFindLocationsByVibe_withMLServiceUnavailable_thenReturnsEmptyResults() {
-        when(mlServiceClient.search(anyString(), anyInt())).thenReturn(null);
+        when(mlServiceClient.search(anyString(), anyInt(), any(), any())).thenReturn(null);
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
 
         // When
@@ -221,7 +245,7 @@ public class VibeServiceTest {
         MlSearchResponse mlResponse = mlSearchResponseWithLocation(
                 1, "Cozy Coffee Shop", null, null, null, 0.85);
 
-        when(mlServiceClient.search(anyString(), anyInt())).thenReturn(mlResponse);
+        when(mlServiceClient.search(anyString(), anyInt(), any(), any())).thenReturn(mlResponse);
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
         when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
 
@@ -236,7 +260,7 @@ public class VibeServiceTest {
         assertEquals(firstResponse.getExplanation(), cachedResponse.getExplanation());
         
         // Verify ML service was called only once
-        verify(mlServiceClient, times(1)).search(anyString(), anyInt());
+        verify(mlServiceClient, times(1)).search(anyString(), anyInt(), any(), any());
     }
 
     @Test
@@ -365,6 +389,7 @@ public class VibeServiceTest {
         similarRestaurant.setId(3);
         similarRestaurant.setName("Similar Restaurant");
         similarRestaurant.setIsRestaurant(true);
+        similarRestaurant.setZone("Downtown");
         
         // Mock with lowercase "restaurant" as expected by repository
         when(locationRepository.findByType("restaurant"))
@@ -379,6 +404,35 @@ public class VibeServiceTest {
         assertEquals("Similar Restaurant", result.getLocations().get(0).getName());
 
         verify(locationRepository).findByType("restaurant");
+    }
+
+    @Test
+    public void whenFindSimilarLocations_withCategoryFallback_thenPrefersSameZone() {
+        testLocation1.setIsRestaurant(true);
+        testLocation1.setZone("Downtown");
+
+        Location otherZoneRestaurant = new Location();
+        otherZoneRestaurant.setId(3);
+        otherZoneRestaurant.setName("Other Zone Restaurant");
+        otherZoneRestaurant.setIsRestaurant(true);
+        otherZoneRestaurant.setZone("Midtown");
+
+        Location sameZoneRestaurant = new Location();
+        sameZoneRestaurant.setId(4);
+        sameZoneRestaurant.setName("Same Zone Restaurant");
+        sameZoneRestaurant.setIsRestaurant(true);
+        sameZoneRestaurant.setZone("Downtown");
+
+        when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
+        when(mlServiceClient.isLlmServiceAvailable()).thenReturn(false);
+        when(locationRepository.findByType("restaurant"))
+                .thenReturn(Arrays.asList(testLocation1, otherZoneRestaurant, sameZoneRestaurant));
+
+        SimilarLocationsResult result = vibeService.findSimilarLocations(1, 5);
+
+        assertEquals("category", result.getSource());
+        assertEquals(1, result.getLocations().size());
+        assertEquals("Same Zone Restaurant", result.getLocations().get(0).getName());
     }
 
     @Test
@@ -398,7 +452,7 @@ public class VibeServiceTest {
         MlSearchResponse mlResponse = new MlSearchResponse();
         mlResponse.setResults(Collections.emptyList());
 
-        when(mlServiceClient.search(anyString(), anyInt())).thenReturn(mlResponse);
+        when(mlServiceClient.search(anyString(), anyInt(), any(), any())).thenReturn(mlResponse);
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
 
         // When
