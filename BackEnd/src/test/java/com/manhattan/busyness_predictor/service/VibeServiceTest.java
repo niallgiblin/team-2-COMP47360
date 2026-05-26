@@ -1,5 +1,7 @@
 package com.manhattan.busyness_predictor.service;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,6 +37,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manhattan.busyness_predictor.dto.BusynessReportDto;
 import com.manhattan.busyness_predictor.dto.LocationDto;
 import com.manhattan.busyness_predictor.dto.MlLocationDto;
 import com.manhattan.busyness_predictor.dto.MlSearchResponse;
@@ -67,9 +71,11 @@ public class VibeServiceTest {
     private Location testLocation1;
     private Location testLocation2;
     private VibeSearchRequest searchRequest;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     public void setUp() {
+        objectMapper = new ObjectMapper();
         // Initialize with RestTemplateBuilder mock
         when(restTemplateBuilder.build()).thenReturn(restTemplate);
         vibeService = new VibeService(
@@ -119,6 +125,87 @@ public class VibeServiceTest {
         searchRequest = new VibeSearchRequest();
         searchRequest.setVibeDescription("cozy coffee shop with good vibes");
         searchRequest.setMaxResults(10);
+    }
+
+    @Test
+    void fetchMLRecommendations_usesSearchFixtureShape() throws Exception {
+        MlSearchResponse mlResponse = loadSearchFixture("contract-fixtures/llm/search-success.json");
+
+        when(restTemplate.exchange(
+                eq("http://llm-service:5000/search"),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                eq(MlSearchResponse.class)))
+                .thenReturn(ResponseEntity.ok(mlResponse));
+
+        when(restTemplate.getForEntity("http://busyness-service:5000/busyness", BusynessReportDto.class))
+                .thenThrow(new RestClientException("unavailable"));
+
+        Location blueNote = fixtureLocation(1, "Blue Note Jazz Club");
+        Location smalls = fixtureLocation(2, "Smalls Jazz Club");
+        when(locationRepository.findById(1)).thenReturn(Optional.of(blueNote));
+        when(locationRepository.findById(2)).thenReturn(Optional.of(smalls));
+
+        VibeSearchResponse response = vibeService.findLocationsByVibe(searchRequest);
+
+        assertEquals(2, response.getLocations().size());
+        assertEquals("Blue Note Jazz Club", response.getLocations().get(0).getName());
+        assertEquals("Smalls Jazz Club", response.getLocations().get(1).getName());
+        assertEquals(0.91, response.getConfidence());
+    }
+
+    @Test
+    void fetchMLSimilarLocations_postsVenueFieldsAndMapsFixture() throws Exception {
+        when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
+        when(restTemplate.getForEntity("http://llm-service:5000/health", String.class))
+                .thenReturn(ResponseEntity.ok("OK"));
+
+        MlSearchResponse mlResponse = loadSearchFixture("contract-fixtures/llm/similar-success.json");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor =
+                ArgumentCaptor.forClass(HttpEntity.class);
+
+        when(restTemplate.exchange(
+                eq("http://llm-service:5000/similar"),
+                eq(HttpMethod.POST),
+                entityCaptor.capture(),
+                eq(MlSearchResponse.class)))
+                .thenReturn(ResponseEntity.ok(mlResponse));
+
+        Location smalls = fixtureLocation(2, "Smalls Jazz Club");
+        Location vanguard = fixtureLocation(3, "Village Vanguard");
+        when(locationRepository.findById(2)).thenReturn(Optional.of(smalls));
+        when(locationRepository.findById(3)).thenReturn(Optional.of(vanguard));
+
+        SimilarLocationsResult result = vibeService.findSimilarLocations(1, 5);
+
+        assertEquals("ml", result.getSource());
+        assertEquals(2, result.getLocations().size());
+        assertEquals("Smalls Jazz Club", result.getLocations().get(0).getName());
+        assertEquals("Village Vanguard", result.getLocations().get(1).getName());
+
+        Map<String, Object> body = entityCaptor.getValue().getBody();
+        assertNotNull(body);
+        assertEquals("Cozy Coffee Shop", body.get("name"));
+        assertEquals("Downtown", body.get("zone"));
+        assertEquals(5, body.get("limit"));
+        assertTrue(body.containsKey("loc_type"));
+        assertTrue(!body.containsKey("locationId"));
+    }
+
+    @Test
+    void fetchBusynessReport_mapsMinimalFixture() throws Exception {
+        BusynessReportDto report = loadBusynessFixture("contract-fixtures/busyness/report-minimal.json");
+
+        when(restTemplate.getForEntity("http://busyness-service:5000/busyness", BusynessReportDto.class))
+                .thenReturn(ResponseEntity.ok(report));
+
+        Map<String, Double> liveBusyness = vibeService.getLiveBusyness();
+
+        assertEquals(2, liveBusyness.size());
+        assertEquals(0.72, liveBusyness.get("zone-1"));
+        assertEquals(0.45, liveBusyness.get("zone-2"));
     }
 
     @Test
@@ -431,6 +518,32 @@ public class VibeServiceTest {
         MlSearchResponse response = new MlSearchResponse();
         response.setResults(List.of(dto));
         return response;
+    }
+
+    private MlSearchResponse loadSearchFixture(String classpathResource) throws Exception {
+        return loadFixture(classpathResource, MlSearchResponse.class);
+    }
+
+    private BusynessReportDto loadBusynessFixture(String classpathResource) throws Exception {
+        return loadFixture(classpathResource, BusynessReportDto.class);
+    }
+
+    private <T> T loadFixture(String classpathResource, Class<T> type) throws Exception {
+        InputStream stream = getClass().getClassLoader().getResourceAsStream(classpathResource);
+        assertNotNull(stream, "Fixture not found on classpath: " + classpathResource);
+        String json = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        return objectMapper.readValue(json, type);
+    }
+
+    private Location fixtureLocation(int id, String name) {
+        Location location = new Location();
+        location.setId(id);
+        location.setName(name);
+        location.setAddress("fixture address");
+        location.setLat(40.7);
+        location.setLng(-74.0);
+        location.setSimilarity(0.9);
+        return location;
     }
 
 }
