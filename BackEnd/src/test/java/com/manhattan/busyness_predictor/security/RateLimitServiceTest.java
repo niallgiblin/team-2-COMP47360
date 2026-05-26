@@ -3,6 +3,7 @@ package com.manhattan.busyness_predictor.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
@@ -38,6 +39,28 @@ class RateLimitServiceTest {
     }
 
     @Test
+    void evictsLeastRecentlyUsedBucketWhenRegistryReachesBound() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-05-26T12:00:00Z"));
+        RateLimitService service = new RateLimitService(1, 60, 3, clock);
+
+        service.consume("user:1:vibe-search");
+        clock.advance(Duration.ofSeconds(1));
+        service.consume("user:2:vibe-search");
+        clock.advance(Duration.ofSeconds(1));
+        service.consume("user:1:vibe-search");
+        clock.advance(Duration.ofSeconds(1));
+        service.consume("user:3:vibe-search");
+        clock.advance(Duration.ofSeconds(1));
+        service.consume("user:4:vibe-search");
+
+        assertThat(service.bucketCount()).isEqualTo(3);
+
+        RateLimitResult evictedUser = service.consume("user:2:vibe-search");
+        assertThat(evictedUser.isAllowed()).isTrue();
+        assertThat(evictedUser.getRemainingTokens()).isEqualTo(0);
+    }
+
+    @Test
     void evictsOldestBucketWhenRegistryReachesBound() {
         RateLimitService service = new RateLimitService(1, 60, 2, fixedClock());
 
@@ -50,5 +73,33 @@ class RateLimitServiceTest {
 
     private Clock fixedClock() {
         return Clock.fixed(Instant.parse("2026-05-26T12:00:00Z"), ZoneOffset.UTC);
+    }
+
+    private static final class MutableClock extends Clock {
+        private Instant instant;
+        private final ZoneOffset zone = ZoneOffset.UTC;
+
+        private MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        private void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
+
+        @Override
+        public ZoneOffset getZone() {
+            return zone;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
     }
 }

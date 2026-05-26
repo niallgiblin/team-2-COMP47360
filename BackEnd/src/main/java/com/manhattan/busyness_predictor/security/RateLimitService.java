@@ -3,8 +3,8 @@ package com.manhattan.busyness_predictor.security;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -17,7 +17,7 @@ public class RateLimitService {
     private final long refillSeconds;
     private final int maxBuckets;
     private final Clock clock;
-    private final Map<String, BucketState> buckets = new LinkedHashMap<>();
+    private final Map<String, BucketState> buckets = new HashMap<>();
 
     public RateLimitService(
             @Value("${app.rate-limit.expensive.capacity:30}") int capacity,
@@ -69,12 +69,15 @@ public class RateLimitService {
 
     private void evictIfNeeded() {
         while (buckets.size() >= maxBuckets) {
-            Iterator<Map.Entry<String, BucketState>> iterator = buckets.entrySet().iterator();
-            if (!iterator.hasNext()) {
-                return;
+            String oldestKey = buckets.entrySet().stream()
+                    .min(Comparator.comparing(entry -> entry.getValue().lastSeen))
+                    .map(Map.Entry::getKey)
+                    .orElse(null);
+            if (oldestKey != null) {
+                buckets.remove(oldestKey);
+            } else {
+                break;
             }
-            iterator.next();
-            iterator.remove();
         }
     }
 
