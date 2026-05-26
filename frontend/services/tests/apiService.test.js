@@ -248,6 +248,7 @@ describe('production-style relative routes', () => {
     expect(callArgs.headers.Authorization).toBe('Bearer chat_tok_abc')
   })
 
+  // D-05/D-24: Flask /api/chat uses previous_questions; completes Phase 2 D-16 deferral.
   test('chatAPI.sendMessage sends previous_questions not history', async () => {
     fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ response: 'ok' }) })
 
@@ -261,6 +262,32 @@ describe('production-style relative routes', () => {
     expect(body.previous_questions).toEqual(['first'])
     expect(body).not.toHaveProperty('history')
     expect(JSON.stringify(body)).not.toContain('"history"')
+  })
+
+  test('chatAPI.sendMessage with empty history sends previous_questions []', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ response: 'ok' }) })
+
+    await chatAPI.sendMessage('first turn', [])
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(body.previous_questions).toEqual([])
+    expect(body).not.toHaveProperty('history')
+    expect(JSON.stringify(body)).not.toContain('"history"')
+  })
+
+  test('chatAPI.sendMessage multi-turn extracts all user questions', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ response: 'ok' }) })
+
+    await chatAPI.sendMessage('third', [
+      { text: 'first', sender: 'user' },
+      { text: 'reply', sender: 'bot' },
+      { text: 'second', sender: 'user' },
+    ])
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(body.message).toBe('third')
+    expect(body.previous_questions).toEqual(['first', 'second'])
+    expect(body).not.toHaveProperty('history')
   })
 
   test('friends call with token asserts Authorization Bearer header', async () => {
