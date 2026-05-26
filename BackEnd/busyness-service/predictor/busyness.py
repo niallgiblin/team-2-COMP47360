@@ -1,5 +1,6 @@
 # /Users/ng/Desktop/team-2-COMP47360/backend/busyness-service/predictor/busyness.py
 import logging
+import hashlib
 import os
 from pathlib import Path
 import sys
@@ -28,6 +29,11 @@ logger = logging.getLogger(__name__)
 dnn_models = {}
 final_lstm_model = None
 us_holidays = holidays.US()
+_checksums_verified = False
+MODEL_CHECKSUMS_PATH = os.getenv(
+    'MODEL_CHECKSUMS_PATH',
+    str(_BUSYNESS_SERVICE_DIR / 'models' / 'checksums.sha256'),
+)
 
 # --- Model Loading ---
 
@@ -35,7 +41,22 @@ def custom_lambda_layer(x):
     """Custom lambda function to replace problematic Lambda layers during model loading."""
     return x
 
-def load_model_with_fallback(model_path):
+def _artifact_label(path):
+    try:
+        return str(Path(path).resolve().relative_to(_BUSYNESS_SERVICE_DIR))
+    except ValueError:
+        return Path(path).name
+
+
+def enable_trusted_legacy_deserialization():
+    """Enable unsafe Keras loading only after artifact checksums passed."""
+    if not _checksums_verified:
+        raise RuntimeError("Trusted legacy deserialization requires verified model checksums")
+    logger.warning("Enabling trusted legacy Keras deserialization for checksum-verified artifacts")
+    keras.config.enable_unsafe_deserialization()
+
+
+def load_model_with_fallback(model_path, allow_trusted_legacy=False):
     """Load a Keras model with fallback strategies for compatibility."""
     try:
         return load_model(model_path)
@@ -47,8 +68,97 @@ def load_model_with_fallback(model_path):
             try:
                 return load_model(model_path, compile=False)
             except Exception as e:
-                logger.error(f"All loading attempts failed for {model_path}: {str(e)}")
+                if allow_trusted_legacy:
+                    try:
+                        enable_trusted_legacy_deserialization()
+                        return load_model(model_path, compile=False)
+                    except Exception as legacy_error:
+                        logger.error(
+                            "All loading attempts failed for %s: %s",
+                            _artifact_label(model_path),
+                            legacy_error,
+                        )
+                        return None
+                logger.error("All loading attempts failed for %s: %s", _artifact_label(model_path), str(e))
                 return None
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as artifact:
+        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _required_model_files(dnn_path, lstm_path):
+    dnn_dir = Path(dnn_path)
+    model_files = sorted(
+        path for path in dnn_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in {".h5", ".keras"}
+    )
+    model_files.append(Path(lstm_path))
+    return model_files
+
+
+def _parse_checksum_manifest(manifest_path):
+    entries = {}
+    errors = []
+    manifest = Path(manifest_path)
+    for line_number, raw_line in enumerate(manifest.read_text().splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2 or len(parts[0]) != 64:
+            errors.append(f"Malformed checksum manifest line {line_number}")
+            continue
+        digest, relative_path = parts[0].lower(), parts[1].strip()
+        if any(char not in "0123456789abcdef" for char in digest):
+            errors.append(f"Malformed checksum digest on line {line_number}")
+            continue
+        artifact_path = Path(relative_path)
+        if artifact_path.is_absolute():
+            errors.append(f"Checksum entry must be relative: {relative_path}")
+            continue
+        resolved = (_BUSYNESS_SERVICE_DIR / artifact_path).resolve()
+        try:
+            resolved.relative_to(_BUSYNESS_SERVICE_DIR)
+        except ValueError:
+            errors.append(f"Checksum entry escapes service directory: {relative_path}")
+            continue
+        entries[str(resolved)] = (digest, str(artifact_path))
+    return entries, errors
+
+
+def verify_model_checksums(dnn_path, lstm_path, manifest_path):
+    """Verify required model files against a sha256sum-style manifest."""
+    manifest = Path(manifest_path)
+    if not manifest.is_file():
+        return False, ["MODEL_CHECKSUMS_PATH (checksum manifest)"]
+
+    entries, errors = _parse_checksum_manifest(manifest)
+    try:
+        required_files = _required_model_files(dnn_path, lstm_path)
+    except OSError:
+        required_files = [Path(lstm_path)]
+
+    for model_file in required_files:
+        resolved = model_file.resolve()
+        label = _artifact_label(resolved)
+        if not model_file.is_file():
+            errors.append(f"Missing model artifact: {label}")
+            continue
+        entry = entries.get(str(resolved))
+        if entry is None:
+            errors.append(f"Missing checksum entry: {label}")
+            continue
+        expected, entry_label = entry
+        actual = _sha256_file(resolved)
+        if actual != expected:
+            errors.append(f"Checksum mismatch: {entry_label}")
+
+    return len(errors) == 0, errors
 
 def verify_file_paths():
     """Verify required model paths exist before attempting to load them.
@@ -57,10 +167,14 @@ def verify_file_paths():
     canonical var-name strings only — never resolved filesystem paths
     (D-08: avoid path disclosure through /health responses).
     """
+    global _checksums_verified
+    _checksums_verified = False
+
     dnn_path  = os.getenv('MODEL_PATH',
         str(_BUSYNESS_SERVICE_DIR / 'models' / 'DNNs'))
     lstm_path = os.getenv('LSTM_MODEL_PATH',
         str(_BUSYNESS_SERVICE_DIR / 'models' / 'LSTMs' / 'Fin.keras'))
+    checksums_path = os.getenv('MODEL_CHECKSUMS_PATH', MODEL_CHECKSUMS_PATH)
 
     missing = []
     if not os.path.isdir(dnn_path):
@@ -73,15 +187,26 @@ def verify_file_paths():
             logger.error("Missing required model path: %s", m)
         return False, missing
 
-    logger.info("All required model paths found.")
+    checksums_ok, checksum_errors = verify_model_checksums(dnn_path, lstm_path, checksums_path)
+    if not checksums_ok:
+        for error in checksum_errors:
+            logger.error("Model checksum verification failed: %s", error)
+        return False, checksum_errors
+
+    _checksums_verified = True
+    logger.info("All required model paths and checksums verified.")
     return True, []
 
 def initialize_busyness_models():
     """Initializes all DNN and the final LSTM models from disk."""
     global dnn_models, final_lstm_model
-    
-    keras.config.enable_unsafe_deserialization()
+
     logger.info("Starting model initialization...")
+
+    paths_ok, path_errors = verify_file_paths()
+    if not paths_ok:
+        logger.error("Model initialization blocked by artifact verification: %s", path_errors)
+        return False
     
     dnn_models_path = os.getenv('MODEL_PATH',
         str(_BUSYNESS_SERVICE_DIR / 'models' / 'DNNs'))
@@ -94,14 +219,14 @@ def initialize_busyness_models():
             if filename.lower().endswith(('.h5', '.keras')):
                 zone_name = os.path.splitext(filename)[0]
                 model_path = os.path.join(dnn_models_path, filename)
-                model = load_model_with_fallback(model_path)
+                model = load_model_with_fallback(model_path, allow_trusted_legacy=True)
                 if model:
                     dnn_models[zone_name] = model
     logger.info(f"Loaded {len(dnn_models)} DNN models.")
 
     # Load the final LSTM model
     if os.path.exists(lstm_model_path):
-        final_lstm_model = load_model_with_fallback(lstm_model_path)
+        final_lstm_model = load_model_with_fallback(lstm_model_path, allow_trusted_legacy=True)
         if final_lstm_model:
             logger.info("Successfully loaded the final LSTM model (Fin.keras).")
         else:
