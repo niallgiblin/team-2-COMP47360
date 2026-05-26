@@ -621,6 +621,9 @@ def chat_endpoint():
         data = request.get_json()
         query = data.get('message', '').strip()
         previous_questions = data.get('previous_questions', [])
+        if not isinstance(previous_questions, list):
+            previous_questions = []
+        previous_questions = [str(q) for q in previous_questions if q][-3:]
         
         if not query:
             return jsonify({'error': 'Message is required'}), 400

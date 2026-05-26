@@ -85,7 +85,7 @@ class _FakeDf:
 
     @property
     def index(self):
-        return list(range(len(self._rows)))
+        return types.SimpleNamespace(tolist=lambda: list(range(len(self._rows))))
 
     def copy(self):
         return _FakeDf(self._rows)
