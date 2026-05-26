@@ -1,73 +1,16 @@
-import importlib
-import sys
+import inspect
 import types
 
 import pytest
 
-
-def load_app(monkeypatch, extra_env=None):
-    monkeypatch.setenv("FLASK_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
-    monkeypatch.setenv("APP_JWT_SECRET", "test-secret")
-    if extra_env:
-        for key, value in extra_env.items():
-            monkeypatch.setenv(key, value)
-    monkeypatch.setitem(sys.modules, "numpy", types.SimpleNamespace())
-    monkeypatch.setitem(sys.modules, "pandas", types.SimpleNamespace(
-        DataFrame=object,
-        isna=lambda value: value is None,
-    ))
-    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(
-        Tensor=object,
-        tensor=lambda *args, **kwargs: None,
-        float32=object(),
-        topk=lambda similarities, k: types.SimpleNamespace(
-            values=[types.SimpleNamespace(item=lambda: 0.9)],
-            indices=[types.SimpleNamespace(item=lambda: 0)],
-        ),
-    ))
-    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(
-        SentenceTransformer=object,
-        util=types.SimpleNamespace(cos_sim=lambda *args, **kwargs: [[0.9, 0.1]]),
-    ))
-    monkeypatch.setitem(sys.modules, "requests", types.SimpleNamespace(
-        post=lambda *args, **kwargs: None,
-        exceptions=types.SimpleNamespace(Timeout=Exception, RequestException=Exception),
-    ))
-    sys.modules.pop("app", None)
-    return importlib.import_module("app")
-
-
-class _LocRow(dict):
-    def get(self, key, default=""):
-        return super().get(key, default)
-
-
-class _FakeIloc:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def __getitem__(self, idx):
-        return self._rows[idx]
-
-
-class _FakeDf:
-    def __init__(self, rows):
-        self.iloc = _FakeIloc(rows)
-
-
-def _ready_chat_app(monkeypatch, rows=None, extra_env=None):
-    app_module = load_app(monkeypatch, extra_env=extra_env)
-    app_module.initialized = True
-    app_module.model = types.SimpleNamespace(
-        encode=lambda query, convert_to_tensor=True: types.SimpleNamespace(cpu=lambda: object())
-    )
-    app_module.location_embeddings = object()
-    app_module.df = _FakeDf(rows or [_LocRow(name="Test Bar", zone="East Village", loc_type="Bar")])
-    return app_module
+from conftest import _LocRow, _ready_chat_app, load_app
 
 
 def test_most_similar_locs_includes_loc_type(monkeypatch):
-    app_module = _ready_chat_app(monkeypatch)
+    app_module = _ready_chat_app(
+        monkeypatch,
+        rows=[_LocRow(name="Test Bar", zone="East Village", loc_type="Bar")],
+    )
 
     result = app_module.most_similar_locs_for_chat("jazz bars")
 
@@ -87,8 +30,6 @@ def test_most_similar_locs_missing_loc_type_falls_back(monkeypatch):
 
 
 def test_most_similar_locs_does_not_use_type_key(monkeypatch):
-    import inspect
-
     app_module = _ready_chat_app(monkeypatch)
     source = inspect.getsource(app_module.most_similar_locs_for_chat)
 
