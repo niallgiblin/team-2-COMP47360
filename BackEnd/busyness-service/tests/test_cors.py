@@ -38,3 +38,17 @@ def test_rejected_origin_receives_no_cors_header(monkeypatch):
 
     assert response.headers.get("Access-Control-Allow-Origin") is None
     assert "Access-Control-Allow-Credentials" not in response.headers
+
+
+def test_unhealthy_health_does_not_leak_initialization_error(monkeypatch):
+    app_module = load_app(monkeypatch)
+    app_module.initialized = False
+    app_module.initialization_error = "/secret/path/missing.pkl import failed"
+    client = app_module.app.test_client()
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    body = response.get_json()
+    assert body["error"] == "Service is initializing."
+    assert "/secret" not in str(body)

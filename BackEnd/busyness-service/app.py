@@ -72,10 +72,12 @@ def health():
             }
         }), 200
     else:
+        if initialization_error:
+            logger.warning("Health check failed during initialization: %s", initialization_error)
         return jsonify({
             "status": "unhealthy",
             "success": False,
-            "error": initialization_error or "Service is initializing."
+            "error": "Service is initializing."
         }), 503
 
 @app.route("/busyness", methods=['GET'])
