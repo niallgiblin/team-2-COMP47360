@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.never;
@@ -27,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -36,8 +36,12 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.manhattan.busyness_predictor.dto.LocationDto;
+import com.manhattan.busyness_predictor.dto.MlLocationDto;
+import com.manhattan.busyness_predictor.dto.MlSearchResponse;
+import com.manhattan.busyness_predictor.dto.SimilarLocationsResult;
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
+import com.manhattan.busyness_predictor.service.MlResponseMapper;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.repository.LocationRepository;
 
@@ -68,7 +72,11 @@ public class VibeServiceTest {
     public void setUp() {
         // Initialize with RestTemplateBuilder mock
         when(restTemplateBuilder.build()).thenReturn(restTemplate);
-        vibeService = new VibeService(restTemplateBuilder, locationRepository, locationService);
+        vibeService = new VibeService(
+                restTemplateBuilder,
+                locationRepository,
+                locationService,
+                new MlResponseMapper());
         
         // Set the service URLs using reflection
         ReflectionTestUtils.setField(vibeService, "llmServiceUrl", "http://llm-service:5000");
@@ -115,28 +123,14 @@ public class VibeServiceTest {
 
     @Test
     public void whenFindLocationsByVibe_withMLServiceAvailable_thenReturnsMLResults() {
-        // Given - ML service is available and returns results
-        Map<String, Object> mlResponse = new HashMap<>();
-        Map<String, Object> location1Map = new HashMap<>();
-        location1Map.put("id", 1);
-        location1Map.put("name", "Cozy Coffee Shop");
-        location1Map.put("address", "123 Main St");
-        location1Map.put("latitude", 40.7128);
-        location1Map.put("longitude", -74.0060);
-        location1Map.put("description", "A warm and cozy coffee shop");
-        location1Map.put("similarity", 0.85);
-        location1Map.put("price", 2);
-        location1Map.put("rating", "4.5");
-        location1Map.put("zone", "Downtown");
-        
-        mlResponse.put("results", Arrays.asList(location1Map));
+        MlSearchResponse mlResponse = mlSearchResponseWithLocation(
+                1, "Cozy Coffee Shop", "123 Main St", 40.7128, -74.0060, 0.85);
 
-        // Mock ML service search call
         when(restTemplate.exchange(
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
                 any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)))
+                eq(MlSearchResponse.class)))
                 .thenReturn(ResponseEntity.ok(mlResponse));
 
         // Mock database lookup for enrichment
@@ -156,17 +150,16 @@ public class VibeServiceTest {
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
                 any(HttpEntity.class),
-                any(ParameterizedTypeReference.class));
+                eq(MlSearchResponse.class));
     }
 
     @Test
     public void whenFindLocationsByVibe_withMLServiceUnavailable_thenReturnsEmptyResults() {
-        // Given - ML service call failure
         when(restTemplate.exchange(
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
                 any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)))
+                eq(MlSearchResponse.class)))
                 .thenThrow(new RestClientException("Connection refused"));
 
         // When
@@ -181,19 +174,14 @@ public class VibeServiceTest {
 
     @Test
     public void whenFindLocationsByVibe_withCachedResults_thenReturnsCachedData() {
-        // Given - First call to populate cache
-        Map<String, Object> mlResponse = new HashMap<>();
-        Map<String, Object> location1Map = new HashMap<>();
-        location1Map.put("id", 1);
-        location1Map.put("name", "Cozy Coffee Shop");
-        location1Map.put("similarity", 0.85);
-        mlResponse.put("results", Arrays.asList(location1Map));
+        MlSearchResponse mlResponse = mlSearchResponseWithLocation(
+                1, "Cozy Coffee Shop", null, null, null, 0.85);
 
         when(restTemplate.exchange(
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
                 any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)))
+                eq(MlSearchResponse.class)))
                 .thenReturn(ResponseEntity.ok(mlResponse));
 
         when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
@@ -213,7 +201,7 @@ public class VibeServiceTest {
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
                 any(HttpEntity.class),
-                any(ParameterizedTypeReference.class));
+                eq(MlSearchResponse.class));
     }
 
     @Test
@@ -280,19 +268,18 @@ public class VibeServiceTest {
         when(restTemplate.getForEntity("http://llm-service:5000/health", String.class))
                 .thenReturn(ResponseEntity.ok("OK"));
 
-        // Mock ML similar locations response
-        Map<String, Object> mlResponse = new HashMap<>();
-        Map<String, Object> location2Map = new HashMap<>();
-        location2Map.put("id", 2);
-        location2Map.put("name", "Another Coffee Shop");
-        location2Map.put("similarity", 0.90);
-        mlResponse.put("results", Arrays.asList(location2Map));
+        MlSearchResponse mlResponse = mlSearchResponseWithLocation(
+                2, "Another Coffee Shop", null, null, null, 0.90);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor =
+                ArgumentCaptor.forClass(HttpEntity.class);
 
         when(restTemplate.exchange(
                 eq("http://llm-service:5000/similar"),
                 eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)))
+                entityCaptor.capture(),
+                eq(MlSearchResponse.class)))
                 .thenReturn(ResponseEntity.ok(mlResponse));
 
         Location anotherCoffeeShop = new Location();
@@ -300,13 +287,20 @@ public class VibeServiceTest {
         anotherCoffeeShop.setName("Another Coffee Shop");
         when(locationRepository.findById(2)).thenReturn(Optional.of(anotherCoffeeShop));
 
-        // When
-        List<LocationDto> similarLocations = vibeService.findSimilarLocations(1, 5);
+        SimilarLocationsResult result = vibeService.findSimilarLocations(1, 5);
 
-        // Then
-        assertNotNull(similarLocations);
-        assertEquals(1, similarLocations.size());
-        assertEquals("Another Coffee Shop", similarLocations.get(0).getName());
+        assertNotNull(result);
+        assertEquals("ml", result.getSource());
+        assertEquals(1, result.getLocations().size());
+        assertEquals("Another Coffee Shop", result.getLocations().get(0).getName());
+
+        Map<String, Object> body = entityCaptor.getValue().getBody();
+        assertNotNull(body);
+        assertEquals("Cozy Coffee Shop", body.get("name"));
+        assertEquals(5, body.get("limit"));
+        assertTrue(body.containsKey("zone"));
+        assertTrue(body.containsKey("loc_type"));
+        assertTrue(!body.containsKey("locationId"));
 
         verify(locationRepository).findById(1);
     }
@@ -317,14 +311,17 @@ public class VibeServiceTest {
         when(locationRepository.findById(999)).thenReturn(Optional.empty());
 
         // When
-        List<LocationDto> similarLocations = vibeService.findSimilarLocations(999, 5);
+        SimilarLocationsResult result = vibeService.findSimilarLocations(999, 5);
 
-        // Then
-        assertNotNull(similarLocations);
-        assertTrue(similarLocations.isEmpty());
+        assertNotNull(result);
+        assertTrue(result.getLocations().isEmpty());
 
         verify(locationRepository).findById(999);
-        verify(restTemplate, never()).exchange(anyString(), any(), any(), any(ParameterizedTypeReference.class));
+        verify(restTemplate, never()).exchange(
+                eq("http://llm-service:5000/similar"),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                eq(MlSearchResponse.class));
     }
 
     @Test
@@ -352,12 +349,12 @@ public class VibeServiceTest {
                 .thenReturn(Arrays.asList(testLocation1, similarRestaurant));
 
         // When
-        List<LocationDto> similarLocations = vibeService.findSimilarLocations(1, 5);
+        SimilarLocationsResult result = vibeService.findSimilarLocations(1, 5);
 
-        // Then
-        assertNotNull(similarLocations);
-        assertEquals(1, similarLocations.size());
-        assertEquals("Similar Restaurant", similarLocations.get(0).getName());
+        assertNotNull(result);
+        assertEquals("category", result.getSource());
+        assertEquals(1, result.getLocations().size());
+        assertEquals("Similar Restaurant", result.getLocations().get(0).getName());
 
         verify(locationRepository).findByType("restaurant");
     }
@@ -376,15 +373,14 @@ public class VibeServiceTest {
 
     @Test
     public void whenFindLocationsByVibe_withEmptyMLResponse_thenReturnsEmptyList() {
-        // Given
-        Map<String, Object> mlResponse = new HashMap<>();
-        mlResponse.put("results", Collections.emptyList());
+        MlSearchResponse mlResponse = new MlSearchResponse();
+        mlResponse.setResults(Collections.emptyList());
 
         when(restTemplate.exchange(
                 eq("http://llm-service:5000/search"),
                 eq(HttpMethod.POST),
                 any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)))
+                eq(MlSearchResponse.class)))
                 .thenReturn(ResponseEntity.ok(mlResponse));
 
         // When
@@ -421,6 +417,20 @@ public class VibeServiceTest {
         // Then
         assertNull(location);
         verify(locationRepository).findById(999);
+    }
+
+    private MlSearchResponse mlSearchResponseWithLocation(
+            int id, String name, String address, Double lat, Double lng, double similarity) {
+        MlLocationDto dto = new MlLocationDto();
+        dto.setId(id);
+        dto.setName(name);
+        dto.setAddress(address);
+        dto.setLatitude(lat);
+        dto.setLongitude(lng);
+        dto.setSimilarity(similarity);
+        MlSearchResponse response = new MlSearchResponse();
+        response.setResults(List.of(dto));
+        return response;
     }
 
 }
