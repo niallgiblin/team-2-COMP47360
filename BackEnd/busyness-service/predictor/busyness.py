@@ -49,7 +49,11 @@ def _artifact_label(path):
 
 
 def enable_trusted_legacy_deserialization():
-    """Enable unsafe Keras loading only after artifact checksums passed."""
+    """Enable unsafe Keras loading only after artifact checksums passed.
+
+    This toggles a process-global Keras setting. Models are loaded once at
+    startup; do not hot-reload artifacts without restarting the worker process.
+    """
     if not _checksums_verified:
         raise RuntimeError("Trusted legacy deserialization requires verified model checksums")
     logger.warning("Enabling trusted legacy Keras deserialization for checksum-verified artifacts")
