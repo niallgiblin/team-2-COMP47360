@@ -4,23 +4,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manhattan.busyness_predictor.model.Location;
+import com.manhattan.busyness_predictor.service.MlResponseMapper;
 
 class MlContractTest {
 
     private ObjectMapper objectMapper;
+    private MlResponseMapper mapper;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
+        mapper = new MlResponseMapper();
     }
 
     @Test
@@ -93,8 +98,34 @@ class MlContractTest {
                 "contract-fixtures/llm/search-success.json",
                 MlSearchResponse.class);
 
-        // RED until Wave 2/5 implements MlResponseMapper.toLocations(MlSearchResponse)
-        fail("MlResponseMapper.toLocations not implemented until Wave 2");
+        List<Location> locations = mapper.toLocations(response);
+
+        assertEquals(2, locations.size());
+        Location first = locations.get(0);
+        assertEquals(1, first.getId());
+        assertEquals("Blue Note Jazz Club", first.getName());
+        assertNotNull(first.getAddress());
+        assertNotNull(first.getLat());
+        assertNotNull(first.getLng());
+        assertEquals(0.91, first.getSimilarity());
+        assertTrue(first.getIsBar());
+    }
+
+    @Test
+    void mapBusynessFixtureToPredictionsAndForecast() throws Exception {
+        BusynessReportDto report = loadFixture(
+                "contract-fixtures/busyness/report-minimal.json",
+                BusynessReportDto.class);
+
+        Map<String, Double> predictions = mapper.toPredictions(report);
+        assertEquals(2, predictions.size());
+        assertEquals(0.72, predictions.get("zone-1"));
+        assertFalse(mapper.toForecast(report).isEmpty());
+    }
+
+    @Test
+    void toPredictionsReturnsEmptyForNullDto() {
+        assertTrue(mapper.toPredictions(null).isEmpty());
     }
 
     private <T> T loadFixture(String classpathResource, Class<T> type) throws Exception {
