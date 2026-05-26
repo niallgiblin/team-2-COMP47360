@@ -14,6 +14,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // Proxy avatar static files to backend (parity with frontend/nginx.conf)
+      '/avatars': {
+        target: 'http://backend:8080',
+        changeOrigin: true,
+        secure: false,
+      },
       // Proxy all other API requests to backend
       '/api': {
         target: 'http://backend:8080',
