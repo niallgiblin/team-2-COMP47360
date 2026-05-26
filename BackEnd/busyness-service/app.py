@@ -148,20 +148,20 @@ def _cache_bucket(now):
     return int(timestamp // CACHE_BUCKET_SECONDS)
 
 
-def build_live_cache_key(lat, lon, now=None):
+def build_cache_key(lat, lon, now=None):
     return (
         round(float(lat), CACHE_COORDINATE_PRECISION),
         round(float(lon), CACHE_COORDINATE_PRECISION),
         _cache_bucket(now),
     )
+
+
+def build_live_cache_key(lat, lon, now=None):
+    return build_cache_key(lat, lon, now)
 
 
 def build_forecast_cache_key(lat, lon, now=None):
-    return (
-        round(float(lat), CACHE_COORDINATE_PRECISION),
-        round(float(lon), CACHE_COORDINATE_PRECISION),
-        _cache_bucket(now),
-    )
+    return build_cache_key(lat, lon, now)
 
 
 def get_live_predictions(lat, lon, now=None):
