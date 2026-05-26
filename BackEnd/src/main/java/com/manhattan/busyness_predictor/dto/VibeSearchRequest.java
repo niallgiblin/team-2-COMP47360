@@ -15,8 +15,10 @@ public class VibeSearchRequest {
     @Max(value = 25, message = "maxResults must not exceed 25")
     private Integer maxResults = 10;
     
+    @Size(max = 100, message = "location filter cannot exceed 100 characters")
     private String location; // Optional: "Manhattan", "Downtown", etc.
     
+    @Size(max = 20, message = "priceRange must be budget, mid, or luxury")
     private String priceRange; // Optional: "budget", "mid", "luxury"
     
     private String timeOfDay; // Optional: "morning", "afternoon", "evening", "night"

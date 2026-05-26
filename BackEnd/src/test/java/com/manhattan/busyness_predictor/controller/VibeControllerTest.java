@@ -195,6 +195,36 @@ class VibeControllerTest {
     }
 
     @Test
+    @DisplayName("Search rejects oversized location filter")
+    void searchLocations_ShouldRejectOversizedLocationFilter() throws Exception {
+        VibeSearchRequest request = new VibeSearchRequest();
+        request.setVibeDescription("happy");
+        request.setLocation("x".repeat(101));
+
+        mockMvc.perform(post("/api/vibe/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        verify(vibeService, never()).findLocationsByVibe(any(VibeSearchRequest.class));
+    }
+
+    @Test
+    @DisplayName("Search rejects oversized priceRange filter")
+    void searchLocations_ShouldRejectOversizedPriceRange() throws Exception {
+        VibeSearchRequest request = new VibeSearchRequest();
+        request.setVibeDescription("happy");
+        request.setPriceRange("x".repeat(21));
+
+        mockMvc.perform(post("/api/vibe/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        verify(vibeService, never()).findLocationsByVibe(any(VibeSearchRequest.class));
+    }
+
+    @Test
     @DisplayName("Similar locations rejects limit below minimum")
     void similarLocations_ShouldRejectLimitBelowMinimum() throws Exception {
         mockMvc.perform(post("/api/vibe/similar")
