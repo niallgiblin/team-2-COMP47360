@@ -231,6 +231,19 @@ Plans:
 
 **Requirements:** SEC-05, ML-02, ML-03, ML-06, PERF-01, PERF-02
 
+**Plans:** 4 plans
+
+Plans:
+**Wave 0** *(Nyquist pre-work — artifact-free tests and failing stubs)*
+- [x] 06-01-PLAN.md — Busyness pytest harness and red smoke/model-safety tests (SEC-05, ML-02, ML-03, ML-06, PERF-01, PERF-02)
+
+**Wave 1** *(depends on Wave 0; plans 02 and 03 can run in parallel)*
+- [x] 06-02-PLAN.md — Checksum-gated model loading and Keras safety (SEC-05, ML-06)
+- [x] 06-03-PLAN.md — Bounded live/forecast caches and split compute paths (ML-02, ML-03, PERF-01, PERF-02)
+
+**Wave 2** *(depends on Wave 1)*
+- [x] 06-04-PLAN.md — Optional artifact tier, docs, config alignment, and final verification (SEC-05, ML-02, ML-03, ML-06, PERF-01, PERF-02)
+
 **Work outline:**
 - Add busyness smoke tests for startup, `/health`, `/busyness`, live predictions, forecast response shape, weather fallback, and normalization.
 - Split or cache live and forecast computation so one request does not repeat all model paths unnecessarily.

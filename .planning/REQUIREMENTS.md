@@ -27,7 +27,7 @@
 - [x] **SEC-02**: Operator has a documented rotation checklist for any secrets that were previously committed.
 - [ ] **SEC-03**: Public expensive endpoints for search, chat, map data, busyness, prediction, and exports are authenticated or rate-limited according to product flow.
 - [ ] **SEC-04**: Flask CORS policies are restricted to configured frontend origins instead of broad defaults.
-- [ ] **SEC-05**: Busyness service model loading avoids unsafe Keras deserialization unless verified trusted artifacts require it.
+- [x] **SEC-05**: Busyness service model loading avoids unsafe Keras deserialization unless verified trusted artifacts require it.
 - [ ] **SEC-06**: Authenticated avatar uploads validate image content by bytes and allowed extension, not only client content type.
 - [ ] **SEC-07**: API error responses expose stable client-safe messages while internal exception details remain server-side.
 - [ ] **SEC-08**: Browser-exposed Google API key usage is documented with referrer/API restrictions or routed through a backend proxy with user-level limits.
@@ -43,11 +43,11 @@
 ### ML Service Reliability
 
 - [x] **ML-01**: LLM service startup, `/health`, `/search`, and `/api/chat` paths are covered by Python smoke tests.
-- [ ] **ML-02**: Busyness service startup, `/health`, `/busyness`, live prediction, forecast, weather fallback, and normalization are covered by Python smoke tests.
-- [ ] **ML-03**: ML service caches have explicit maximum size, TTL, and invalidation or refresh behavior.
+- [x] **ML-02**: Busyness service startup, `/health`, `/busyness`, live prediction, forecast, weather fallback, and normalization are covered by Python smoke tests.
+- [x] **ML-03**: ML service caches have explicit maximum size, TTL, and invalidation or refresh behavior.
 - [ ] **ML-04**: LLM service worker and memory behavior is measured or documented for the current Gunicorn preload configuration.
 - [ ] **ML-05**: Python runtime versions are aligned or explicitly justified with compatibility notes and smoke-test coverage.
-- [ ] **ML-06**: Keras model compatibility is verified by startup tests for every required model artifact.
+- [x] **ML-06**: Keras model compatibility is verified by startup tests for every required model artifact.
 
 ### Frontend Map, Routing, and Forecast Correctness
 
@@ -59,8 +59,8 @@
 
 ### Performance and Scaling
 
-- [ ] **PERF-01**: Busyness service separates or caches live and forecast prediction work so one cache miss does not unnecessarily run all model paths twice.
-- [ ] **PERF-02**: Busyness forecasts can be precomputed, batched, or cached by input and forecast hour.
+- [x] **PERF-01**: Busyness service separates or caches live and forecast prediction work so one cache miss does not unnecessarily run all model paths twice.
+- [x] **PERF-02**: Busyness forecasts can be precomputed, batched, or cached by input and forecast hour.
 - [ ] **PERF-03**: LLM semantic search avoids full DataFrame copies and full-corpus sort work where candidate limiting or vector indexing is available.
 - [ ] **PERF-04**: Route planning caches route segments by origin, destination, and mode.
 - [ ] **PERF-05**: Map data can be paginated, tiled, or viewport-filtered instead of returning all locations for every map load.
@@ -128,7 +128,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-02 | Phase 3 | Complete |
 | SEC-03 | Phase 4 | Pending |
 | SEC-04 | Phase 4 | Pending |
-| SEC-05 | Phase 6 | Pending |
+| SEC-05 | Phase 6 | Complete |
 | SEC-06 | Phase 4 | Pending |
 | SEC-07 | Phase 4 | Pending |
 | SEC-08 | Phase 8 | Pending |
@@ -138,18 +138,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-04 | Phase 2 | Complete |
 | API-05 | Phase 5 | Complete |
 | ML-01 | Phase 5 | Complete |
-| ML-02 | Phase 6 | Pending |
-| ML-03 | Phase 6 | Pending |
+| ML-02 | Phase 6 | Complete |
+| ML-03 | Phase 6 | Complete |
 | ML-04 | Phase 7 | Pending |
 | ML-05 | Phase 7 | Pending |
-| ML-06 | Phase 6 | Pending |
+| ML-06 | Phase 6 | Complete |
 | MAP-01 | Phase 8 | Pending |
 | MAP-02 | Phase 8 | Pending |
 | MAP-03 | Phase 8 | Pending |
 | MAP-04 | Phase 8 | Pending |
 | MAP-05 | Phase 8 | Pending |
-| PERF-01 | Phase 6 | Pending |
-| PERF-02 | Phase 6 | Pending |
+| PERF-01 | Phase 6 | Complete |
+| PERF-02 | Phase 6 | Complete |
 | PERF-03 | Phase 7 | Pending |
 | PERF-04 | Phase 8 | Pending |
 | PERF-05 | Phase 10 | Pending |
