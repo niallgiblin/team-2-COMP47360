@@ -34,11 +34,11 @@
 
 ### API and Service Contracts
 
-- [ ] **API-01**: Similar-location search either implements the Flask `/similar` endpoint or updates the Spring caller to use a tested supported endpoint.
-- [ ] **API-02**: Chat widget requests use the same history field and route that the Flask `/api/chat` endpoint accepts.
-- [ ] **API-03**: Java service clients deserialize ML service responses through typed DTOs instead of raw map casting.
+- [x] **API-01**: Similar-location search either implements the Flask `/similar` endpoint or updates the Spring caller to use a tested supported endpoint.
+- [x] **API-02**: Chat widget requests use the same history field and route that the Flask `/api/chat` endpoint accepts.
+- [x] **API-03**: Java service clients deserialize ML service responses through typed DTOs instead of raw map casting.
 - [x] **API-04**: Frontend contract tests cover relative `/api/vibe/*`, plan sharing, favourites, chat configuration, and auth-expiry error handling.
-- [ ] **API-05**: Spring-to-Flask contract tests verify search, similar-location, busyness, forecast, and chat payload shapes.
+- [x] **API-05**: Spring-to-Flask contract tests verify search, similar-location, busyness, forecast, and chat payload shapes.
 
 ### ML Service Reliability
 
@@ -76,8 +76,8 @@
 ### Maintainability and Decomposition
 
 - [ ] **MAINT-01**: `MapView.jsx` route fetching, route processing, polygon enrichment, and directions calls are extracted into focused modules with tests.
-- [ ] **MAINT-02**: `FindMyVibe.jsx` API calls, enrichment, and caching behavior are extracted into focused modules with tests.
-- [ ] **MAINT-03**: `VibeService.java` separates ML service client calls, response mapping, cache ownership, and business response assembly.
+- [x] **MAINT-02**: `FindMyVibe.jsx` API calls, enrichment, and caching behavior are extracted into focused modules with tests.
+- [x] **MAINT-03**: `VibeService.java` separates ML service client calls, response mapping, cache ownership, and business response assembly.
 - [ ] **MAINT-04**: `BackEnd/llm-service/app.py` separates endpoint handlers from model loading, search, cache, and chat integration logic.
 - [ ] **MAINT-05**: Browser and process-global caches are replaced or wrapped by explicit cache owners with clear refresh paths.
 
@@ -132,11 +132,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-06 | Phase 4 | Pending |
 | SEC-07 | Phase 4 | Pending |
 | SEC-08 | Phase 8 | Pending |
-| API-01 | Phase 5 | Pending |
-| API-02 | Phase 5 | Pending |
-| API-03 | Phase 5 | Pending |
+| API-01 | Phase 5 | Complete |
+| API-02 | Phase 5 | Complete |
+| API-03 | Phase 5 | Complete |
 | API-04 | Phase 2 | Complete |
-| API-05 | Phase 5 | Pending |
+| API-05 | Phase 5 | Complete |
 | ML-01 | Phase 5 | Complete |
 | ML-02 | Phase 6 | Pending |
 | ML-03 | Phase 6 | Pending |
@@ -159,8 +159,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-03 | Phase 9 | Pending |
 | DATA-04 | Phase 9 | Pending |
 | MAINT-01 | Phase 8 | Pending |
-| MAINT-02 | Phase 5 | Pending |
-| MAINT-03 | Phase 5 | Pending |
+| MAINT-02 | Phase 5 | Complete |
+| MAINT-03 | Phase 5 | Complete |
 | MAINT-04 | Phase 7 | Pending |
 | MAINT-05 | Phase 10 | Pending |
 | TEST-01 | Phase 1 | Complete |
