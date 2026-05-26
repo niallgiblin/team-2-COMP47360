@@ -1,3 +1,4 @@
+import concurrent.futures
 import logging
 import sys
 import time
@@ -79,28 +80,32 @@ class BoundedTTLCache:
         self.ttl_seconds = ttl_seconds
         self.now_func = now_func
         self._items = OrderedDict()
+        self._lock = threading.Lock()
 
     def get(self, key):
-        self._cleanup_expired()
-        item = self._items.get(key)
-        if item is None:
-            return None
-        timestamp, value = item
-        if self.now_func() - timestamp >= self.ttl_seconds:
-            self._items.pop(key, None)
-            return None
-        self._items.move_to_end(key)
-        return value
+        with self._lock:
+            self._cleanup_expired()
+            item = self._items.get(key)
+            if item is None:
+                return None
+            timestamp, value = item
+            if self.now_func() - timestamp >= self.ttl_seconds:
+                self._items.pop(key, None)
+                return None
+            self._items.move_to_end(key)
+            return value
 
     def set(self, key, value):
-        self._cleanup_expired()
-        self._items[key] = (self.now_func(), value)
-        self._items.move_to_end(key)
-        while len(self._items) > self.max_entries:
-            self._items.popitem(last=False)
+        with self._lock:
+            self._cleanup_expired()
+            self._items[key] = (self.now_func(), value)
+            self._items.move_to_end(key)
+            while len(self._items) > self.max_entries:
+                self._items.popitem(last=False)
 
     def clear(self):
-        self._items.clear()
+        with self._lock:
+            self._items.clear()
 
     def _cleanup_expired(self):
         now = self.now_func()
