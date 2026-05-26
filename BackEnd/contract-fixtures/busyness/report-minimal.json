@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "predictions": {
+    "zone-1": 0.72,
+    "zone-2": 0.45
+  },
+  "forecast": [
+    {
+      "zoneId": "zone-1",
+      "hour": 18,
+      "busyness": 0.65
+    },
+    {
+      "zoneId": "zone-2",
+      "hour": 19,
+      "busyness": 0.40
+    }
+  ],
+  "cached": false
+}

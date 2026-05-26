@@ -1,0 +1,34 @@
+{
+  "success": true,
+  "query": "jazz bars",
+  "results": [
+    {
+      "id": 1,
+      "name": "Blue Note Jazz Club",
+      "address": "131 W 3rd St, New York, NY",
+      "latitude": 40.7308,
+      "longitude": -74.0020,
+      "type": "Bar",
+      "similarity": 0.91,
+      "zone": "Greenwich Village",
+      "zoneId": 12,
+      "price": "$$$",
+      "rating": 4.7
+    },
+    {
+      "id": 2,
+      "name": "Smalls Jazz Club",
+      "address": "183 W 10th St, New York, NY",
+      "latitude": 40.7348,
+      "longitude": -74.0022,
+      "type": "Bar",
+      "similarity": 0.87,
+      "zone": "Greenwich Village",
+      "zoneId": 12,
+      "price": "$$",
+      "rating": 4.5
+    }
+  ],
+  "confidence": 0.91,
+  "explanation": "Found 2 locations matching your vibe and filters."
+}

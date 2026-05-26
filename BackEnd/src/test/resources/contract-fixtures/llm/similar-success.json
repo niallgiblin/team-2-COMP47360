@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "results": [
+    {
+      "id": 2,
+      "name": "Smalls Jazz Club",
+      "address": "183 W 10th St, New York, NY",
+      "latitude": 40.7348,
+      "longitude": -74.0022,
+      "type": "Bar",
+      "similarity": 0.89,
+      "zone": "Greenwich Village",
+      "zoneId": 12
+    },
+    {
+      "id": 3,
+      "name": "Village Vanguard",
+      "address": "178 7th Ave S, New York, NY",
+      "latitude": 40.7360,
+      "longitude": -74.0015,
+      "type": "Bar",
+      "similarity": 0.85,
+      "zone": "Greenwich Village",
+      "zoneId": 12
+    }
+  ],
+  "confidence": 0.89
+}
