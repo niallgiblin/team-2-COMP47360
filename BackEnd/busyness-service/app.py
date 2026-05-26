@@ -50,14 +50,25 @@ def _parse_allowed_origins():
 
 CORS(app, origins=_parse_allowed_origins(), supports_credentials=False)
 
+def _env_int(name, default):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r; using default %s", name, raw, default)
+        return default
+
+
 # Global state with bounded process-local caching
 initialized = False
 initialization_error = None
 pending_request = None
 request_lock = threading.Lock()
-LIVE_CACHE_TTL_SECONDS = int(os.getenv("BUSYNESS_LIVE_CACHE_TTL_SECONDS", str(30 * 60)))
-FORECAST_CACHE_TTL_SECONDS = int(os.getenv("BUSYNESS_FORECAST_CACHE_TTL_SECONDS", str(30 * 60)))
-BUSYNESS_CACHE_MAX_ENTRIES = int(os.getenv("BUSYNESS_CACHE_MAX_ENTRIES", "512"))
+LIVE_CACHE_TTL_SECONDS = _env_int("BUSYNESS_LIVE_CACHE_TTL_SECONDS", 30 * 60)
+FORECAST_CACHE_TTL_SECONDS = _env_int("BUSYNESS_FORECAST_CACHE_TTL_SECONDS", 30 * 60)
+BUSYNESS_CACHE_MAX_ENTRIES = _env_int("BUSYNESS_CACHE_MAX_ENTRIES", 512)
 CACHE_COORDINATE_PRECISION = 3
 CACHE_BUCKET_SECONDS = 60 * 60
 
