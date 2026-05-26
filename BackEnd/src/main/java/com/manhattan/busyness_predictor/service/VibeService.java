@@ -65,7 +65,7 @@ public class VibeService {
         Integer maxResults = request.getMaxResults() != null ? request.getMaxResults() : 10;
 
         // Check cache first
-        String cacheKey = generateCacheKey(vibeDescription, maxResults);
+        String cacheKey = generateCacheKey(vibeDescription, maxResults, request.getLocation(), request.getPriceRange());
         CachedSearchResult cached = searchCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
             logger.info("Returning cached search result for: {}", vibeDescription);
@@ -73,7 +73,11 @@ public class VibeService {
         }
 
         // 1. Fetch ML recommendations
-        List<Location> mlLocations = fetchMLRecommendations(vibeDescription, maxResults);
+        List<Location> mlLocations = fetchMLRecommendations(
+                vibeDescription,
+                maxResults,
+                request.getLocation(),
+                request.getPriceRange());
         
         // 3. Use only ML results (no keyword fallback)
         List<Location> finalLocations = mlLocations;
@@ -95,8 +99,15 @@ public class VibeService {
         return response;
     }
 
-    private String generateCacheKey(String vibeDescription, Integer maxResults) {
-        return vibeDescription.toLowerCase().trim() + "|" + maxResults;
+    private String generateCacheKey(String vibeDescription, Integer maxResults, String location, String priceRange) {
+        return normalizeCachePart(vibeDescription) + "|"
+                + maxResults + "|"
+                + normalizeCachePart(location) + "|"
+                + normalizeCachePart(priceRange);
+    }
+
+    private String normalizeCachePart(String value) {
+        return value == null ? "" : value.toLowerCase().trim();
     }
 
     // Cache class for search results
@@ -185,8 +196,12 @@ public class VibeService {
         return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
     }
 
-    private List<Location> fetchMLRecommendations(String vibeDescription, Integer maxResults) {
-        MlSearchResponse response = mlServiceClient.search(vibeDescription, maxResults);
+    private List<Location> fetchMLRecommendations(
+            String vibeDescription,
+            Integer maxResults,
+            String location,
+            String priceRange) {
+        MlSearchResponse response = mlServiceClient.search(vibeDescription, maxResults, location, priceRange);
         if (response != null) {
             List<Location> mlLocations = mlResponseMapper.toLocations(response);
             return enrichFromDatabase(mlLocations);
@@ -318,8 +333,8 @@ public class VibeService {
         
         // Try to find similar locations by type and zone
         if (baseType != null && baseZone != null) {
-            similar = locationRepository.findByType(baseType.toLowerCase());
-            similar = similar.stream()
+            similar = locationRepository.findByType(baseType.toLowerCase()).stream()
+                    .filter(loc -> baseZone.equalsIgnoreCase(loc.getZone()))
                     .filter(loc -> !loc.getId().equals(baseLocation.getId()))
                     .limit(limit)
                     .collect(Collectors.toList());
