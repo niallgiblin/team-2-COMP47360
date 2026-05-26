@@ -29,7 +29,7 @@ class MlContractTest {
     }
 
     @Test
-    void deserializesSearchFixtureWithRequiredFields() throws Exception {
+    void deserializeSearchSuccessFixture() throws Exception {
         MlSearchResponse response = loadFixture(
                 "contract-fixtures/llm/search-success.json",
                 MlSearchResponse.class);
@@ -51,7 +51,20 @@ class MlContractTest {
     }
 
     @Test
-    void deserializesSimilarFixtureWithSimilarityScore() throws Exception {
+    void deserializeSearchEmptyFixture() throws Exception {
+        MlSearchResponse response = loadFixture(
+                "contract-fixtures/llm/search-empty.json",
+                MlSearchResponse.class);
+
+        assertTrue(response.isSuccess());
+        assertEquals("none", response.getQuery());
+        assertNotNull(response.getResults());
+        assertTrue(response.getResults().isEmpty());
+        assertEquals(0.0, response.getConfidence());
+    }
+
+    @Test
+    void deserializeSimilarSuccessFixture() throws Exception {
         MlSearchResponse response = loadFixture(
                 "contract-fixtures/llm/similar-success.json",
                 MlSearchResponse.class);
@@ -62,7 +75,7 @@ class MlContractTest {
     }
 
     @Test
-    void deserializesBusynessFixtureWithNumericPredictions() throws Exception {
+    void deserializeBusynessMinimalFixture() throws Exception {
         BusynessReportDto report = loadFixture(
                 "contract-fixtures/busyness/report-minimal.json",
                 BusynessReportDto.class);
@@ -75,7 +88,7 @@ class MlContractTest {
     }
 
     @Test
-    void ignoresUnknownFlaskFieldsDuringDeserialization() throws Exception {
+    void ignoreUnknownFlaskFields() throws Exception {
         String json = """
                 {
                   "success": true,
@@ -93,7 +106,7 @@ class MlContractTest {
     }
 
     @Test
-    void mapSearchFixtureToLocationEntity() throws Exception {
+    void mapSearchFixtureToLocations() throws Exception {
         MlSearchResponse response = loadFixture(
                 "contract-fixtures/llm/search-success.json",
                 MlSearchResponse.class);
@@ -126,6 +139,26 @@ class MlContractTest {
     @Test
     void toPredictionsReturnsEmptyForNullDto() {
         assertTrue(mapper.toPredictions(null).isEmpty());
+    }
+
+    @Test
+    void busynessParseFailureReturnsEmptyPredictions() throws Exception {
+        BusynessReportDto missingPredictions = objectMapper.readValue(
+                """
+                {
+                  "success": true,
+                  "predictions": null,
+                  "forecast": []
+                }
+                """,
+                BusynessReportDto.class);
+
+        assertTrue(mapper.toPredictions(missingPredictions).isEmpty());
+        assertTrue(mapper.toForecast(missingPredictions).isEmpty());
+
+        BusynessReportDto malformedEnvelope = new BusynessReportDto();
+        malformedEnvelope.setSuccess(true);
+        assertTrue(mapper.toPredictions(malformedEnvelope).isEmpty());
     }
 
     private <T> T loadFixture(String classpathResource, Class<T> type) throws Exception {

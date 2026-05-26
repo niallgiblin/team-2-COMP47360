@@ -71,3 +71,41 @@ Copy (not symlink) these into `BackEnd/src/test/resources/contract-fixtures/`:
 - `busyness/report-minimal.json`
 
 Keep authoritative JSON in this directory; update both locations when shapes change.
+
+## Flask `POST /chat` (Flask-only — no Spring proxy)
+
+Chat is served directly by the LLM Flask service. Spring does not proxy chat requests (D-12). Document here for pytest and Vitest alignment.
+
+**Request:**
+
+```json
+{
+  "message": "<user message>",
+  "previous_questions": ["<prior user question 1>", "<prior user question 2>"]
+}
+```
+
+- `previous_questions` is the canonical history field (not `history`).
+- Server truncates history to a bounded window before calling the model.
+
+**Response:**
+
+```json
+{
+  "response": "<assistant reply>"
+}
+```
+
+## Forecast Array (Phase 6 expansion)
+
+Minimal busyness forecast entries in `report-minimal.json`:
+
+```json
+{
+  "zoneId": "<zone identifier>",
+  "hour": 18,
+  "busyness": 0.65
+}
+```
+
+Phase 6 may add richer forecast shapes (multi-day horizons, confidence bands). Contract tests should load fixtures rather than inline JSON when shapes grow.
