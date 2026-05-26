@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,17 +13,8 @@ import java.time.Instant;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.PageRequest;
 
 import com.manhattan.busyness_predictor.dto.BusynessReportDto;
 import com.manhattan.busyness_predictor.dto.LocationDto;
@@ -34,21 +24,13 @@ import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.model.Location;
 import com.manhattan.busyness_predictor.repository.LocationRepository;
-import org.springframework.data.domain.PageRequest;
 
 @Service
 public class VibeService {
 
     private static final Logger logger = LoggerFactory.getLogger(VibeService.class);
 
-    private final RestTemplate restTemplate;
-
-    @Value("${llm.service.url}")
-    private String llmServiceUrl;
-
-    @Value("${busyness.service.url}")
-    private String busynessServiceUrl;
-
+    private final MlServiceClient mlServiceClient;
     private final LocationRepository locationRepository;
     private final LocationService locationService;
     private final MlResponseMapper mlResponseMapper;
@@ -67,11 +49,11 @@ public class VibeService {
     private Instant lastMapDataFetch = null;
     private static final long MAP_DATA_CACHE_DURATION_SECONDS = 300; // 5 minutes
 
-    public VibeService(RestTemplateBuilder restTemplateBuilder,
+    public VibeService(MlServiceClient mlServiceClient,
             LocationRepository locationRepository,
             LocationService locationService,
             MlResponseMapper mlResponseMapper) {
-        this.restTemplate = restTemplateBuilder.build();
+        this.mlServiceClient = mlServiceClient;
         this.locationRepository = locationRepository;
         this.locationService = locationService;
         this.mlResponseMapper = mlResponseMapper;
@@ -81,7 +63,6 @@ public class VibeService {
     public VibeSearchResponse findLocationsByVibe(VibeSearchRequest request) {
         String vibeDescription = request.getVibeDescription();
         Integer maxResults = request.getMaxResults() != null ? request.getMaxResults() : 10;
-        final double ML_CONFIDENCE_THRESHOLD = 0.4; // Similarity score must be above this to be considered high-confidence.
 
         // Check cache first
         String cacheKey = generateCacheKey(vibeDescription, maxResults);
@@ -162,7 +143,7 @@ public class VibeService {
         
         List<Location> allLocations = locationService.getAllLocations();
 
-        BusynessReportDto busynessReport = fetchBusynessReport();
+        BusynessReportDto busynessReport = mlServiceClient.fetchBusynessReport();
         Map<String, Double> liveBusyness = mlResponseMapper.toPredictions(busynessReport);
         List<Object> forecast = mlResponseMapper.toForecast(busynessReport);
 
@@ -189,7 +170,7 @@ public class VibeService {
         }
 
         try {
-            BusynessReportDto report = fetchBusynessReport();
+            BusynessReportDto report = mlServiceClient.fetchBusynessReport();
             Map<String, Double> newBusyness = mlResponseMapper.toPredictions(report);
             if (!newBusyness.isEmpty()) {
                 busynessCache = new HashMap<>(newBusyness);
@@ -204,40 +185,11 @@ public class VibeService {
         return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
     }
 
-    private boolean isMLServiceAvailable() {
-        try {
-            ResponseEntity<String> response = restTemplate.getForEntity(llmServiceUrl + "/health", String.class);
-            return response.getStatusCode().is2xxSuccessful();
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     private List<Location> fetchMLRecommendations(String vibeDescription, Integer maxResults) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            Map<String, Object> payload = Map.of(
-                    "vibeDescription", vibeDescription,
-                    "maxResults", maxResults);
-
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
-
-            // Calling ML service for recommendations
-
-            ResponseEntity<MlSearchResponse> response = restTemplate.exchange(
-                    llmServiceUrl + "/search",
-                    HttpMethod.POST,
-                    requestEntity,
-                    MlSearchResponse.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                List<Location> mlLocations = mlResponseMapper.toLocations(response.getBody());
-                return enrichFromDatabase(mlLocations);
-            }
-        } catch (RestClientException e) {
-            logger.error("Error calling ML service for vibe '{}': {}", vibeDescription, e.getMessage(), e);
+        MlSearchResponse response = mlServiceClient.search(vibeDescription, maxResults);
+        if (response != null) {
+            List<Location> mlLocations = mlResponseMapper.toLocations(response);
+            return enrichFromDatabase(mlLocations);
         }
         return Collections.emptyList();
     }
@@ -264,27 +216,6 @@ public class VibeService {
 
     public List<Location> getLocationsByIds(List<Integer> locationIds) {
         return locationRepository.findAllById(locationIds);
-    }
-
-
-
-    private BusynessReportDto fetchBusynessReport() {
-        try {
-            ResponseEntity<BusynessReportDto> response = restTemplate.getForEntity(
-                    busynessServiceUrl + "/busyness",
-                    BusynessReportDto.class);
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                BusynessReportDto body = response.getBody();
-                if (body.getPredictions() != null) {
-                    return body;
-                }
-            }
-        } catch (Exception e) {
-            logger.error("Error fetching busyness report: {}", e.getMessage());
-        }
-
-        return null;
     }
 
     private VibeSearchResponse buildResponse(List<Location> locations, String explanation, double confidence,
@@ -326,7 +257,7 @@ public class VibeService {
         List<Location> similarLocations = Collections.emptyList();
         String source = "category";
 
-        if (isMLServiceAvailable()) {
+        if (mlServiceClient.isLlmServiceAvailable()) {
             List<Location> mlResults = fetchMLSimilarLocations(baseLocation, limit);
             if (!mlResults.isEmpty()) {
                 similarLocations = mlResults;
@@ -346,25 +277,11 @@ public class VibeService {
     }
 
     private List<Location> fetchMLSimilarLocations(Location baseLocation, Integer limit) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            Map<String, Object> payload = buildSimilarPayload(baseLocation, limit);
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
-
-            ResponseEntity<MlSearchResponse> response = restTemplate.exchange(
-                    llmServiceUrl + "/similar",
-                    HttpMethod.POST,
-                    requestEntity,
-                    MlSearchResponse.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                List<Location> mlLocations = mlResponseMapper.toLocations(response.getBody());
-                return enrichFromDatabase(mlLocations);
-            }
-        } catch (Exception e) {
-            logger.error("Error fetching ML similar locations: {}", e.getMessage());
+        Map<String, Object> payload = buildSimilarPayload(baseLocation, limit);
+        MlSearchResponse response = mlServiceClient.findSimilar(payload);
+        if (response != null) {
+            List<Location> mlLocations = mlResponseMapper.toLocations(response);
+            return enrichFromDatabase(mlLocations);
         }
         return Collections.emptyList();
     }
