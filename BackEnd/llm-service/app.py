@@ -286,6 +286,11 @@ def vibe_search():
 
         vibe_desc = data.get('vibeDescription', '').strip()
         max_results = data.get('maxResults', 10)
+        try:
+            max_results = int(max_results)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'maxResults must be an integer'}), 400
+        max_results = max(1, min(max_results, 25))
         location_filter = data.get('location', None)
         price_range = data.get('priceRange', None)
 
