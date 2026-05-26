@@ -130,6 +130,10 @@ export const vibeAPI = {
 // Chat API — proxied Flask route requires the same Bearer JWT boundary as Spring.
 export const chatAPI = {
   sendMessage: async (message, history) => {
+    const previous_questions = (history || [])
+      .filter((m) => m.sender === 'user')
+      .map((m) => m.text)
+      .filter(Boolean);
     const token = getAuthToken();
     const headers = { 'Content-Type': 'application/json' };
     if (token) {
@@ -138,7 +142,7 @@ export const chatAPI = {
     const response = await fetch(resolveLlmApiUrl(), {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, previous_questions }),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
