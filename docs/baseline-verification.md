@@ -2,7 +2,7 @@
 
 Tiered verification record for Phase 1 and downstream remediation. Required-pass checks are limited to metadata and artifact policy gates expected to pass after plans 01-01 and 01-02. Application tests, Docker runtime smoke, and Python service smoke are documented as known gaps, manual tiers, or missing placeholders — not Phase 1 required gates.
 
-Related policy: [artifacts.md](artifacts.md) · Planning traceability: [.planning/REQUIREMENTS.md](../.planning/REQUIREMENTS.md)
+Related policy: [artifacts.md](artifacts.md). GSD planning artifacts under `.planning/` are local-only and must not be committed.
 
 ## Required Metadata Gate
 
@@ -10,7 +10,7 @@ Checks expected to pass for the Phase 1 gate. These validate repository metadata
 
 | Command | Expected outcome | Owner file | Requirement IDs | Phase 1 gate |
 |---------|------------------|------------|-----------------|--------------|
-| `rtk git status --short` | Clean working tree for Phase 1 deliverables; only pre-existing local editor config (e.g. `.vscode/settings.json`) may appear modified | `.gitignore`, `.gitattributes` | ART-01, TEST-01 | **Required** |
+| `rtk git status --short` | Clean working tree for Phase 1 deliverables; local editor config (`.vscode/`) and GSD planning (`.planning/`) must not appear as tracked changes | `.gitignore`, `.gitattributes` | ART-01, TEST-01 | **Required** |
 | `rtk git diff --check` | No whitespace or conflict-marker errors in staged/unstaged diffs | Repository-wide | ART-01, TEST-01 | **Required** |
 | `rtk git lfs ls-files --long` | Lists runtime `.keras`, `.npy`, `.safetensors`, and model metadata under `BackEnd/...` with LFS pointer metadata | `.gitattributes` | ART-01, ART-02, ART-04 | **Required** |
 | `rtk git check-attr filter diff merge -- BackEnd/llm-service/data/location_embeddings.npy` | `filter: lfs`, `diff: lfs`, `merge: lfs` (or equivalent LFS attributes) | `.gitattributes` | ART-01, ART-02 | **Required** |
@@ -21,6 +21,8 @@ Checks expected to pass for the Phase 1 gate. These validate repository metadata
 | `rtk git check-ignore -v --no-index docs/controller-coverage.txt` | Path ignored (generated metric, not authored documentation) | `.gitignore` | ART-01 | **Required** |
 | `rtk git check-ignore -v --no-index docs/service-coverage.txt` | Path ignored (generated metric, not authored documentation) | `.gitignore` | ART-01 | **Required** |
 | `rtk git check-ignore -v --no-index docs/frontend-tests.txt` | Path ignored (generated metric, not authored documentation) | `.gitignore` | ART-01 | **Required** |
+| `rtk git check-ignore -v --no-index .planning/PROJECT.md` | GSD planning directory ignored (local-only) | `.gitignore` | ART-01 | **Required** |
+| `rtk git check-ignore -v --no-index .vscode/settings.json` | Editor settings ignored (local-only) | `.gitignore` | ART-01 | **Required** |
 | `rtk bash scripts/verify-artifacts.sh` | All 70 runtime binary SHA-256 checksums match `docs/artifacts.md` | `scripts/verify-artifacts.sh`, `docs/artifacts.md` | ART-04, TEST-01 | **Required** |
 
 **Not required-pass in Phase 1:** Maven (`./mvnw test`), Vitest, ESLint, Cypress, Docker Compose runtime smoke, and Python ML smoke commands belong in the tiers below.
@@ -68,7 +70,7 @@ These placeholders are baseline evidence, not Phase 1 fixes.
 
 ### v0.1 coverage summary
 
-Based on [.planning/REQUIREMENTS.md](../.planning/REQUIREMENTS.md) as of 2026-05-25:
+Based on the v0.1 requirement set captured during Phase 1 planning (2026-05-25):
 
 | Metric | Count |
 |--------|-------|
@@ -76,7 +78,7 @@ Based on [.planning/REQUIREMENTS.md](../.planning/REQUIREMENTS.md) as of 2026-05
 | **54 mapped** to roadmap phases | 54 |
 | **0 unmapped** | 0 |
 
-Every item in `.planning/codebase/CONCERNS.md` maps to at least one requirement and phase via the traceability table in `.planning/REQUIREMENTS.md` and phase concern coverage in `.planning/ROADMAP.md`.
+Every concern identified during the Phase 1 codebase audit maps to at least one requirement and phase in the v0.1 traceability record.
 
 ### Phase 1 plan-to-requirement mapping
 
@@ -88,7 +90,7 @@ Every item in `.planning/codebase/CONCERNS.md` maps to at least one requirement 
 
 ### Concern coverage (Phase 1)
 
-| Concern area (from `.planning/codebase/CONCERNS.md`) | Phase 1 response | Requirement IDs |
+| Concern area (from Phase 1 codebase audit) | Phase 1 response | Requirement IDs |
 |------------------------------------------------------|------------------|-----------------|
 | Large generated and model artifacts in the working tree | Git LFS policy, artifact manifest, checksum table, metadata gate checks | ART-01, ART-02, ART-03, ART-04 |
 | Missing baseline test matrix before remediation | Tiered matrix in this document (required metadata vs known gaps vs manual vs placeholders) | TEST-01 |

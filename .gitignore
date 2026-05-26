@@ -10,6 +10,7 @@ dist/
 .env.*.local
 .idea/
 .vscode/
+.planning/
 *.sublime-project
 *.sublime-workspace
 Thumbs.db
@@ -23,3 +24,10 @@ test-reports/
 docs/controller-coverage.txt
 docs/service-coverage.txt
 docs/frontend-tests.txt
+
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
