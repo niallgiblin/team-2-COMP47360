@@ -2,25 +2,25 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
-status: ready_to_plan
-stopped_at: Completed 07-05-PLAN.md
-last_updated: "2026-05-27T12:16:16.376Z"
-last_activity: 2026-05-27
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-05-27T20:11:30.000Z"
+last_activity: 2026-05-27 -- Completed 08-01 Wave 0 validation tests
 progress:
   total_phases: 10
-  completed_phases: 7
-  total_plans: 35
-  completed_plans: 29
-  percent: 70
+  completed_phases: 6
+  total_plans: 40
+  completed_plans: 30
+  percent: 75
 ---
 
 # GSD State
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
-Status: Ready to plan
+Phase: 08 (map-forecast-routing-and-external-api-correctness) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
 Last activity: 2026-05-27
 
 ## Project Reference
@@ -28,7 +28,7 @@ Last activity: 2026-05-27
 See: `.planning/PROJECT.md` (updated 2026-05-25)
 
 **Core value:** Users can reliably discover, compare, route to, and plan venue visits using trustworthy busyness and location intelligence.
-**Current focus:** Phase 07 — llm-search-scaling-and-python-service-maintainability
+**Current focus:** Phase 08 — map-forecast-routing-and-external-api-correctness
 
 ## Milestone Summary
 
@@ -71,6 +71,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 07]: Python 3.11 adopted for llm-service Docker; build and smoke pass (plan 07-05, D-13/D-14).
 - [Phase 07]: Gunicorn command duplicated in Dockerfile and Compose: workers 2, preload, timeout 120 (plan 07-05, D-15/D-16).
 - [Phase 07]: FAISS index built at startup; generated vector artifacts not committed (plan 07-05, D-20).
+- [Phase 08]: Wave 0 red tests lock map/forecast/route contracts before MapView extraction (plan 08-01).
+- [Phase 08]: MapView integration tests import pages/MapView and assert UI-SPEC route copy (plan 08-01).
+- [Phase 08]: Vitest config uses @vitejs/plugin-react for page component JSX tests (plan 08-01).
 
 ## Blockers
 
@@ -78,8 +81,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-27T12:16:16.370Z
-Stopped at: Completed 07-05-PLAN.md
+Last session: 2026-05-27T20:11:30.000Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
 
 ## Notes

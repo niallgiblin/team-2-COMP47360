@@ -315,6 +315,20 @@ Plans:
 
 **Requirements:** SEC-08, MAP-01, MAP-02, MAP-03, MAP-04, MAP-05, PERF-04, MAINT-01
 
+**Plans:** 5 plans
+
+Plans:
+**Wave 0** *(Nyquist validation foundation)*
+- [x] 08-01-PLAN.md — Frontend route, forecast, cache, zone, and MapView red tests
+
+**Wave 1** *(depends on Wave 0; parallel — no shared implementation files)*
+- [ ] 08-02-PLAN.md — Forecast fallback and zone enrichment utilities
+- [ ] 08-03-PLAN.md — Google Routes client, normalizer, and route segment cache
+- [ ] 08-05-PLAN.md — Backend zoneId DTO support and Google key restriction docs
+
+**Wave 2** *(depends on Wave 1)*
+- [ ] 08-04-PLAN.md — MapView and direction drawer wiring
+
 **Work outline:**
 - Fix timestamp generation to produce 12 hourly forecast labels.
 - Correct route step distance and duration mapping.

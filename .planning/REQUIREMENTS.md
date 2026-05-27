@@ -51,18 +51,18 @@
 
 ### Frontend Map, Routing, and Forecast Correctness
 
-- [ ] **MAP-01**: Forecast timestamp generation returns 12 hourly labels for 12-hour forecast data.
-- [ ] **MAP-02**: Directions step rendering displays distance and duration from the correct route response fields.
-- [ ] **MAP-03**: Multi-stop directions reuse route legs and polylines instead of making duplicate per-segment external route calls.
-- [ ] **MAP-04**: Frontend map and vibe flows use backend-provided canonical `zoneId` when available and only fall back to polygon lookup when required.
-- [ ] **MAP-05**: Map and directions tests cover multi-stop route generation, fallback polylines, forecast alignment, Google Routes failures, and polygon edge cases.
+- [x] **MAP-01**: Forecast timestamp generation returns 12 hourly labels for 12-hour forecast data.
+- [x] **MAP-02**: Directions step rendering displays distance and duration from the correct route response fields.
+- [x] **MAP-03**: Multi-stop directions reuse route legs and polylines instead of making duplicate per-segment external route calls.
+- [x] **MAP-04**: Frontend map and vibe flows use backend-provided canonical `zoneId` when available and only fall back to polygon lookup when required.
+- [x] **MAP-05**: Map and directions tests cover multi-stop route generation, fallback polylines, forecast alignment, Google Routes failures, and polygon edge cases.
 
 ### Performance and Scaling
 
 - [x] **PERF-01**: Busyness service separates or caches live and forecast prediction work so one cache miss does not unnecessarily run all model paths twice.
 - [x] **PERF-02**: Busyness forecasts can be precomputed, batched, or cached by input and forecast hour.
 - [x] **PERF-03**: LLM semantic search avoids full DataFrame copies and full-corpus sort work where candidate limiting or vector indexing is available.
-- [ ] **PERF-04**: Route planning caches route segments by origin, destination, and mode.
+- [x] **PERF-04**: Route planning caches route segments by origin, destination, and mode.
 - [ ] **PERF-05**: Map data can be paginated, tiled, or viewport-filtered instead of returning all locations for every map load.
 - [x] **PERF-06**: Java vibe search cache is bounded with maximum size in addition to TTL.
 
@@ -75,7 +75,7 @@
 
 ### Maintainability and Decomposition
 
-- [ ] **MAINT-01**: `MapView.jsx` route fetching, route processing, polygon enrichment, and directions calls are extracted into focused modules with tests.
+- [x] **MAINT-01**: `MapView.jsx` route fetching, route processing, polygon enrichment, and directions calls are extracted into focused modules with tests.
 - [x] **MAINT-02**: `FindMyVibe.jsx` API calls, enrichment, and caching behavior are extracted into focused modules with tests.
 - [x] **MAINT-03**: `VibeService.java` separates ML service client calls, response mapping, cache ownership, and business response assembly.
 - [x] **MAINT-04**: `BackEnd/llm-service/app.py` separates endpoint handlers from model loading, search, cache, and chat integration logic.
@@ -143,22 +143,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ML-04 | Phase 7 | Complete |
 | ML-05 | Phase 7 | Complete |
 | ML-06 | Phase 6 | Complete |
-| MAP-01 | Phase 8 | Pending |
-| MAP-02 | Phase 8 | Pending |
-| MAP-03 | Phase 8 | Pending |
-| MAP-04 | Phase 8 | Pending |
-| MAP-05 | Phase 8 | Pending |
+| MAP-01 | Phase 8 | Complete |
+| MAP-02 | Phase 8 | Complete |
+| MAP-03 | Phase 8 | Complete |
+| MAP-04 | Phase 8 | Complete |
+| MAP-05 | Phase 8 | Complete |
 | PERF-01 | Phase 6 | Complete |
 | PERF-02 | Phase 6 | Complete |
 | PERF-03 | Phase 7 | Complete |
-| PERF-04 | Phase 8 | Pending |
+| PERF-04 | Phase 8 | Complete |
 | PERF-05 | Phase 10 | Pending |
 | PERF-06 | Phase 7 | Complete |
 | DATA-01 | Phase 9 | Pending |
 | DATA-02 | Phase 9 | Pending |
 | DATA-03 | Phase 9 | Pending |
 | DATA-04 | Phase 9 | Pending |
-| MAINT-01 | Phase 8 | Pending |
+| MAINT-01 | Phase 8 | Complete |
 | MAINT-02 | Phase 5 | Complete |
 | MAINT-03 | Phase 5 | Complete |
 | MAINT-04 | Phase 7 | Complete |
