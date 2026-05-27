@@ -1,5 +1,5 @@
 # --- Build Stage ---
-FROM python:3.9-slim as builder
+FROM python:3.11-slim as builder
 
 # Set the working directory in the container
 WORKDIR /app
@@ -19,7 +19,7 @@ RUN pip-compile requirements.in -o requirements.txt && \
     pip install --no-cache-dir --timeout=100 -r requirements.txt
 
 # --- Final Stage ---
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from the builder stage
-COPY --from=builder /usr/local/lib/python3.9/site-packages/ /usr/local/lib/python3.9/site-packages/
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy only the necessary application code into the container
