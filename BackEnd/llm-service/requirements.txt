@@ -77,6 +77,8 @@ psutil==7.0.0
     # via -r requirements.in
 PyJWT==2.10.1
     # via -r requirements.in
+faiss-cpu==1.14.2
+    # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas
 python-dotenv==1.1.1
