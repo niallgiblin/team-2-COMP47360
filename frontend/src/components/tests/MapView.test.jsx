@@ -1,225 +1,208 @@
-import { vi } from 'vitest';
+import { vi, describe, test, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import MapView from '../MapView';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import MapView from '../../pages/MapView';
 
-// Mock Leaflet components
+const theme = createTheme();
+
+const planVenues = [
+  { id: 1, name: 'Venue A', lat: 40.7589, lng: -73.9851 },
+  { id: 2, name: 'Venue B', lat: 40.7614, lng: -73.9778 },
+];
+
+let mockPlanState = {
+  plan: planVenues,
+  fromPlan: true,
+  setFromPlan: vi.fn(),
+};
+
+const localStorageMock = (() => {
+  let store = {};
+  return {
+    getItem: (key) => store[key] || null,
+    setItem: (key, value) => {
+      store[key] = value.toString();
+    },
+    removeItem: (key) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+  };
+})();
+
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children, ...props }) => (
-    <div data-testid="map-container" {...props}>
-      {children}
-    </div>
+    <div data-testid="map-container" {...props}>{children}</div>
   ),
   TileLayer: (props) => <div data-testid="tile-layer" {...props} />,
   Marker: (props) => <div data-testid="marker" {...props} />,
   Popup: ({ children, ...props }) => (
-    <div data-testid="popup" {...props}>
-      {children}
-    </div>
+    <div data-testid="popup" {...props}>{children}</div>
   ),
-  useMap: () => ({
-    setView: vi.fn(),
-    flyTo: vi.fn(),
+  useMap: () => ({ setView: vi.fn(), flyTo: vi.fn() }),
+}));
+
+vi.mock('../DemoMap', () => ({
+  default: () => <div data-testid="demo-map">Demo Map</div>,
+}));
+
+vi.mock('../CompactPlanSummary', () => ({ default: () => null }));
+vi.mock('../CompactSavedPlans', () => ({ default: () => null }));
+vi.mock('../CompactFavorites', () => ({ default: () => null }));
+vi.mock('../CompactSharedPlans', () => ({ default: () => null }));
+vi.mock('../SharedPlans', () => ({ default: () => null }));
+vi.mock('../VenueCard', () => ({ default: () => null }));
+vi.mock('../ForecastSlider', () => ({ default: () => null }));
+
+const mockFetchAllData = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('../../context/BusynessContext', () => ({
+  useBusyness: () => ({
+    busynessData: [{ LocationID: '1', busyness: 0.5 }],
+    predictionData: [],
+    fetchAllData: mockFetchAllData,
   }),
 }));
 
-// Mock the map context
-const mockMapContext = {
-  venues: [
-    {
-      id: 1,
-      name: 'Test Restaurant',
-      lat: 40.7589,
-      lng: -73.9851,
-      description: 'A great test restaurant',
-      review: 4.5,
-      numReviews: 100,
-      busyness: 0.7,
-    },
-    {
-      id: 2,
-      name: 'Test Bar',
-      lat: 40.7589,
-      lng: -73.9851,
-      description: 'A great test bar',
-      review: 4.2,
-      numReviews: 50,
-      busyness: 0.8,
-    },
-  ],
-  selectedVenue: null,
-  setSelectedVenue: vi.fn(),
-  isLoading: false,
-  error: null,
-};
+vi.mock('../../context/PlanContext', () => ({
+  usePlan: () => mockPlanState,
+}));
 
-// Mock the busyness context
-const mockBusynessContext = {
-  busynessData: {
-    '1': 0.7,
-    '2': 0.8,
-  },
-  isLoading: false,
-  error: null,
-};
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 1, username: 'testuser' },
+    token: 'test-token',
+    isAuthenticated: true,
+  }),
+}));
 
-// Mock the auth context
-const mockAuthContext = {
-  user: { id: 1, username: 'testuser' },
-  token: 'test-token',
-  isAuthenticated: true,
-  login: vi.fn(),
-  logout: vi.fn(),
-};
+function defaultFetchHandler(url) {
+  if (typeof url === 'string' && url.includes('manhattanZones.geojson')) {
+    return {
+      ok: true,
+      json: async () => ({ type: 'FeatureCollection', features: [] }),
+    };
+  }
+  if (typeof url === 'string' && url.includes('/api/vibe/map-data')) {
+    return {
+      ok: true,
+      json: async () => ({ locations: planVenues, busyness: {} }),
+    };
+  }
+  if (typeof url === 'string' && url.includes('routes.googleapis.com')) {
+    return { ok: false, status: 503, text: async () => 'unavailable' };
+  }
+  return { ok: false, status: 404, json: async () => ({}) };
+}
 
-// Mock the plan context
-const mockPlanContext = {
-  currentPlan: null,
-  setCurrentPlan: vi.fn(),
-  addVenueToPlan: vi.fn(),
-  removeVenueFromPlan: vi.fn(),
-};
-
-const renderWithProviders = (component) => {
+function renderMapView() {
   return render(
     <BrowserRouter>
-      {component}
+      <ThemeProvider theme={theme}>
+        <MapView />
+      </ThemeProvider>
     </BrowserRouter>
   );
-};
+}
 
-describe('MapView', () => {
+async function openDirectionsDrawer() {
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /get directions/i })).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByRole('button', { name: /get directions/i }));
+}
+
+describe('MapView route and sidebar integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  test('renders map container', () => {
-    renderWithProviders(<MapView />);
-    
-    expect(screen.getByTestId('map-container')).toBeInTheDocument();
-    expect(screen.getByTestId('tile-layer')).toBeInTheDocument();
-  });
-
-  test('renders markers for venues', () => {
-    renderWithProviders(<MapView />);
-    
-    const markers = screen.getAllByTestId('marker');
-    expect(markers).toHaveLength(2);
-  });
-
-  test('displays venue information in popup when marker is clicked', async () => {
-    renderWithProviders(<MapView />);
-    
-    const markers = screen.getAllByTestId('marker');
-    fireEvent.click(markers[0]);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Test Restaurant')).toBeInTheDocument();
-      expect(screen.getByText('A great test restaurant')).toBeInTheDocument();
-      expect(screen.getByText('4.5')).toBeInTheDocument();
-    });
-  });
-
-  test('shows busyness indicator for venues', () => {
-    renderWithProviders(<MapView />);
-    
-    // Check if busyness indicators are rendered
-    expect(screen.getByText('70%')).toBeInTheDocument();
-    expect(screen.getByText('80%')).toBeInTheDocument();
-  });
-
-  test('handles venue selection', async () => {
-    const mockSetSelectedVenue = vi.fn();
-    mockMapContext.setSelectedVenue = mockSetSelectedVenue;
-    
-    renderWithProviders(<MapView />);
-    
-    const markers = screen.getAllByTestId('marker');
-    fireEvent.click(markers[0]);
-    
-    await waitFor(() => {
-      expect(mockSetSelectedVenue).toHaveBeenCalledWith(mockMapContext.venues[0]);
-    });
-  });
-
-  test('displays loading state when venues are loading', () => {
-    const loadingContext = { ...mockMapContext, isLoading: true };
-    
-    renderWithProviders(<MapView />);
-    
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
-  });
-
-  test('displays error state when there is an error', () => {
-    const errorContext = { ...mockMapContext, error: 'Failed to load venues' };
-    
-    renderWithProviders(<MapView />);
-    
-    expect(screen.getByText(/error/i)).toBeInTheDocument();
-  });
-
-  test('handles empty venues list', () => {
-    const emptyContext = { ...mockMapContext, venues: [] };
-    
-    renderWithProviders(<MapView />);
-    
-    const markers = screen.queryAllByTestId('marker');
-    expect(markers).toHaveLength(0);
-  });
-
-  test('displays venue details in popup', async () => {
-    renderWithProviders(<MapView />);
-    
-    const markers = screen.getAllByTestId('marker');
-    fireEvent.click(markers[0]);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Test Restaurant')).toBeInTheDocument();
-      expect(screen.getByText('A great test restaurant')).toBeInTheDocument();
-      expect(screen.getByText('4.5')).toBeInTheDocument();
-      expect(screen.getByText('100 reviews')).toBeInTheDocument();
-    });
-  });
-
-  test('handles venue with missing data gracefully', () => {
-    const incompleteVenue = {
-      id: 3,
-      name: 'Incomplete Venue',
-      lat: 40.7589,
-      lng: -73.9851,
+    mockPlanState = {
+      plan: planVenues,
+      fromPlan: true,
+      setFromPlan: vi.fn(),
     };
-    
-    const incompleteContext = {
-      ...mockMapContext,
-      venues: [incompleteVenue],
-    };
-    
-    renderWithProviders(<MapView />);
-    
-    const markers = screen.getAllByTestId('marker');
-    expect(markers).toHaveLength(1);
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true });
+    localStorage.clear();
+    window.scrollTo = vi.fn();
+    window.alert = vi.fn();
+    Element.prototype.scrollIntoView = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(defaultFetchHandler));
+    vi.stubEnv('VITE_GOOGLE_API_KEY', 'test-key');
   });
 
-  test('displays busyness level with appropriate styling', () => {
-    renderWithProviders(<MapView />);
-    
-    // Check if busyness indicators are rendered with appropriate styling
-    const busynessIndicators = screen.getAllByText(/\d+%/);
-    expect(busynessIndicators).toHaveLength(2);
+  test('imports MapView from pages and renders map shell', async () => {
+    renderMapView();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('demo-map')).toBeInTheDocument();
+    });
   });
 
-  test('handles map zoom and pan interactions', () => {
-    renderWithProviders(<MapView />);
-    
-    const mapContainer = screen.getByTestId('map-container');
-    
-    // Simulate map interactions
-    fireEvent.mouseDown(mapContainer);
-    fireEvent.mouseMove(mapContainer);
-    fireEvent.mouseUp(mapContainer);
-    
-    // Map should still be rendered
-    expect(mapContainer).toBeInTheDocument();
+  test('shows empty directions heading when directions drawer is open with no steps', async () => {
+    renderMapView();
+    await openDirectionsDrawer();
+
+    await waitFor(() => {
+      expect(screen.getByText(/No directions available/i)).toBeInTheDocument();
+    });
   });
-}); 
+
+  test('shows empty state body copy per UI-SPEC', async () => {
+    renderMapView();
+    await openDirectionsDrawer();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Choose a start and destination, then get directions.')
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('shows route error copy when Google route request fails', async () => {
+    renderMapView();
+    await openDirectionsDrawer();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'We could not load this route. Check the start and destination, then try again.'
+        )
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('shows fallback route notice when detailed geometry is unavailable', async () => {
+    fetch.mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('routes.googleapis.com')) {
+        return {
+          ok: true,
+          json: async () => ({
+            routes: [{
+              legs: [{
+                steps: [],
+                startLocation: { latLng: { latitude: 40.7589, longitude: -73.9851 } },
+                endLocation: { latLng: { latitude: 40.7614, longitude: -73.9778 } },
+              }],
+              polyline: null,
+            }],
+          }),
+        };
+      }
+      return defaultFetchHandler(url);
+    });
+
+    renderMapView();
+    await openDirectionsDrawer();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Showing an approximate route because detailed route geometry is unavailable.'
+        )
+      ).toBeInTheDocument();
+    });
+  });
+});
