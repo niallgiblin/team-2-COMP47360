@@ -24,7 +24,7 @@ from config import (
     parse_allowed_origins,
 )
 from loader import verify_file_paths
-from search_service import SearchService, SearchStartupError
+from search_service import VALID_PRICE_RANGES, SearchService, SearchStartupError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,14 +64,7 @@ def load_model():
         return True
     except Exception as exc:
         logger.error("Model loading failed: %s", exc, exc_info=True)
-        try:
-            logger.info("Attempting to load fallback model from HuggingFace...")
-            model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
-            logger.warning("Loaded fallback model from HuggingFace")
-            return True
-        except Exception as fallback_exc:
-            logger.error("Fallback model loading also failed: %s", fallback_exc)
-            return False
+        return False
 
 
 def load_data():
@@ -240,6 +233,15 @@ def vibe_search():
         max_results = max(1, min(max_results, 25))
         location_filter = data.get("location", None)
         price_range = data.get("priceRange", None)
+        if price_range is not None and str(price_range).strip():
+            price_key = str(price_range).lower().strip()
+            if price_key not in VALID_PRICE_RANGES:
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f"Unknown priceRange: {price_range}. Valid values: {', '.join(sorted(VALID_PRICE_RANGES))}",
+                    }
+                ), 400
 
         cache_key = generate_cache_key(vibe_desc, max_results, location_filter, price_range)
         cached_result = search_cache.get(cache_key)
