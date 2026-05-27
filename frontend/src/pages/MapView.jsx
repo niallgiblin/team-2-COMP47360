@@ -3,7 +3,7 @@
 // displays colour-coded busyness zones
 
 // react and routing components
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { Tabs, Tab } from '@mui/material';
 
@@ -33,7 +33,7 @@ import CompactSharedPlans from "../components/CompactSharedPlans";
 import { usePlan } from "../context/PlanContext";
 import { useBusyness } from "../context/BusynessContext";
 import { STORAGE_KEYS } from "../utils/storageUtils";
-import { vibeAPI } from "../../services/apiService";
+import { authFetch, vibeAPI } from "../../services/apiService";
 
 // External libraries, utilities for directions and geo-calculations
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
@@ -176,13 +176,13 @@ export default function MapView() {
   const [directions, setDirections] = useState(null);
   const [travelMode, setTravelMode] = useState("WALK");
   const [directionsPolyline, setDirectionsPolyline] = useState(null);
+  const directionsFetchIdRef = useRef(0);
 
   // State for selected venue and plan
   const [selectedVenue, setSelectedVenue] = useState(null);
 
-  // State for forecast
+  // State for forecast — timestamps come from API data when available
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
-  const [forecastTimestamps] = useState(generateNext12Hours());
   const [mode, setMode] = useState("live");
   const [viewMode, setViewMode] = useState("plan");
   const [resetMapKey] = useState(0);
@@ -195,10 +195,28 @@ export default function MapView() {
 
   // Refs
   const mapSectionRef = useRef(null);
-
-  // Context data
   const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchAllData } = useBusyness();
   const { plan: currentPlan, fromPlan: contextFromPlan, setFromPlan: setContextFromPlan } = usePlan();
+
+  const mapBusynessData = useMemo(
+    () => contextBusynessData || [],
+    [contextBusynessData]
+  );
+  const mapPredictionData = useMemo(
+    () => contextPredictionData || [],
+    [contextPredictionData]
+  );
+  const handleSelectVenue = useCallback((venue) => {
+    setSelectedVenue(venue);
+  }, []);
+
+  const forecastTimestamps = useMemo(() => {
+    const firstZone = contextPredictionData?.[0]?.predictions;
+    if (Array.isArray(firstZone) && firstZone.length > 0) {
+      return firstZone.map((point) => point.timestamp).filter(Boolean);
+    }
+    return generateNext12Hours();
+  }, [contextPredictionData]);
 
   // Use context values for plan and fromPlan
   const plan = currentPlan || [];
@@ -317,7 +335,7 @@ export default function MapView() {
 
       setLoading(true);
       try {
-        const res = await fetch(vibeAPI.mapDataUrl());
+        const res = await authFetch(vibeAPI.mapDataUrl());
         if (!res.ok) throw new Error("Server error on map-data fetch");
         const data = await res.json();
         const venuesData = data.locations || [];
@@ -363,15 +381,19 @@ export default function MapView() {
     } else {
       setIsMock(true);
     }
-    
+
     if (contextPredictionData && contextPredictionData.length > 0) {
-      const first = contextPredictionData[0]?.predictions?.[0]?.timestamp;
-      if (first) setSelectedTimestamp(first);
+      const apiTimestamps = contextPredictionData[0]?.predictions?.map((p) => p.timestamp).filter(Boolean) || [];
+      if (apiTimestamps.length > 0) {
+        setSelectedTimestamp((current) =>
+          current && apiTimestamps.includes(current) ? current : apiTimestamps[0]
+        );
+      }
       setIsMock(false);
-    } else {
+    } else if (mode === "forecast") {
       setIsMock(true);
     }
-  }, [contextBusynessData, contextPredictionData]);
+  }, [contextBusynessData, contextPredictionData, mode]);
 
   // Always use dummy busyness and prediction data if isMock is true
   useEffect(() => {
@@ -454,6 +476,9 @@ export default function MapView() {
       return;
     }
 
+    const fetchId = ++directionsFetchIdRef.current;
+    const isStale = () => fetchId !== directionsFetchIdRef.current;
+
     const hasPlan = fromPlan && plan.length > 0;
     const planVenues = hasPlan ? plan : [];
 
@@ -473,6 +498,7 @@ export default function MapView() {
             alert("Could not find the start location.");
             return;
           }
+          if (!isStale()) setUserLocation(start);
         }
         destination = { lat: planVenues[planVenues.length - 1].lat, lng: planVenues[planVenues.length - 1].lng };
       } else {
@@ -493,6 +519,7 @@ export default function MapView() {
           alert("Could not find the start location.");
           return;
         }
+        if (!isStale()) setUserLocation(start);
       } else {
         // No start location provided - use first venue as start and destination
         start = { lat: planVenues[0].lat, lng: planVenues[0].lng };
@@ -508,6 +535,7 @@ export default function MapView() {
           alert("Could not find the start location.");
           return;
         }
+        if (!isStale()) setUserLocation(start);
       } else {
         alert("Please set a start location.");
         return;
@@ -543,6 +571,8 @@ export default function MapView() {
         // Single destination route
         directionsData = await getSingleDestinationDirections(start, destination, GOOGLE_API_KEY);
       }
+
+      if (isStale()) return;
 
                       if (directionsData) {
                   
@@ -659,14 +689,15 @@ export default function MapView() {
                     }
                   }
                   
+                  if (isStale()) return;
                   setDirections(processedLegs);
         if (directionsData.polyline) {
           try {
             
             let decodedPolyline;
             // The Google Directions API v2 returns encoded polyline that needs to be decoded
-            // For plan routes, create a seamless route by getting directions between each venue
-            if (fromPlan && plan.length > 0) {
+            // For multi-stop plan routes, stitch segment polylines together
+            if (fromPlan && plan.length > 1) {
               
               // Get directions between each venue in the plan
               const routeSegments = [];
@@ -732,7 +763,7 @@ export default function MapView() {
             }
             
             if (decodedPolyline.length > 0) {
-              setDirectionsPolyline(decodedPolyline);
+              if (!isStale()) setDirectionsPolyline(decodedPolyline);
             } else {
               // Create a simple straight-line route as fallback
               const start = directionsData.legs?.[0]?.startLocation;
@@ -742,13 +773,13 @@ export default function MapView() {
                   [start.latLng.latitude, start.latLng.longitude],
                   [end.latLng.latitude, end.latLng.longitude]
                 ];
-                setDirectionsPolyline(fallbackRoute);
+                if (!isStale()) setDirectionsPolyline(fallbackRoute);
               } else {
                 // If we can't get start/end from legs, try to create route from plan venues
                 if (fromPlan && plan.length > 0) {
                   const fallbackRoute = plan.map(venue => [venue.lat, venue.lng]);
-                  setDirectionsPolyline(fallbackRoute);
-                } else {
+                  if (!isStale()) setDirectionsPolyline(fallbackRoute);
+                } else if (!isStale()) {
                   setDirectionsPolyline(null);
                 }
               }
@@ -763,8 +794,8 @@ export default function MapView() {
                 [start.latLng.latitude, start.latLng.longitude],
                 [end.latLng.latitude, end.latLng.longitude]
               ];
-              setDirectionsPolyline(fallbackRoute);
-            } else {
+              if (!isStale()) setDirectionsPolyline(fallbackRoute);
+            } else if (!isStale()) {
               setDirectionsPolyline(null);
             }
           }
@@ -777,8 +808,8 @@ export default function MapView() {
               [start.latLng.latitude, start.latLng.longitude],
               [end.latLng.latitude, end.latLng.longitude]
             ];
-            setDirectionsPolyline(fallbackRoute);
-          } else {
+            if (!isStale()) setDirectionsPolyline(fallbackRoute);
+          } else if (!isStale()) {
             setDirectionsPolyline(null);
           }
         }
@@ -795,18 +826,23 @@ export default function MapView() {
 
   // Reset map function
   const handleResetMap = () => {
+    directionsFetchIdRef.current += 1;
     setShowDirections(false);
     setDirections(null);
+    setDirectionsPolyline(null);
     setSelectedVenue(null);
     setUserLocation(null);
     setManualStart("");
-    // Reset other map-related state as needed
+    setManualDestination("");
   };
 
   // Toggle directions function
   const toggleDirections = () => {
     if (showDirections) {
+      directionsFetchIdRef.current += 1;
       setShowDirections(false);
+      setDirections(null);
+      setDirectionsPolyline(null);
     } else {
       handleGetDirections();
     }
@@ -1090,14 +1126,16 @@ export default function MapView() {
     }
   };
 
-  // 5. Fetch directions when mode changes (walk/ public transport)
+  // Refetch directions when travel mode changes while directions are visible
   useEffect(() => {
     if (!showDirections) return;
 
-    const hasValidStart = userLocation || (fromPlan && plan.length > 0);
-    const hasValidDestination = selectedVenue || (fromPlan && plan.length > 0);
+    const hasValidStart =
+      userLocation || manualStart.trim() || (fromPlan && plan.length > 0);
+    const hasValidDestination =
+      selectedVenue || manualDestination.trim() || (fromPlan && plan.length > 0);
 
-    const venuesReady = fromPlan ? plan.length > 0 : selectedVenue;
+    const venuesReady = fromPlan ? plan.length > 0 : selectedVenue || manualDestination.trim();
     const zonesReady = zoneData !== null;
     const allReady =
       hasValidStart && hasValidDestination && venuesReady && zonesReady;
@@ -1105,7 +1143,8 @@ export default function MapView() {
     if (allReady) {
       handleGetDirections();
     }
-  }, [travelMode, showDirections, userLocation, selectedVenue, plan, zoneData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [travelMode]);
 
   if (loading) {
     return (
@@ -1172,8 +1211,12 @@ export default function MapView() {
         </Button>
         <Button
           onClick={() => {
-    
             setMode("forecast");
+            if (!contextPredictionData || contextPredictionData.length === 0) {
+              fetchAllData().catch((err) =>
+                console.error("Failed to load forecast data:", err)
+              );
+            }
           }}
           sx={{
             fontWeight: "bold",
@@ -1467,13 +1510,13 @@ export default function MapView() {
           <DemoMap
             venues={enrichedVenues}
             selectedVenue={selectedVenue}
-            onSelectVenue={setSelectedVenue}
+            onSelectVenue={handleSelectVenue}
             fromPlan={fromPlan}
-            busynessData={contextBusynessData || []}
+            busynessData={mapBusynessData}
             zoneData={zoneData}
             userLocation={userLocation}
             mode={mode}
-            predictionData={contextPredictionData || []}
+            predictionData={mapPredictionData}
             selectedTimestamp={selectedTimestamp}
             plan={plan}
             routeCoords={directionsPolyline}
@@ -1486,7 +1529,12 @@ export default function MapView() {
 
           <DirectionSidebar
             open={showDirections}
-            onClose={() => setShowDirections(false)}
+            onClose={() => {
+              directionsFetchIdRef.current += 1;
+              setShowDirections(false);
+              setDirections(null);
+              setDirectionsPolyline(null);
+            }}
             directions={directions}
             travelMode={travelMode}
             setTravelMode={setTravelMode}

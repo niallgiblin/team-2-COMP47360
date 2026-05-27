@@ -29,13 +29,14 @@ Users can reliably discover, compare, route to, and plan venue visits using trus
 - [x] Repository artifacts, generated outputs, and ML binaries have an explicit source-control and runtime loading policy. Validated in Phase 1: Planning Baseline and Artifact Policy.
 - [x] Frontend production container serves static Nginx assets with relative `/api` routing and consolidated API client boundary. Validated in Phase 2: Frontend Production Runtime and API Client.
 - [x] Frontend chat, Spring DTO/client boundaries, Flask `/similar`, and LLM smoke/cold-start paths share tested contracts. Validated in Phase 5: API Contract Alignment and LLM Smoke Tests.
+- [x] Busyness service has checksum-gated model loading, bounded live/forecast caches, and artifact-free pytest coverage. Validated in Phase 6: Busyness Service Reliability and Model Safety.
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 - [ ] Frontend, backend, and Python services can run in production-like containers without dev servers or hard-coded local assumptions (partial — frontend prod path complete; Python path hygiene in Phase 3).
 - [ ] Public and authenticated API boundaries are secure, rate-limited where expensive, and tested.
-- [ ] ML services have safe path configuration, bounded caches, and clearer model artifact provenance beyond the Phase 5 LLM smoke/cold-start coverage.
+- [ ] LLM service has bounded search cache and modular internals (busyness cache/model safety complete in Phase 6).
 - [ ] Map, route, forecast, and vibe workflows have correctness tests for the known bugs listed in the concern audit.
 - [ ] Performance bottlenecks have concrete remediation paths for prediction, vector search, routing, enrichment, and map payload size.
 - [ ] Database evolution, CSV import, and fragile controller/entity paths have safer tested patterns.
@@ -95,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-26 after Phase 5 completion*
+*Last updated: 2026-05-26 after Phase 6 completion*

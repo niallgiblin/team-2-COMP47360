@@ -11,8 +11,8 @@ export default function DirectionsSidebar({ open, onClose, directions, travelMod
       anchor="right"
       open={open}
       onClose={onClose}
-      hideBackdrop
-      variant="persistent"
+      variant="temporary"
+      ModalProps={{ keepMounted: false }}
       sx={{
         '& .MuiDrawer-paper': {
           position: 'fixed',

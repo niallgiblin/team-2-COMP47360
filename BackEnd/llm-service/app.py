@@ -1,4 +1,5 @@
 import logging
+import base64
 import os
 import sys
 import threading
@@ -405,6 +406,14 @@ def chat_endpoint():
         return jsonify({"error": "Internal server error"}), 500
 
 
+def _jwt_verification_key(secret: str) -> bytes:
+    """Match Spring JwtTokenProvider base64 decoding; fall back for test secrets."""
+    try:
+        return base64.b64decode(secret, validate=True)
+    except Exception:
+        return secret.encode("utf-8")
+
+
 def validate_chat_jwt():
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -420,7 +429,8 @@ def validate_chat_jwt():
         return chat_auth_error()
 
     try:
-        jwt.decode(token, secret, algorithms=["HS256"])
+        key = _jwt_verification_key(secret)
+        jwt.decode(token, key, algorithms=["HS512", "HS256"])
         return None
     except InvalidTokenError:
         return chat_auth_error()

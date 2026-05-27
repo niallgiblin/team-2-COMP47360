@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,7 @@ public class RateLimitService {
     private final Clock clock;
     private final Map<String, BucketState> buckets = new HashMap<>();
 
+    @Autowired
     public RateLimitService(
             @Value("${app.rate-limit.expensive.capacity:30}") int capacity,
             @Value("${app.rate-limit.expensive.refill-seconds:60}") long refillSeconds,

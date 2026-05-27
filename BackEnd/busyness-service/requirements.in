@@ -8,4 +8,5 @@ pandas
 python-dotenv
 requests
 holidays
+pytz
 pytest
