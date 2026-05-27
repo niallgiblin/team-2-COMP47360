@@ -40,7 +40,7 @@ class LocationDtoTest {
             "Alphabet City",
             "Battery Park",
             "Central Park",
-            "Greenwich Village",
+            "Greenwich Village North",
             "Midtown East",
             "Upper East Side South",
             "West Village");

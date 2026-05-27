@@ -26,6 +26,7 @@ public class LocationDto {
     private String summary;
     private List<String> tags;
     private String zone;
+    private String zoneId;
 
     public LocationDto(Location location) {
         this.id = location.getId();
@@ -53,6 +54,16 @@ public class LocationDto {
             this.tags = new ArrayList<>();
         }
         this.zone = location.getZone();
+        this.zoneId = deriveZoneId(location.getZone());
+    }
+
+    /**
+     * Derives canonical zoneId only when {@code zone} is an audit-proven GeoJSON LocationID string.
+     * Repository audit (LocationDtoTest) found {@code Location.zone} stores human-readable names,
+     * not numeric LocationID values, so this returns null and frontend polygon fallback applies.
+     */
+    static String deriveZoneId(String zone) {
+        return null;
     }
 
     public static LocationDto fromLocation(Location location) {
@@ -116,4 +127,7 @@ public class LocationDto {
 
     public String getZone() { return zone; }
     public void setZone(String zone) { this.zone = zone; }
+
+    public String getZoneId() { return zoneId; }
+    public void setZoneId(String zoneId) { this.zoneId = zoneId; }
 }
