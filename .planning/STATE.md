@@ -2,33 +2,33 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
-status: verifying
-stopped_at: Completed Phase 06 busyness-service-reliability-and-model-safety
-last_updated: "2026-05-26T21:14:10.396Z"
-last_activity: 2026-05-26
+status: executing
+stopped_at: Completed 07-04-PLAN.md
+last_updated: "2026-05-27T11:51:00.000Z"
+last_activity: 2026-05-27 -- Completed Phase 07 plan 04
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 30
-  completed_plans: 24
-  percent: 80
+  total_plans: 35
+  completed_plans: 27
+  percent: 77
 ---
 
 # GSD State
 
 ## Current Position
 
-Phase: 06 (busyness-service-reliability-and-model-safety) — VERIFYING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-05-26
+Phase: 07 (llm-search-scaling-and-python-service-maintainability) — EXECUTING
+Plan: 4 of 5 complete — ready for 07-05
+Status: Executing Phase 07
+Last activity: 2026-05-27 -- Completed Phase 07 plan 04
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-25)
 
 **Core value:** Users can reliably discover, compare, route to, and plan venue visits using trustworthy busyness and location intelligence.
-**Current focus:** Phase 06 — busyness-service-reliability-and-model-safety
+**Current focus:** Phase 07 — llm-search-scaling-and-python-service-maintainability
 
 ## Milestone Summary
 
@@ -61,6 +61,11 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 05]: Implement Flask POST /similar; similar fallback exposes `source` ml|category (05-CONTEXT D-01–D-04)
 - [Phase 05]: Chat canonical field `previous_questions`; full widget thread with server-side truncation (D-05–D-08)
 - [Phase 05]: PyJWT must be declared in requirements.in because Docker regenerates llm-service requirements.txt during image build.
+- [Phase 07]: FAISS IndexFlatIP over normalized float32 vectors with explicit row-id map and stable tie-breaking for cosine parity (plan 07-02).
+- [Phase 07]: Loader/search startup errors and missing-file lists use env var names only — no resolved paths (plan 07-02).
+- [Phase 07]: faiss-cpu pinned in requirements.in; host pip-compile blocked on Python 3.13 vs torch==2.2.2 — Docker pip-tools flow regenerates requirements.txt (plan 07-02).
+- [Phase 07]: VibeService search cache uses direct Caffeine Cache with executor(Runnable::run) for synchronous max-size enforcement (plan 07-04, PERF-06).
+- [Phase 07]: app.vibe.search-cache defaults 300s TTL and 512 max entries via APP_VIBE_SEARCH_CACHE_* env placeholders (plan 07-04, D-06/D-07/D-18).
 
 ## Blockers
 
@@ -68,9 +73,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-26T21:14:10.391Z
-Stopped at: Completed Phase 06 busyness-service-reliability-and-model-safety
-Resume file: None
+Last session: 2026-05-27T11:51:00.000Z
+Stopped at: Completed 07-04-PLAN.md
+Resume file: .planning/phases/07-llm-search-scaling-and-python-service-maintainability/07-05-PLAN.md
 
 ## Notes
 

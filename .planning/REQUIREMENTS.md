@@ -61,10 +61,10 @@
 
 - [x] **PERF-01**: Busyness service separates or caches live and forecast prediction work so one cache miss does not unnecessarily run all model paths twice.
 - [x] **PERF-02**: Busyness forecasts can be precomputed, batched, or cached by input and forecast hour.
-- [ ] **PERF-03**: LLM semantic search avoids full DataFrame copies and full-corpus sort work where candidate limiting or vector indexing is available.
+- [x] **PERF-03**: LLM semantic search avoids full DataFrame copies and full-corpus sort work where candidate limiting or vector indexing is available.
 - [ ] **PERF-04**: Route planning caches route segments by origin, destination, and mode.
 - [ ] **PERF-05**: Map data can be paginated, tiled, or viewport-filtered instead of returning all locations for every map load.
-- [ ] **PERF-06**: Java vibe search cache is bounded with maximum size in addition to TTL.
+- [x] **PERF-06**: Java vibe search cache is bounded with maximum size in addition to TTL.
 
 ### Data and Persistence
 
@@ -78,7 +78,7 @@
 - [ ] **MAINT-01**: `MapView.jsx` route fetching, route processing, polygon enrichment, and directions calls are extracted into focused modules with tests.
 - [x] **MAINT-02**: `FindMyVibe.jsx` API calls, enrichment, and caching behavior are extracted into focused modules with tests.
 - [x] **MAINT-03**: `VibeService.java` separates ML service client calls, response mapping, cache ownership, and business response assembly.
-- [ ] **MAINT-04**: `BackEnd/llm-service/app.py` separates endpoint handlers from model loading, search, cache, and chat integration logic.
+- [x] **MAINT-04**: `BackEnd/llm-service/app.py` separates endpoint handlers from model loading, search, cache, and chat integration logic.
 - [ ] **MAINT-05**: Browser and process-global caches are replaced or wrapped by explicit cache owners with clear refresh paths.
 
 ### Testing and Verification
@@ -150,10 +150,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAP-05 | Phase 8 | Pending |
 | PERF-01 | Phase 6 | Complete |
 | PERF-02 | Phase 6 | Complete |
-| PERF-03 | Phase 7 | Pending |
+| PERF-03 | Phase 7 | Complete |
 | PERF-04 | Phase 8 | Pending |
 | PERF-05 | Phase 10 | Pending |
-| PERF-06 | Phase 7 | Pending |
+| PERF-06 | Phase 7 | Complete |
 | DATA-01 | Phase 9 | Pending |
 | DATA-02 | Phase 9 | Pending |
 | DATA-03 | Phase 9 | Pending |
@@ -161,7 +161,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAINT-01 | Phase 8 | Pending |
 | MAINT-02 | Phase 5 | Complete |
 | MAINT-03 | Phase 5 | Complete |
-| MAINT-04 | Phase 7 | Pending |
+| MAINT-04 | Phase 7 | Complete |
 | MAINT-05 | Phase 10 | Pending |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 4 | Pending |

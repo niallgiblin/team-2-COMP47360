@@ -13,7 +13,7 @@
 | 3 | Secret and Runtime Configuration Hygiene | Remove committed secret-bearing config assumptions and make service paths environment-driven. | DEP-04, DEP-05, SEC-01, SEC-02 |
 | 4 | Security Boundary and Abuse Controls | Harden public routes, CORS, uploads, exception payloads, and expensive endpoint access. | SEC-03, SEC-04, SEC-06, SEC-07, TEST-02 |
 | 5 | API Contract Alignment and LLM Smoke Tests | Align chat/search/similar contracts and add typed Spring-to-Flask verification. | API-01, API-02, API-03, API-05, ML-01, MAINT-02, MAINT-03, TEST-04 |
-| 6 | Busyness Service Reliability and Model Safety | Test and harden prediction startup, forecast behavior, cache policy, and Keras artifact loading. | SEC-05, ML-02, ML-03, ML-06, PERF-01, PERF-02 |
+| 6 | 4/4 | Complete    | 2026-05-26 |
 | 7 | LLM Search Scaling and Python Service Maintainability | Reduce semantic-search scaling risk and document worker/runtime dependency boundaries. | ML-04, ML-05, PERF-03, PERF-06, MAINT-04 |
 | 8 | Map, Forecast, Routing, and External API Correctness | Fix known frontend map bugs and reduce duplicated geospatial/route work. | SEC-08, MAP-01, MAP-02, MAP-03, MAP-04, MAP-05, PERF-04, MAINT-01 |
 | 9 | Persistence, Import, and Auth Flow Safety | Add migration/import safety and remove fragile entity/controller behavior. | DATA-01, DATA-02, DATA-03, DATA-04 |
@@ -231,7 +231,7 @@ Plans:
 
 **Requirements:** SEC-05, ML-02, ML-03, ML-06, PERF-01, PERF-02
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 0** *(Nyquist pre-work — artifact-free tests and failing stubs)*
@@ -270,6 +270,22 @@ Plans:
 - `BackEnd/llm-service/app.py` mixes endpoint, model, search, cache, and chat logic.
 
 **Requirements:** ML-04, ML-05, PERF-03, PERF-06, MAINT-04
+
+**Plans:** 5 plans
+
+Plans:
+**Wave 0** *(Nyquist validation foundation)*
+- [x] 07-01-PLAN.md — FAISS/module/cache red tests and Java cache policy tests
+
+**Wave 1** *(depends on Wave 0; Python search and Java cache can run in parallel)*
+- [x] 07-02-PLAN.md — FAISS search foundation and loader/DTO modules
+- [x] 07-04-PLAN.md — Caffeine bounded Java vibe search cache
+
+**Wave 2** *(depends on Python search foundation)*
+- [ ] 07-03-PLAN.md — Flask route integration and chat/cache/config extraction
+
+**Wave 3** *(depends on Python route integration and Java cache)*
+- [ ] 07-05-PLAN.md — Python runtime, Gunicorn memory docs, Docker smoke gates
 
 **Work outline:**
 - Measure or document resident memory behavior under current Gunicorn `--preload` and worker settings.
