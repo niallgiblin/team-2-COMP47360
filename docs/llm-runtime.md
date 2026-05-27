@@ -72,6 +72,12 @@ docker compose exec llm-service curl -f http://localhost:5000/health
 docker compose exec llm-service sh -lc 'ps -o pid,ppid,rss,vsz,cmd -C gunicorn || ps -o pid,ppid,rss,vsz,cmd'
 ```
 
+On `python:3.11-slim`, `ps` is not installed. Use host-side `docker top` instead:
+
+```bash
+docker top urban-gala-llm
+```
+
 Record these fields after startup stabilizes:
 
 | Field | Meaning |
@@ -92,10 +98,37 @@ Record `MEM USAGE / LIMIT` and `%` for capacity planning.
 
 ## Measured Memory (Phase 7 verification)
 
-<!-- Updated by plan 07-05 Task 3 -->
-
-See [Measured Memory Output](#measured-memory-output) below after final gates run.
+Recorded in [Measured Memory Output](#measured-memory-output) (2026-05-27).
 
 ## Measured Memory Output
 
-_To be filled by Task 3 verification._
+Phase 7 plan 07-05 verification (2026-05-27, healthy `/health` after ~20s):
+
+**Container (`docker stats --no-stream urban-gala-llm`):**
+
+| Field | Value |
+|-------|-------|
+| MEM USAGE / LIMIT | 347.8 MiB / 3 GiB |
+| MEM % | 11.32% |
+| PIDS | 12 |
+
+**Processes (`docker top urban-gala-llm`):**
+
+| Role | PPID | CMD |
+|------|------|-----|
+| Master (preload) | container init | `gunicorn --bind 0.0.0.0:5000 --workers 2 --preload --timeout 120 app:app` |
+| Worker 1 | master PID | same command line (forked worker) |
+| Worker 2 | master PID | same command line (forked worker) |
+
+RSS per process is not available without `procps` in the slim image; use `docker stats` for aggregate footprint and scale workers against the 3 GiB Compose limit.
+
+**Verification gates (same session):**
+
+| Gate | Result |
+|------|--------|
+| `PYTHONPATH=. python3 -m pytest tests/ -q` | 63 passed |
+| `PYTHONPATH=. python3 -m pytest tests/test_retrieval_relevance.py -q` | 17 passed (16 examples + harness) |
+| `./mvnw test -Dtest=VibeServiceTest` | 22 passed |
+| `docker compose build llm-service` | Built |
+| `docker compose up -d llm-service` + `curl -f http://localhost:5000/health` | Healthy, 2262 locations |
+| `git status --short` | No `.faiss`/`.index`/generated `.npy` artifacts |
