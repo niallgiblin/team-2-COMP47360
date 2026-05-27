@@ -8,6 +8,10 @@ import MapView from '../../pages/MapView';
 import { getFallbackForecastTimestamps } from '../../utils/forecastTimes';
 import { enrichVenuesWithZones } from '../../utils/zoneEnrichment';
 import { FALLBACK_POLYLINE_NOTICE } from '../../utils/routeNormalizer';
+import {
+  EMPTY_DIRECTIONS_BODY,
+  EMPTY_DIRECTIONS_HEADING,
+} from '../DirectionSidebar';
 
 const theme = createTheme();
 
@@ -200,6 +204,23 @@ describe('MapView route and sidebar integration', () => {
       expect(enrichVenuesWithZones).toHaveBeenCalled();
       const result = enrichVenuesWithZones.mock.results.at(-1)?.value;
       expect(result?.[0]?.zoneId).toBe('77');
+    });
+  });
+
+  test('does not alert when Get Directions clicked without start or destination', async () => {
+    mockPlanState = {
+      plan: [],
+      fromPlan: false,
+      setFromPlan: vi.fn(),
+    };
+
+    renderMapView();
+    await openDirectionsDrawer();
+
+    await waitFor(() => {
+      expect(window.alert).not.toHaveBeenCalled();
+      expect(screen.getByText(EMPTY_DIRECTIONS_HEADING)).toBeInTheDocument();
+      expect(screen.getByText(EMPTY_DIRECTIONS_BODY)).toBeInTheDocument();
     });
   });
 

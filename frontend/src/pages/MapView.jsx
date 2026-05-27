@@ -536,7 +536,7 @@ export default function MapView() {
         } else {
           start = await geocodeAddress(manualStart);
           if (!start) {
-            alert("Could not find the start location.");
+            setRouteError(ROUTE_LOAD_ERROR);
             return;
           }
           if (!isStale()) setUserLocation(start);
@@ -560,7 +560,7 @@ export default function MapView() {
       } else if (manualStart.trim()) {
         start = await geocodeAddress(manualStart);
         if (!start) {
-          alert("Could not find the start location.");
+          setRouteError(ROUTE_LOAD_ERROR);
           return;
         }
         if (!isStale()) setUserLocation(start);
@@ -574,19 +574,18 @@ export default function MapView() {
       } else if (manualStart.trim()) {
         start = await geocodeAddress(manualStart);
         if (!start) {
-          alert("Could not find the start location.");
+          setRouteError(ROUTE_LOAD_ERROR);
           return;
         }
         if (!isStale()) setUserLocation(start);
       } else {
-        alert("Please set a start location.");
         return;
       }
 
       if (manualDestination.trim()) {
         destination = await geocodeAddress(manualDestination);
         if (!destination) {
-          alert("Could not find the destination location.");
+          setRouteError(ROUTE_LOAD_ERROR);
           return;
         }
       } else if (selectedVenue) {
@@ -594,7 +593,6 @@ export default function MapView() {
       } else if (planVenues.length > 0) {
         destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
       } else {
-        alert("Please select a destination venue or enter a destination address.");
         return;
       }
     }
