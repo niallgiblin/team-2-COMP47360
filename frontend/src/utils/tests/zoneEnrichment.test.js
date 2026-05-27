@@ -89,4 +89,26 @@ describe('enrichVenueZone', () => {
 
     expect(lookup).toHaveBeenCalled();
   });
+
+  test('preserves backend zoneId for vibe-shaped venue objects without polygon lookup', () => {
+    const lookup = vi.fn(() => true);
+    const vibeVenue = {
+      id: 'place-123',
+      placeId: 'place-123',
+      name: 'Vibe Bar',
+      latitude: 40.76,
+      longitude: -73.99,
+      zone: 'Midtown',
+      zoneId: '55',
+      tags: ['cozy', 'jazz'],
+    };
+
+    const result = enrichVenueZone(vibeVenue, tinyZoneGeoJson, {
+      lookupPointInPolygon: lookup,
+    });
+
+    expect(result.zoneId).toBe('55');
+    expect(result.tags).toEqual(['cozy', 'jazz']);
+    expect(lookup).not.toHaveBeenCalled();
+  });
 });

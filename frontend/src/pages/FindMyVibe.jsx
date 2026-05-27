@@ -19,9 +19,7 @@ import { useNavigate } from "react-router-dom";
 import PlanSummary from "../components/PlanSummary";
 import { useBusyness } from "../context/BusynessContext";
 import { authFetch, vibeAPI } from "../../services/apiService";
-// Turf imports for data enrichment
-import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
-import { point as turfPoint } from "@turf/helpers";
+import { enrichVenueZone } from "../utils/zoneEnrichment";
 
 // Cache for search results
 const searchCache = new Map();
@@ -168,40 +166,29 @@ export default function FindMyVibe() {
         const enriched = {
           ...canonical,
           ...venue,
-          id: (canonical && canonical.id) || venue.id || venue.placeId, // Prefer canonical id
+          id: (canonical && canonical.id) || venue.id || venue.placeId,
           latitude: venue.latitude || venue.lat || (canonical && canonical.latitude),
           longitude: venue.longitude || venue.lng || (canonical && canonical.longitude),
           address: venue.address || (canonical && canonical.address) || 'No address provided',
           zone: venue.zone || venue.Zone || (canonical && canonical.zone) || 'Unknown',
         };
-        // Assign zoneId using Turf.js (polygon lookup)
-        let zoneIdFromPolygon = null;
-        if (zoneData && enriched.latitude && enriched.longitude) {
-          try {
-            const venuePoint = turfPoint([enriched.longitude, enriched.latitude]);
-            const matchingZone = zoneData.features.find((feature) =>
-              booleanPointInPolygon(venuePoint, feature.geometry)
-            );
-            if (matchingZone) {
-              zoneIdFromPolygon = String(matchingZone.properties.LocationID);
-              enriched.zoneId = zoneIdFromPolygon;
-            }
-          } catch (err) {
-            console.warn(`[VIBE DEBUG] Polygon lookup failed for venue '${enriched.name}':`, err);
-          }
-        }
-        // Fallback: Assign zoneId using zoneNameToId mapping if not set
-        let zoneIdFromMapping = null;
+
+        const zoneEnriched = enrichVenueZone(enriched, zoneData);
+        Object.assign(enriched, zoneEnriched);
+
         if (!enriched.zoneId && enriched.zone) {
           const zoneKey = enriched.zone.trim().toLowerCase();
           if (zoneNameToId[zoneKey]) {
-            zoneIdFromMapping = zoneNameToId[zoneKey];
-            enriched.zoneId = zoneIdFromMapping;
+            enriched.zoneId = zoneNameToId[zoneKey];
           }
         }
-        // Fallback: Try to match zone name to any LocationID in allVenues
         if (!enriched.zoneId && enriched.zone) {
-          const possible = (allVenues || []).find(v => v.zone && v.zone.trim().toLowerCase() === enriched.zone.trim().toLowerCase() && v.zoneId);
+          const possible = (allVenues || []).find(
+            (v) =>
+              v.zone &&
+              v.zone.trim().toLowerCase() === enriched.zone.trim().toLowerCase() &&
+              v.zoneId
+          );
           if (possible) {
             enriched.zoneId = String(possible.zoneId);
           }
