@@ -73,7 +73,9 @@ async function fetchCachedSegment(origin, destination, mode, apiKey) {
     travelMode: mode,
     apiKey,
   });
-  routeSegmentCache.set(origin, destination, mode, response);
+  if (!response?.error) {
+    routeSegmentCache.set(origin, destination, mode, response);
+  }
   return response;
 }
 
