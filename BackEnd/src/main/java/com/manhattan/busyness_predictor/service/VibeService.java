@@ -79,6 +79,7 @@ public class VibeService {
         VibeSearchResponse cached = searchCache.getIfPresent(cacheKey);
         if (cached != null) {
             logger.info("Returning cached search result for: {}", vibeDescription);
+            cached.setBusyness(getLiveBusyness());
             return cached;
         }
 
