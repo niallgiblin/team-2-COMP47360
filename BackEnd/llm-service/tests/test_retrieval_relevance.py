@@ -225,7 +225,7 @@ def _query_vectors():
         "cozy hangout": np.array([0.0, 0.0, 0.0, 0.75, 0.7, 0.4], dtype="float32"),
         "exclusive luxury lounge": np.array([0.2, 0.0, 0.0, 0.0, 0.0, 0.0], dtype="float32"),
         "Blue Note Jazz Club Greenwich Village Bar": np.array([0.0, 0.0, 0.0, 0.99, 0.05, 0.0], dtype="float32"),
-        "Quiet Corner Cafe West Village Cafe": np.array([0.0, 0.98, 0.0, 0.0, 0.0, 0.0], dtype="float32"),
+        "Quiet Corner Cafe West Village Cafe": np.array([0.0, 0.0, 0.0, 0.99, 0.05, 0.0], dtype="float32"),
         "Smalls Jazz Club Greenwich Village Bar": np.array([0.0, 0.0, 0.0, 0.2, 0.98, 0.0], dtype="float32"),
         "Late Night Slice": np.array([0.0, 0.0, 0.99, 0.0, 0.0, 0.0], dtype="float32"),
         "": np.zeros(6, dtype="float32"),
