@@ -177,19 +177,68 @@ For every secret below, follow this pattern:
 
 ### Google Maps API key (`VITE_GOOGLE_API_KEY`)
 
-1. Create a new API key in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (restrict by HTTP referrer or IP as appropriate).
+`VITE_GOOGLE_API_KEY` is a **browser-visible, public-but-restricted** credential. Vite inlines `VITE_*` variables into the frontend bundle at build time, so anyone can read the key from compiled JavaScript or network requests. Treat it as exposed by design and rely on Google Cloud Console restrictions—not repository secrecy—to limit abuse.
+
+#### Required Google Cloud Console restrictions (SEC-08)
+
+Apply these settings in [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials) for every browser key. This cannot be automated from the repository; operators must verify manually after each change.
+
+**Application restrictions — HTTP referrer**
+
+Restrict the browser key to approved origins only:
+
+| Environment | Referrer patterns |
+|-------------|-------------------|
+| Local development | `http://localhost:5173/*`, `http://127.0.0.1:5173/*` |
+| Staging | Your approved staging origin, e.g. `https://staging.example.com/*` |
+| Production | Your approved production origin, e.g. `https://app.example.com/*` |
+
+Do not use unrestricted keys or IP restrictions for browser keys (IP restrictions apply to server-side keys only).
+
+**API restrictions**
+
+Limit the key to Google Maps Platform APIs actually used by this application:
+
+| API | Required | Used by |
+|-----|----------|---------|
+| **Routes API** | Yes | Walking/transit directions via `computeRoutes` in `MapView.jsx` and `routeClient.js` |
+| **Maps JavaScript API** | Conditional | Enable only if the map implementation loads the Google Maps JS SDK; current routing uses the Routes REST API directly |
+
+Use **separate keys** for development and production. Never reuse an unrestricted development key in production builds.
+
+#### Manual Cloud Console verification
+
+After creating or rotating a key, confirm in the Cloud Console UI:
+
+1. **Application restrictions** shows *HTTP referrers* with the expected origin patterns (not *None*).
+2. **API restrictions** shows *Restrict key* with Routes API (and Maps JavaScript API if enabled)—not *Don't restrict key*.
+3. Open the app in a browser on an allowed origin; confirm map routing works.
+4. From a disallowed origin or with `curl`, confirm Google returns a referrer/API restriction error rather than a successful route response.
+
+#### Rotation procedure
+
+1. Create a new restricted API key in Google Cloud Console (apply HTTP referrer and API restrictions before use).
 2. Update `VITE_GOOGLE_API_KEY=your_new_google_api_key_here` in `.env`.
 3. Restart the dev frontend:
    ```bash
    docker compose restart frontend
    ```
-4. For production static images, rebuild so build-time args pick up the new key:
+4. For production static images, **rebuild and redeploy** so build-time args pick up the new key:
    ```bash
    docker compose --profile prod build frontend-prod
    docker compose --profile prod up -d frontend-prod
    ```
-5. Verify the map loads in the browser.
+5. Verify the map and directions load in the browser on each deployed origin.
 6. Disable or delete the old API key in Google Cloud Console.
+
+#### Backend proxy escalation criteria
+
+Phase 8 satisfies SEC-08 through documented browser restrictions, not a backend route proxy. Escalate to an authenticated backend proxy (with per-user/IP rate limits) only when:
+
+- Referrer or API restrictions cannot be managed reliably across all deployment origins, or
+- Abuse continues despite restrictions and you need user-level quotas beyond Google key limits.
+
+A backend proxy requires a separately approved scoped work item covering Spring security, DTOs, caching, and deployment changes.
 
 > **Never include real secret values in documentation or commit messages.** Use placeholders such as `your_new_password_here` and `your_new_jwt_secret_here` only.
 
@@ -295,13 +344,15 @@ Credentials are disabled by default. Production and staging must set explicit fr
 
 ### Environment Variables
 
-Frontend environment variables are prefixed with `VITE_` for Vite.js:
+Frontend environment variables are prefixed with `VITE_` for Vite.js. Values are **embedded in the built JavaScript bundle** and are visible to anyone who loads the app:
 
 ```javascript
-// Accessible in frontend code
+// Accessible in frontend code — also visible in browser devtools and network traffic
 const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 ```
+
+`VITE_GOOGLE_API_KEY` must be restricted via Google Cloud Console HTTP referrer and API restrictions (see [Google Maps API key](#google-maps-api-key-vite_google_api_key) above). Do not treat it as a server-side secret.
 
 
 
