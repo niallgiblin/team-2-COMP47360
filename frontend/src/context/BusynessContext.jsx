@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { vibeAPI } from '../../services/apiService';
+import { authFetch, vibeAPI } from '../../services/apiService';
+import { useAuth } from '../hooks/useAuth';
 
 const BusynessContext = createContext();
 
@@ -12,6 +13,7 @@ export const useBusyness = () => {
 };
 
 export const BusynessProvider = ({ children }) => {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [busynessData, setBusynessData] = useState(null);
   const [predictionData, setPredictionData] = useState(null);
   const [venueData, setVenueData] = useState(null);
@@ -22,35 +24,46 @@ export const BusynessProvider = ({ children }) => {
   
   // Add request deduplication
   const pendingRequestRef = useRef(null);
-  const cacheKey = 'venueBusynessCache_v2'; // Updated cache key
+  const cacheKey = 'venueBusynessCache_v3';
 
-  // Load cached data on mount
+  const hasForecastData = (predictions) =>
+    Array.isArray(predictions) && predictions.length > 0;
+
+  // Load cached data on mount once the user is authenticated
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
     try {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const { busynessData: cachedBusyness, predictionData: cachedPrediction, venueData: cachedVenues, lastFetchTime: cachedTime } = JSON.parse(cached);
-        if (cachedTime && Date.now() - cachedTime < 30 * 60 * 1000) { // 30 minute cache
+        if (
+          cachedTime &&
+          Date.now() - cachedTime < 30 * 60 * 1000 &&
+          hasForecastData(cachedPrediction)
+        ) {
           setBusynessData(cachedBusyness);
           setPredictionData(cachedPrediction);
           setVenueData(cachedVenues);
           setLastFetchTime(cachedTime);
           setIsInitialized(true);
-  
+
           return;
         }
       }
     } catch (err) {
       console.warn('Failed to load cached data:', err);
     }
-    
-    // If no cache or expired, fetch fresh data
-    fetchAllData();
-  }, []);
 
-  // Save data to sessionStorage whenever it changes
+    // If no cache, expired, or missing forecast — fetch fresh data
+    fetchAllData();
+  }, [authLoading, isAuthenticated]);
+
+  // Save data to sessionStorage whenever it changes (skip incomplete forecast snapshots)
   useEffect(() => {
-    if (busynessData && predictionData && venueData) {
+    if (busynessData && venueData && hasForecastData(predictionData)) {
       try {
         const cacheData = {
           busynessData,
@@ -59,7 +72,6 @@ export const BusynessProvider = ({ children }) => {
           lastFetchTime: Date.now()
         };
         sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
-
       } catch (err) {
         console.warn('Failed to save data to cache:', err);
       }
@@ -67,9 +79,12 @@ export const BusynessProvider = ({ children }) => {
   }, [busynessData, predictionData, venueData]);
 
   const fetchAllData = async () => {
-    // If we have recent data (less than 30 minutes old), use cached data
-    if (lastFetchTime && Date.now() - lastFetchTime < 30 * 60 * 1000) {
-      
+    // If we have recent data (less than 30 minutes old) with forecast, use cached state
+    if (
+      lastFetchTime &&
+      Date.now() - lastFetchTime < 30 * 60 * 1000 &&
+      hasForecastData(predictionData)
+    ) {
       return { busynessData, predictionData, venueData };
     }
 
@@ -107,8 +122,8 @@ export const BusynessProvider = ({ children }) => {
         
         // Fetch both busyness and venue data in parallel
         const [busynessResponse, venueResponse] = await Promise.all([
-          fetch(vibeAPI.mapDataUrl()),
-          fetch(vibeAPI.trendingUrl())
+          authFetch(vibeAPI.mapDataUrl()),
+          authFetch(vibeAPI.trendingUrl())
         ]);
         
         if (!busynessResponse.ok || !venueResponse.ok) {

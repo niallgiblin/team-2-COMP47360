@@ -9,6 +9,26 @@ const getAuthToken = () => {
   return localStorage.getItem('token');
 };
 
+// Authenticated fetch — attaches Bearer token when present (required for /api/vibe/*).
+export const authFetch = async (url, options = {}) => {
+  const token = getAuthToken();
+  const headers = { ...options.headers };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (
+    options.body &&
+    !(options.body instanceof FormData) &&
+    !headers['Content-Type']
+  ) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return fetch(url, { ...options, headers });
+};
+
 // Unauthenticated JSON request helper (used by authAPI, friendsAPI)
 // Authenticated requests use AuthContext.makeAuthenticatedRequest (D-10)
 const makeRequest = async (url, options = {}) => {

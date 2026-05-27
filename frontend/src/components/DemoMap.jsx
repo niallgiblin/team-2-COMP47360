@@ -15,11 +15,9 @@ import {
 
 import { Box } from "@mui/material";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import RouteDisplay from "./RouteDisplay";            // custom component for routing
 import L from "leaflet";
 import { getVenueIcon } from "../utils/mapIcons";
 
-import { usePlan } from "../context/PlanContext";
 import { DateTime } from "luxon";                     // library for handling time zones, datetime formatting
 
 // Memoized Polyline component to prevent unnecessary re-renders
@@ -32,11 +30,6 @@ const MemoizedPolyline = React.memo(({ positions, color, weight, opacity }) => {
       opacity={opacity}
     />
   );
-});
-
-// Memoized RouteDisplay component to prevent unnecessary re-renders
-const MemoizedRouteDisplay = React.memo(({ start, end }) => {
-  return <RouteDisplay start={start} end={end} />;
 });
 
 // import custom icons for map markers
@@ -52,9 +45,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// component definition
-export default function DemoMap({
+function DemoMap({
   venues = [],
+  selectedVenue = null,
   onSelectVenue,
   busynessData = [],
   zoneData,
@@ -72,9 +65,9 @@ export default function DemoMap({
 }) {
   const [activeZoneVenues, setActiveZoneVenues] = useState([]);
   const allVenuesRef = useRef([]);
-  const { selectedVenue } = usePlan();
   const [overridePlanMode, setOverridePlanMode] = useState(false);  // disables plan display if zone is manually clicked
   const mapRef = useRef(null);
+  const geoJsonLayerRef = useRef(null);
 
   // Use mode directly instead of internal state
   // Don't override mode when there's a plan - let forecast mode work with plans
@@ -177,45 +170,6 @@ export default function DemoMap({
     allVenuesRef.current = venues;
   }, [venues]);
 
-  // Auto-center map on route when directions are shown - with minimal movement
-  const prevRouteCoordsRef = useRef(null);
-  
-  useEffect(() => {
-    if (showDirections && routeCoords && routeCoords.length > 0 && mapRef.current) {
-      // Only re-center if the route coordinates actually changed
-      const coordsChanged = JSON.stringify(routeCoords) !== JSON.stringify(prevRouteCoordsRef.current);
-      
-      if (coordsChanged) {
-        // Check if coordinates are valid numbers
-        const validCoords = routeCoords.filter(coord => 
-          Array.isArray(coord) && 
-          coord.length === 2 && 
-          typeof coord[0] === 'number' && 
-          typeof coord[1] === 'number' &&
-          !isNaN(coord[0]) && 
-          !isNaN(coord[1])
-        );
-        
-        if (validCoords.length > 0) {
-          try {
-            const bounds = L.latLngBounds(validCoords);
-            // Use minimal padding and smooth animation
-            mapRef.current.fitBounds(bounds, { 
-              padding: [10, 10], // Reduced padding
-              animate: true,
-              duration: 0.8 // Slower, smoother animation
-            });
-          } catch (error) {
-            console.error('Error setting map bounds:', error);
-          }
-        }
-        
-        // Update the ref to track the current coordinates
-        prevRouteCoordsRef.current = JSON.stringify(routeCoords);
-      }
-    }
-  }, [showDirections, routeCoords]);
-
   // choropleth styling
   const getColorForBusyness = (busyness) => {
     if (busyness >= 75) return "#FF0000";
@@ -224,62 +178,72 @@ export default function DemoMap({
     return "#00FF00";
   };
 
+  const getForecastPoint = useCallback((locationId) => {
+    const zoneEntry = predictionData.find((z) => {
+      const mappedZoneId = dnnToGeoJsonMapping[z.LocationID];
+      return mappedZoneId && mappedZoneId.toString() === String(locationId);
+    });
+
+    if (!zoneEntry?.predictions?.length) {
+      return null;
+    }
+
+    if (selectedTimestamp) {
+      const exactMatch = zoneEntry.predictions.find((p) => {
+        try {
+          return DateTime.fromISO(p.timestamp).equals(DateTime.fromISO(selectedTimestamp));
+        } catch {
+          return false;
+        }
+      });
+      if (exactMatch) {
+        return exactMatch;
+      }
+    }
+
+    return zoneEntry.predictions[0];
+  }, [predictionData, selectedTimestamp, dnnToGeoJsonMapping]);
+
+  const getBusynessLabelForFeature = useCallback((feature) => {
+    const locationId = feature.properties.LocationID;
+    const zoneName = feature.properties.zone || feature.properties.name || "Unnamed Zone";
+
+    if (currentMode === "forecast") {
+      const point = getForecastPoint(locationId);
+      if (!point) {
+        return `${zoneName} — No forecast data`;
+      }
+      const normalizedBusyness = Math.max(0, Math.min(100, (point.busyness + 100) / 2));
+      return `${zoneName} — ${normalizedBusyness.toFixed(0)}% busy`;
+    }
+
+    const match = busynessData.find((z) => String(z.LocationID) === String(locationId));
+    if (!match) {
+      return `${zoneName} — No live data`;
+    }
+    return `${zoneName} — ${(match.busyness * 100).toFixed(0)}% busy`;
+  }, [currentMode, busynessData, getForecastPoint]);
+
   // Memoize the zone style function to prevent unnecessary re-renders
   const getZoneStyle = useCallback((feature) => {
     const locationId = feature.properties.LocationID;
-    
-    // match current timestamp for forecast mode or use live value
+
     const match = currentMode === "forecast"
-      ? (() => {
-          // First try to find exact timestamp match
-          const zoneData = predictionData.find((z) => {
-            // Use the mapping to convert DNN model names to GeoJSON LocationIDs
-            const mappedZoneId = dnnToGeoJsonMapping[z.LocationID];
-            const zoneId = String(locationId);
-            return mappedZoneId && mappedZoneId.toString() === zoneId;
-          });
-          
-          if (!zoneData || !zoneData.predictions || zoneData.predictions.length === 0) {
-            return null;
-          }
-          
-          // Try to find exact timestamp match
-          const exactMatch = zoneData.predictions.find((p) => {
-            try {
-              const pTime = DateTime.fromISO(p.timestamp);
-              const sTime = DateTime.fromISO(selectedTimestamp);
-              return pTime.equals(sTime);
-            } catch (error) {
-              return false;
-            }
-          });
-          
-          // If no exact match, use the first available prediction
-          if (!exactMatch && zoneData.predictions.length > 0) {
-            return zoneData.predictions[0];
-          }
-          
-          return exactMatch;
-        })()
+      ? getForecastPoint(locationId)
       : busynessData.find((z) => String(z.LocationID) === String(locationId));
 
-    // fallback to grey if no match
     let fillColor;
     if (match) {
       if (currentMode === "forecast") {
-        // For forecast data, normalize the raw values (-100 to +100) to 0-100%
         const normalizedBusyness = Math.max(0, Math.min(100, (match.busyness + 100) / 2));
         fillColor = getColorForBusyness(normalizedBusyness);
       } else {
-        // For live data, the values are already normalized (0-1)
         fillColor = getColorForBusyness((match.busyness || 0) * 100);
       }
     } else {
       fillColor = "#CCCCCC";
     }
-    
 
-    
     return {
       fillColor,
       weight: 2,
@@ -287,7 +251,7 @@ export default function DemoMap({
       color: "#3ABEFF",
       fillOpacity: 0.5,
     };
-  }, [currentMode, predictionData, selectedTimestamp, busynessData, dnnToGeoJsonMapping, fromPlanProp]);
+  }, [currentMode, busynessData, getForecastPoint]);
 
   // update and click handlers
   
@@ -319,10 +283,16 @@ export default function DemoMap({
   const onEachZone = useCallback((feature, layer) => {
     layer.on({
       mouseover: (e) => {
-        e.target.setStyle({ weight: 3, color: "#ffffff", fillOpacity: 0.7 });
+        const baseStyle = getZoneStyle(feature);
+        e.target.setTooltipContent(getBusynessLabelForFeature(feature));
+        e.target.setStyle({ ...baseStyle, weight: 3, color: "#ffffff", fillOpacity: 0.7 });
       },
       mouseout: (e) => {
-        e.target.setStyle(getZoneStyle(feature));
+        if (geoJsonLayerRef.current) {
+          geoJsonLayerRef.current.resetStyle(e.target);
+        } else {
+          e.target.setStyle(getZoneStyle(feature));
+        }
       },
       click: (e) => {
         const bounds = e.target.getBounds();
@@ -332,37 +302,8 @@ export default function DemoMap({
       },
     });
 
-    const level =
-      currentMode === "forecast"
-        ? (() => {
-          const match = predictionData
-            .find((z) => {
-              // Use the mapping to convert DNN model names to GeoJSON LocationIDs
-              const mappedZoneId = dnnToGeoJsonMapping[z.LocationID];
-              const zoneId = String(feature.properties.LocationID);
-              return mappedZoneId && mappedZoneId.toString() === zoneId;
-            })
-            ?.predictions?.find((p) => {
-              // Use Luxon's DateTime to compare timestamps in a timezone-agnostic way
-              return DateTime.fromISO(p.timestamp).equals(DateTime.fromISO(selectedTimestamp));
-            });
-            // For forecast data, the busyness values are raw and need to be normalized
-            // The values range from roughly -100 to +100, so we normalize to 0-100%
-            const normalizedBusyness = match ? Math.max(0, Math.min(100, (match.busyness + 100) / 2)) : 0;
-            return match ? `${normalizedBusyness.toFixed(0)}% busy` : "No forecast data";
-          })()
-        : (() => {
-            const match = busynessData.find(
-              (z) => String(z.LocationID) === String(feature.properties.LocationID)
-            );
-            return match ? `${(match.busyness * 100).toFixed(0)}% busy` : "No live data";
-          })();
-
-    layer.bindTooltip(
-      `${feature.properties.zone || feature.properties.name || "Unnamed Zone"} — ${level}`,
-      { sticky: true }
-    );
-  }, [currentMode, predictionData, selectedTimestamp, busynessData, dnnToGeoJsonMapping, getZoneStyle, setZoneCenter, handleZoneClick]);
+    layer.bindTooltip(getBusynessLabelForFeature(feature), { sticky: true });
+  }, [getZoneStyle, getBusynessLabelForFeature, setZoneCenter, handleZoneClick]);
 
 // function toe smoothly pan and zoom to selected venues
 function FlyToVenue({ venue, showDirections }) {
@@ -468,28 +409,39 @@ function FlyToVenue({ venue, showDirections }) {
     return null;
   }
 
-  function FitToDirections({ routeCoords }) {
+  function FitToDirections({ routeCoords, active }) {
     const map = useMap();
-    const hasFitted = useRef(false);
+    const lastRouteKeyRef = useRef(null);
 
     useEffect(() => {
-      if (!routeCoords || routeCoords.length === 0 || hasFitted.current) return;
-
-      hasFitted.current = true;
-      const bounds = L.latLngBounds(routeCoords);
-      map.fitBounds(bounds, { 
-        padding: [20, 20],
-        animate: true,
-        duration: 0.8
-      });
-    }, [routeCoords, map]);
-
-    // Reset the flag when directions are hidden
-    useEffect(() => {
-      if (!routeCoords || routeCoords.length === 0) {
-        hasFitted.current = false;
+      if (!active) {
+        lastRouteKeyRef.current = null;
+        return;
       }
-    }, [routeCoords]);
+      if (!routeCoords || routeCoords.length === 0) return;
+
+      const routeKey = JSON.stringify(routeCoords);
+      if (routeKey === lastRouteKeyRef.current) return;
+
+      const validCoords = routeCoords.filter(
+        (coord) =>
+          Array.isArray(coord) &&
+          coord.length === 2 &&
+          typeof coord[0] === "number" &&
+          typeof coord[1] === "number" &&
+          !isNaN(coord[0]) &&
+          !isNaN(coord[1])
+      );
+      if (validCoords.length === 0) return;
+
+      lastRouteKeyRef.current = routeKey;
+      const bounds = L.latLngBounds(validCoords);
+      map.fitBounds(bounds, {
+        padding: [40, 40],
+        animate: true,
+        duration: 0.8,
+      });
+    }, [routeCoords, active, map]);
 
     return null;
   }
@@ -577,13 +529,18 @@ function FlyToVenue({ venue, showDirections }) {
         }}
         style={{ height: "calc(120vh - 300px)", width: "100%" }}
       >
-        <FlyToUserLocation location={userLocation} />
+        {!showDirections && <FlyToUserLocation location={userLocation} />}
         <ResetMap triggerKey={resetMapKey} />
-        {/* Show FlyToPlan for plans, but disable it during forecast mode to prevent interference */}
-        {fromPlanProp && currentMode !== "forecast" && <FlyToPlan venues={plan} fromPlan={fromPlanProp} />}
-        {selectedVenue && !fromPlanProp && currentMode !== "forecast" && <FlyToVenue venue={selectedVenue} />}
-        {zoneCenter && <FlyToZone center={zoneCenter} />}
-        {showDirections && routeCoords && routeCoords.length > 0 && <FitToDirections routeCoords={routeCoords} />}
+        {!showDirections && fromPlanProp && currentMode !== "forecast" && (
+          <FlyToPlan venues={plan} fromPlan={fromPlanProp} />
+        )}
+        {!showDirections && selectedVenue && !fromPlanProp && currentMode !== "forecast" && (
+          <FlyToVenue venue={selectedVenue} showDirections={showDirections} />
+        )}
+        {!showDirections && zoneCenter && <FlyToZone center={zoneCenter} />}
+        {showDirections && routeCoords && routeCoords.length > 0 && (
+          <FitToDirections routeCoords={routeCoords} active={showDirections} />
+        )}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
@@ -591,7 +548,8 @@ function FlyToVenue({ venue, showDirections }) {
         {/* Only show zones when directions are not being shown */}
         {zoneData && !showDirections && (
           <GeoJSON
-            key={`zones-${currentMode}`}
+            ref={geoJsonLayerRef}
+            key={`zones-${currentMode}-${selectedTimestamp}-${predictionData.length}`}
             data={zoneData}
             style={getZoneStyle}
             onEachFeature={onEachZone}
@@ -646,12 +604,6 @@ function FlyToVenue({ venue, showDirections }) {
               </Marker>
             );
           })}
-        {userLocation && selectedVenue && !showDirections && currentMode !== "forecast" && (
-          <MemoizedRouteDisplay
-            start={[userLocation.lat, userLocation.lng]}
-            end={[selectedVenue.lat, selectedVenue.lng]}
-          />
-        )}
         {showDirections && routeCoords && routeCoords.length > 0 && (
           <MemoizedPolyline 
             positions={routeCoords} 
@@ -664,3 +616,5 @@ function FlyToVenue({ venue, showDirections }) {
     </Box>
   );
 }
+
+export default React.memo(DemoMap);

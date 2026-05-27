@@ -36,9 +36,9 @@ def parse_allowed_origins():
     return [origin.strip() for origin in configured.split(",") if origin.strip()]
 
 
-DEFAULT_HF_CHAT_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
+DEFAULT_HF_CHAT_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 HF_CHAT_MODEL = os.getenv("HF_CHAT_MODEL", DEFAULT_HF_CHAT_MODEL)
-CHAT_API_URL = "https://router.huggingface.co/together/v1/chat/completions"
+CHAT_API_URL = "https://router.huggingface.co/v1/chat/completions"
 
 SEARCH_CACHE_TTL_SECONDS = _env_int("SEARCH_CACHE_TTL_SECONDS", 300)
 SEARCH_CACHE_MAX_ENTRIES = _env_int("SEARCH_CACHE_MAX_ENTRIES", 512)

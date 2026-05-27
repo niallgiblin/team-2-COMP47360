@@ -6,9 +6,16 @@ import { DateTime } from "luxon";         // used to format timestamps
 
 export default function ForecastSlider({ timestamps = [], selectedTimestamp, onChange, mode, onInteractionStart, onInteractionEnd }) {
 
-  if (!timestamps.length) return null;    // if no timestamps available, return null
+  if (!timestamps.length || !selectedTimestamp) return null;
 
-  const currentIndex = timestamps.findIndex(ts => ts === selectedTimestamp);  // determine which index is currently selected
+  const currentIndex = timestamps.findIndex((ts) => {
+    if (ts === selectedTimestamp) return true;
+    try {
+      return DateTime.fromISO(ts).toMillis() === DateTime.fromISO(selectedTimestamp).toMillis();
+    } catch {
+      return false;
+    }
+  });
 
   return (
     <Box
