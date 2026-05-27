@@ -30,7 +30,7 @@
 - [x] **SEC-05**: Busyness service model loading avoids unsafe Keras deserialization unless verified trusted artifacts require it.
 - [ ] **SEC-06**: Authenticated avatar uploads validate image content by bytes and allowed extension, not only client content type.
 - [ ] **SEC-07**: API error responses expose stable client-safe messages while internal exception details remain server-side.
-- [ ] **SEC-08**: Browser-exposed Google API key usage is documented with referrer/API restrictions or routed through a backend proxy with user-level limits.
+- [x] **SEC-08**: Browser-exposed Google API key usage is documented with referrer/API restrictions or routed through a backend proxy with user-level limits.
 
 ### API and Service Contracts
 
@@ -131,7 +131,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-05 | Phase 6 | Complete |
 | SEC-06 | Phase 4 | Pending |
 | SEC-07 | Phase 4 | Pending |
-| SEC-08 | Phase 8 | Pending |
+| SEC-08 | Phase 8 | Complete |
 | API-01 | Phase 5 | Complete |
 | API-02 | Phase 5 | Complete |
 | API-03 | Phase 5 | Complete |
