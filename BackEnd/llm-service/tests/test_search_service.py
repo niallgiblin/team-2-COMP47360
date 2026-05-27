@@ -129,7 +129,7 @@ def test_build_vector_index_rejects_dimension_mismatch():
     embeddings = _tiny_embeddings()[:, :3]
 
     with pytest.raises(SearchStartupError, match="dimension"):
-        SearchService.from_startup(df, embeddings, encoder=_FakeEncoder([1, 0, 0]))
+        SearchService.from_startup(df, embeddings, encoder=_FakeEncoder([1, 0, 0, 0]))
 
 
 def test_build_vector_index_rejects_empty_embeddings():
