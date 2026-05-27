@@ -108,6 +108,10 @@ def test_get_ai_response_delegates_to_search_helper_and_hf_call(monkeypatch):
 
 
 def test_get_ai_response_does_not_perform_jwt_validation():
-    source = open(__file__, encoding="utf-8").read()
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parent.parent.joinpath("chat_service.py").read_text(
+        encoding="utf-8"
+    )
     assert "validate_chat_jwt" not in source
     assert "jwt.decode" not in source
