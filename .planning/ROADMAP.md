@@ -323,7 +323,7 @@ Plans:
 
 **Wave 1** *(depends on Wave 0; parallel — no shared implementation files)*
 - [x] 08-02-PLAN.md — Forecast fallback and zone enrichment utilities
-- [ ] 08-03-PLAN.md — Google Routes client, normalizer, and route segment cache
+- [x] 08-03-PLAN.md — Google Routes client, normalizer, and route segment cache
 - [ ] 08-05-PLAN.md — Backend zoneId DTO support and Google key restriction docs
 
 **Wave 2** *(depends on Wave 1)*

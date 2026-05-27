@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
 status: executing
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-05-27T19:13:00.000Z"
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-05-27T20:14:00.000Z"
 last_activity: 2026-05-27
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 40
-  completed_plans: 31
-  percent: 78
+  completed_plans: 32
+  percent: 80
 ---
 
 # GSD State
@@ -19,7 +19,7 @@ progress:
 ## Current Position
 
 Phase: 08 (map-forecast-routing-and-external-api-correctness) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-05-27
 
@@ -76,6 +76,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 08]: Vitest config uses @vitejs/plugin-react for page component JSX tests (plan 08-01).
 - [Phase 08]: Default forecast fallback returns exactly 12 hourly America/New_York ISO strings starting next hour (plan 08-02).
 - [Phase 08]: Backend zoneId is string-normalized and skips Turf polygon lookup when present (plan 08-02).
+- [Phase 08]: Route cache keys round coordinates to four decimals for stable 08-01 test parity (plan 08-03).
+- [Phase 08]: Google Routes field mask uses explicit leg/step/transit/polyline fields without wildcard (plan 08-03).
 
 ## Blockers
 
@@ -83,8 +85,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-27T19:13:00.000Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-05-27T20:14:00.000Z
+Stopped at: Completed 08-03-PLAN.md
 Resume file: None
 
 ## Notes
