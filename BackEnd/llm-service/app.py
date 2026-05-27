@@ -11,10 +11,9 @@ import time
 import threading
 from typing import Optional
 import sys
-import requests
 import hashlib
-import pickle
 import jwt
+from chat_service import get_ai_response as _chat_get_ai_response
 from jwt import InvalidTokenError
 
 # Anchor: BackEnd/llm-service/ from app.py (D-10)
@@ -518,94 +517,37 @@ if not initialization_success:
     logger.error(f"Service initialization failed: {initialization_error}")
     # Don't exit - let the container start so we can debug via health endpoint
 
-# --- Chatbot Logic (Merged) ---
+# --- Chatbot Logic ---
 
-CHAT_API_URL = "https://router.huggingface.co/together/v1/chat/completions"
-DEFAULT_HF_CHAT_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
-HF_CHAT_MODEL = os.environ.get("HF_CHAT_MODEL", DEFAULT_HF_CHAT_MODEL)
-HF_HEADERS = {
-    "Authorization": f"Bearer {os.environ.get('HF_TOKEN')}",
-}
-
-def huggingface_chat_api_call(messages, model=None):
-    """Make a call to the Hugging Face chat completions API"""
-    token = os.environ.get('HF_TOKEN')
-    if not token or token == "your-hugging-face-api-token":
-        logger.error("CRITICAL: HF_TOKEN environment variable is not set or is using a placeholder value.")
-        raise ValueError("Hugging Face API token is missing or invalid.")
-
-    if model is None:
-        model = HF_CHAT_MODEL
-
-    logger.info("Making request to Hugging Face API...")
-    payload = {"messages": messages, "model": model, "max_tokens": 400, "temperature": 0.4, "top_p": 0.9}
-    
-    try:
-        # Add a 30-second timeout to prevent indefinite hanging
-        response = requests.post(CHAT_API_URL, headers=HF_HEADERS, json=payload, timeout=30)
-        response.raise_for_status()
-        logger.info("Successfully received response from Hugging Face API.")
-        return response.json()
-    except requests.exceptions.Timeout:
-        logger.error("Request to Hugging Face API timed out.")
-        raise
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error calling Hugging Face API: {e}")
-        if e.response is not None:
-            logger.error(f"Response status: {e.response.status_code}, Body: {e.response.text}")
-        raise
-
-def most_similar_locs_for_chat(query):
-    """
-    Finds the top 5 most similar locations by calling the core ML logic directly.
-    This is a simplified, internal version of the main /search endpoint.
-    """
-    global model, df, location_embeddings
+def _chat_search_helper(query, limit=5):
+    """Return top similar locations as formatted chat retrieval context."""
     if not initialized or model is None or df is None or location_embeddings is None:
         return "Location search is not available at the moment."
 
     try:
         query_embedding = model.encode(query, convert_to_tensor=True).cpu()
         similarities = util.cos_sim(query_embedding, location_embeddings)[0]
-        
-        top_results = torch.topk(similarities, k=5)
-        
+        top_results = torch.topk(similarities, k=limit)
+
         loc_info_parts = []
         for _, idx in zip(top_results.values, top_results.indices):
             loc = df.iloc[idx.item()]
             loc_type = loc.get("loc_type", "") if hasattr(loc, "get") else loc["loc_type"]
             loc_info_parts.append(f"- {loc['name']} ({loc['zone']}): {loc_type}")
-        
+
         return "Here are some similar locations:\n" + "\n".join(loc_info_parts)
-    except Exception as e:
-        logger.error(f"Error in most_similar_locs_for_chat: {e}")
+    except Exception as exc:
+        logger.error("Error in chat search helper: %s", exc)
         return "I'm having trouble finding similar locations right now."
 
+
 def get_ai_response(query, previous_questions):
-    """Get AI response using Hugging Face API"""
-    try:
-        # Build context from previous questions and current query
-        context_parts = []
-        if previous_questions:
-            context_parts.append("Previous conversation:")
-            for q in previous_questions[-3:]:  # Last 3 questions for context
-                context_parts.append(f"- User: {q}")
-        
-        context_parts.append(f"Current query: {query}")
-        
-        # Get similar locations for context
-        similar_locs = most_similar_locs_for_chat(query)
-        
-        messages = [
-            {"role": "system", "content": f"You are a helpful AI assistant for a Manhattan nightlife app. You have access to information about venues in Manhattan. Here's what you know about similar locations:\n{similar_locs}\n\nProvide helpful, concise responses about Manhattan nightlife and venues."},
-            {"role": "user", "content": "\n".join(context_parts)}
-        ]
-        
-        response = huggingface_chat_api_call(messages)
-        return response['choices'][0]['message']['content']
-    except Exception as e:
-        logger.error(f"Error getting AI response: {e}")
-        return "I'm having trouble processing your request right now. Please try again later."
+    """Route-owned wrapper delegating prompt assembly and HF call to chat_service."""
+    return _chat_get_ai_response(
+        query,
+        previous_questions,
+        search_helper=_chat_search_helper,
+    )
 
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
