@@ -19,6 +19,19 @@ def test_search_rejects_non_integer_max_results(monkeypatch):
     assert response.get_json()["error"] == "maxResults must be an integer"
 
 
+def test_search_rejects_unknown_price_range(monkeypatch):
+    app_module = _ready_app(monkeypatch)
+    client = app_module.app.test_client()
+
+    response = client.post(
+        "/search",
+        json={"vibeDescription": "jazz", "priceRange": "premium"},
+    )
+
+    assert response.status_code == 400
+    assert "Unknown priceRange" in response.get_json()["error"]
+
+
 def test_search_clamps_excessive_max_results(monkeypatch):
     app_module = _ready_app(monkeypatch)
     captured = {}
