@@ -87,7 +87,10 @@ function buildMultiStopWalkingRequest(start, venues, isUserStart) {
         lat: venues[venues.length - 1].lat,
         lng: venues[venues.length - 1].lng,
       },
-      intermediates: venues.map((venue) => ({ lat: venue.lat, lng: venue.lng })),
+      intermediates: venues.slice(0, -1).map((venue) => ({
+        lat: venue.lat,
+        lng: venue.lng,
+      })),
     };
   }
   return {
