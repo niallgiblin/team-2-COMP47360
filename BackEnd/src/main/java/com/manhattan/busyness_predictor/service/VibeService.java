@@ -1,5 +1,6 @@
 package com.manhattan.busyness_predictor.service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Collections;
@@ -8,13 +9,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.PageRequest;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import com.manhattan.busyness_predictor.dto.BusynessReportDto;
 import com.manhattan.busyness_predictor.dto.LocationDto;
@@ -36,8 +40,7 @@ public class VibeService {
     private final MlResponseMapper mlResponseMapper;
 
     // Cache for search results
-    private final Map<String, CachedSearchResult> searchCache = new ConcurrentHashMap<>();
-    private static final long CACHE_DURATION_SECONDS = 300; // 5 minutes
+    private final Cache<String, VibeSearchResponse> searchCache;
 
     // Cache for busyness data
     private Map<String, Double> busynessCache = new HashMap<>();
@@ -52,11 +55,18 @@ public class VibeService {
     public VibeService(MlServiceClient mlServiceClient,
             LocationRepository locationRepository,
             LocationService locationService,
-            MlResponseMapper mlResponseMapper) {
+            MlResponseMapper mlResponseMapper,
+            @Value("${app.vibe.search-cache.ttl-seconds:300}") long searchCacheTtlSeconds,
+            @Value("${app.vibe.search-cache.max-size:512}") long searchCacheMaxSize) {
         this.mlServiceClient = mlServiceClient;
         this.locationRepository = locationRepository;
         this.locationService = locationService;
         this.mlResponseMapper = mlResponseMapper;
+        this.searchCache = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofSeconds(searchCacheTtlSeconds))
+                .maximumSize(searchCacheMaxSize)
+                .executor(Runnable::run)
+                .build();
     }
 
     // Main entry for vibe search
@@ -66,10 +76,10 @@ public class VibeService {
 
         // Check cache first
         String cacheKey = generateCacheKey(vibeDescription, maxResults, request.getLocation(), request.getPriceRange());
-        CachedSearchResult cached = searchCache.get(cacheKey);
-        if (cached != null && !cached.isExpired()) {
+        VibeSearchResponse cached = searchCache.getIfPresent(cacheKey);
+        if (cached != null) {
             logger.info("Returning cached search result for: {}", vibeDescription);
-            return cached.getResponse();
+            return cached;
         }
 
         // 1. Fetch ML recommendations
@@ -94,7 +104,7 @@ public class VibeService {
         VibeSearchResponse response = buildResponse(finalLocations, explanation, confidence, busynessData);
         
         // Cache the result
-        searchCache.put(cacheKey, new CachedSearchResult(response));
+        searchCache.put(cacheKey, response);
         
         return response;
     }
@@ -108,25 +118,6 @@ public class VibeService {
 
     private String normalizeCachePart(String value) {
         return value == null ? "" : value.toLowerCase().trim();
-    }
-
-    // Cache class for search results
-    private static class CachedSearchResult {
-        private final VibeSearchResponse response;
-        private final Instant timestamp;
-
-        public CachedSearchResult(VibeSearchResponse response) {
-            this.response = response;
-            this.timestamp = Instant.now();
-        }
-
-        public VibeSearchResponse getResponse() {
-            return response;
-        }
-
-        public boolean isExpired() {
-            return Instant.now().isAfter(timestamp.plusSeconds(CACHE_DURATION_SECONDS));
-        }
     }
 
     public VibeSearchResponse getTrendingWithBusyness() {
