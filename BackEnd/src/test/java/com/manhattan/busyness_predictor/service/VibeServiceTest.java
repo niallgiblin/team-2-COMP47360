@@ -1,17 +1,23 @@
 package com.manhattan.busyness_predictor.service;
 
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -489,6 +495,115 @@ public class VibeServiceTest {
         // Then
         assertNull(location);
         verify(locationRepository).findById(999);
+    }
+
+    @Test
+    void applicationPropertiesExposeVibeSearchCacheDefaults() throws Exception {
+        Properties props = new Properties();
+        try (InputStream stream = getClass().getClassLoader().getResourceAsStream("application.properties")) {
+            assertNotNull(stream, "application.properties must exist");
+            props.load(stream);
+        }
+
+        assertEquals("512", props.getProperty("app.vibe.search-cache.max-size"),
+                "Default search cache max size must be 512");
+        assertEquals("300", props.getProperty("app.vibe.search-cache.ttl-seconds"),
+                "Default search cache TTL must be 300 seconds");
+    }
+
+    @Test
+    void searchCacheUsesCaffeineNotConcurrentHashMap() throws Exception {
+        Field cacheField = VibeService.class.getDeclaredField("searchCache");
+        cacheField.setAccessible(true);
+        Object cache = cacheField.get(vibeService);
+
+        assertFalse(cache instanceof ConcurrentHashMap,
+                "VibeService search cache must use Caffeine, not ConcurrentHashMap");
+        assertTrue(cache.getClass().getName().contains("caffeine.cache"),
+                "search cache implementation must be com.github.benmanes.caffeine.cache.Cache");
+    }
+
+    @Test
+    void configuredSearchCacheHitsMlServiceOnceForIdenticalQueries() throws Exception {
+        VibeService configuredService = newVibeServiceWithCachePolicy(300L, 512L);
+
+        MlSearchResponse mlResponse = mlSearchResponseWithLocation(
+                1, "Cozy Coffee Shop", "123 Main St", 40.7128, -74.0060, 0.85);
+        when(mlServiceClient.search(anyString(), anyInt(), any(), any())).thenReturn(mlResponse);
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+        when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
+
+        configuredService.findLocationsByVibe(searchRequest);
+        configuredService.findLocationsByVibe(searchRequest);
+
+        verify(mlServiceClient, times(1)).search(anyString(), anyInt(), any(), any());
+    }
+
+    @Test
+    void configuredSearchCacheEvictsOldestEntryWhenMaxSizeExceeded() throws Exception {
+        VibeService configuredService = newVibeServiceWithCachePolicy(300L, 2L);
+
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+        when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
+
+        MlSearchResponse first = mlSearchResponseWithLocation(
+                1, "First", "123 Main St", 40.7128, -74.0060, 0.85);
+        MlSearchResponse second = mlSearchResponseWithLocation(
+                1, "Second", "123 Main St", 40.7128, -74.0060, 0.80);
+        MlSearchResponse third = mlSearchResponseWithLocation(
+                1, "Third", "123 Main St", 40.7128, -74.0060, 0.75);
+
+        when(mlServiceClient.search(eq("query-one"), anyInt(), any(), any())).thenReturn(first);
+        when(mlServiceClient.search(eq("query-two"), anyInt(), any(), any())).thenReturn(second);
+        when(mlServiceClient.search(eq("query-three"), anyInt(), any(), any())).thenReturn(third);
+
+        VibeSearchRequest firstRequest = new VibeSearchRequest();
+        firstRequest.setVibeDescription("query-one");
+        firstRequest.setMaxResults(5);
+
+        VibeSearchRequest secondRequest = new VibeSearchRequest();
+        secondRequest.setVibeDescription("query-two");
+        secondRequest.setMaxResults(5);
+
+        VibeSearchRequest thirdRequest = new VibeSearchRequest();
+        thirdRequest.setVibeDescription("query-three");
+        thirdRequest.setMaxResults(5);
+
+        configuredService.findLocationsByVibe(firstRequest);
+        configuredService.findLocationsByVibe(secondRequest);
+        configuredService.findLocationsByVibe(thirdRequest);
+
+        configuredService.findLocationsByVibe(firstRequest);
+        configuredService.findLocationsByVibe(secondRequest);
+        configuredService.findLocationsByVibe(thirdRequest);
+
+        verify(mlServiceClient, times(2)).search(eq("query-one"), anyInt(), any(), any());
+        verify(mlServiceClient, times(1)).search(eq("query-two"), anyInt(), any(), any());
+        verify(mlServiceClient, times(1)).search(eq("query-three"), anyInt(), any(), any());
+    }
+
+    private VibeService newVibeServiceWithCachePolicy(long ttlSeconds, long maxSize) throws Exception {
+        Constructor<VibeService> constructor;
+        try {
+            constructor = VibeService.class.getConstructor(
+                    MlServiceClient.class,
+                    LocationRepository.class,
+                    LocationService.class,
+                    MlResponseMapper.class,
+                    long.class,
+                    long.class);
+        } catch (NoSuchMethodException ex) {
+            fail("VibeService must expose cache TTL/max-size constructor for app.vibe.search-cache (512 default, 300 TTL)");
+            return vibeService;
+        }
+
+        return constructor.newInstance(
+                mlServiceClient,
+                locationRepository,
+                locationService,
+                mlResponseMapper,
+                ttlSeconds,
+                maxSize);
     }
 
     private MlSearchResponse mlSearchResponseWithLocation(
