@@ -18,6 +18,8 @@ _PRICE_FILTERS = {
     "luxury": {"expensive", "luxury"},
 }
 
+VALID_PRICE_RANGES = frozenset(_PRICE_FILTERS.keys())
+
 
 class SearchStartupError(Exception):
     """Controlled startup failure for search index construction."""
@@ -67,8 +69,8 @@ def _matches_price_range(row, price_range):
     if not price_range:
         return True
     allowed = _PRICE_FILTERS.get(str(price_range).lower())
-    if not allowed:
-        return True
+    if allowed is None:
+        return False
     price = str(row.get("price", "")).lower()
     return price in allowed
 
@@ -230,35 +232,46 @@ class SearchService:
             return []
 
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
-        candidate_count = min(
+        batch = min(
             len(self._df),
             max(limit * self._over_fetch_multiplier, limit + len(exclude_lower)),
         )
-        scores, positions = self._index.index.search(query_vector, candidate_count)
-
-        candidates = []
-        for position, score in zip(positions[0], scores[0]):
-            if position < 0:
-                continue
-            row_idx = int(self._index.row_ids[position])
-            candidates.append((row_idx, float(score)))
-
-        # Stable tie-breaking matches current_cosine_top_k enumeration order.
-        candidates.sort(key=lambda item: (-item[1], item[0]))
-
+        seen = set()
         results = []
-        for row_idx, score in candidates:
-            row = self._df.iloc[row_idx]
-            name = str(row.get("name", ""))
-            if name.lower() in exclude_lower:
-                continue
-            if not _matches_location_filter(row, location_filter):
-                continue
-            if not _matches_price_range(row, price_range):
-                continue
-            results.append(create_location_dto(row, score))
-            if len(results) >= limit:
+
+        while len(results) < limit and batch > 0:
+            scores, positions = self._index.index.search(query_vector, batch)
+
+            candidates = []
+            for position, score in zip(positions[0], scores[0]):
+                if position < 0:
+                    continue
+                row_idx = int(self._index.row_ids[position])
+                if row_idx in seen:
+                    continue
+                seen.add(row_idx)
+                candidates.append((row_idx, float(score)))
+
+            # Stable tie-breaking matches current_cosine_top_k enumeration order.
+            candidates.sort(key=lambda item: (-item[1], item[0]))
+
+            for row_idx, score in candidates:
+                if len(results) >= limit:
+                    break
+                row = self._df.iloc[row_idx]
+                name = str(row.get("name", ""))
+                if name.lower() in exclude_lower:
+                    continue
+                if not _matches_location_filter(row, location_filter):
+                    continue
+                if not _matches_price_range(row, price_range):
+                    continue
+                results.append(create_location_dto(row, score))
+
+            if batch >= len(self._df):
                 break
+            batch = min(len(self._df), batch * 2)
+
         return results
 
     def search(self, query_text, limit=10, location_filter=None, price_range=None):
