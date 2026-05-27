@@ -93,6 +93,20 @@ Services load artifacts from container paths. Repository paths above are bind-mo
 
 Docker Compose (`llm-service` service) sets these environment variables and mounts `./BackEnd/llm-service/data` to `/app/data`. Model files are baked into the image from the build context.
 
+For Gunicorn worker count, preload behavior, memory measurement commands, and Python 3.11 runtime notes, see [llm-runtime.md](llm-runtime.md).
+
+### LLM service runtime and FAISS index
+
+The LLM service builds a **FAISS vector index in memory at startup** from the committed `location_embeddings.npy` artifact and location catalog. This index enables cosine-similarity search without recomputing embeddings per request.
+
+| Artifact | Committed? | Notes |
+|----------|------------|-------|
+| `BackEnd/llm-service/data/location_embeddings.npy` | Yes (Git LFS) | Precomputed embedding matrix consumed at startup |
+| `BackEnd/llm-service/data/locations.csv` | Yes (Git) | Location catalog |
+| FAISS index files (`.faiss`, `.index`, generated `.npy`) | **No** | Built in-process; do not commit generated vector-index artifacts |
+
+Operators and CI should verify `git status` stays clean after LLM service startup — no new `.faiss`, `.index`, or generated `.npy` files should appear for commit.
+
 ### Busyness service (`BackEnd/busyness-service/predictor/busyness.py`)
 
 | Variable | Default runtime path (Compose) | Repository source | Consumer |
