@@ -1,538 +1,189 @@
-import numpy as np
-import pandas as pd
-import torch
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from sentence_transformers import SentenceTransformer, util
-import os
-from pathlib import Path
 import logging
-import time
+import os
+import sys
 import threading
 from typing import Optional
-import sys
-import hashlib
+
 import jwt
-from chat_service import get_ai_response as _chat_get_ai_response
+import numpy as np
+import pandas as pd
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 from jwt import InvalidTokenError
+from sentence_transformers import SentenceTransformer
 
-# Anchor: BackEnd/llm-service/ from app.py (D-10)
-_LLM_SERVICE_DIR = Path(__file__).parent.resolve()
+from cache_policy import BoundedTTLCache, generate_cache_key
+from chat_service import get_ai_response as _chat_get_ai_response
+from config import (
+    DATA_PATH,
+    EMBEDDINGS_PATH,
+    MODEL_PATH,
+    SEARCH_CACHE_MAX_ENTRIES,
+    SEARCH_CACHE_TTL_SECONDS,
+    SEARCH_OVERFETCH_MULTIPLIER,
+    parse_allowed_origins,
+)
+from loader import verify_file_paths
+from search_service import SearchService, SearchStartupError
 
-# Helper function for safe type conversion
-def _safe_to_int(value, default=0):
-    """Safely convert a value to an integer, handling pandas/numpy NaN."""
-    if pd.isna(value):
-        return default
-    try:
-        # Convert to float first to handle string representations of floats
-        return int(float(value))
-    except (ValueError, TypeError):
-        return default
-
-# Global constant for price mapping
-PRICE_MAP = {
-    'very cheap': 1, 'cheap': 2, 'moderate': 3, 'mid': 3,
-    'expensive': 4, 'very expensive': 5, 'luxury': 5
-}
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app, origins=parse_allowed_origins(), supports_credentials=False)
 
-def _parse_allowed_origins():
-    configured = os.getenv("FLASK_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
-    return [origin.strip() for origin in configured.split(",") if origin.strip()]
-
-CORS(app, origins=_parse_allowed_origins(), supports_credentials=False)
-
-# Global variables
 model: Optional[SentenceTransformer] = None
-df: Optional[pd.DataFrame] = None
-location_embeddings: Optional[torch.Tensor] = None
+search_service: Optional[SearchService] = None
 initialized = False
 initialization_error = None
 initialization_lock = threading.Lock()
+search_cache = BoundedTTLCache(SEARCH_CACHE_MAX_ENTRIES, SEARCH_CACHE_TTL_SECONDS)
 
-# Enhanced cache for search results with better key generation
-search_cache = {}
-SEARCH_CACHE_DURATION = 300  # 5 minutes
-MAX_CACHE_SIZE = 1000  # Maximum number of cached results
-
-def generate_cache_key(vibe_desc, max_results, location_filter=None, price_range=None):
-    """Generate a unique cache key for search parameters"""
-    key_parts = [
-        vibe_desc.lower().strip(),
-        str(max_results),
-        str(location_filter).lower() if location_filter else '',
-        str(price_range).lower() if price_range else ''
-    ]
-    key_string = '|'.join(key_parts)
-    return hashlib.md5(key_string.encode()).hexdigest()
 
 def cleanup_cache():
-    """Remove expired entries from cache"""
-    current_time = time.time()
-    expired_keys = [
-        key for key, value in search_cache.items()
-        if current_time - value['timestamp'] > SEARCH_CACHE_DURATION
-    ]
-    for key in expired_keys:
-        del search_cache[key]
-    
-    # If cache is still too large, remove oldest entries
-    if len(search_cache) > MAX_CACHE_SIZE:
-        sorted_items = sorted(search_cache.items(), key=lambda x: x[1]['timestamp'])
-        for key, _ in sorted_items[:len(sorted_items) - MAX_CACHE_SIZE]:
-            del search_cache[key]
+    """Compatibility hook; BoundedTTLCache evicts on get/set."""
+    return None
 
-def verify_file_paths():
-    """Verify that all required files exist before attempting to load them"""
-    model_path = os.getenv('MODEL_PATH', str(_LLM_SERVICE_DIR / 'models' / 'sentence-transformers'))
-    data_path = os.getenv('DATA_PATH', str(_LLM_SERVICE_DIR / 'data' / 'locations.csv'))
-    embeddings_path = os.getenv('EMBEDDINGS_PATH', str(_LLM_SERVICE_DIR / 'data' / 'location_embeddings.npy'))
-    
-    missing_files = []
-    
-    if not os.path.exists(model_path):
-        missing_files.append("MODEL_PATH")
-    if not os.path.exists(data_path):
-        missing_files.append("DATA_PATH")
-    if not os.path.exists(embeddings_path):
-        missing_files.append("EMBEDDINGS_PATH")
-    
-    if missing_files:
-        logger.error("Missing required files:")
-        for missing in missing_files:
-            logger.error("  - %s", missing)
-        logger.debug(
-            "Resolved paths: MODEL_PATH=%s DATA_PATH=%s EMBEDDINGS_PATH=%s",
-            model_path,
-            data_path,
-            embeddings_path,
-        )
-        return False, missing_files
-    
-    logger.info("All required files found")
-    return True, []
 
 def load_model():
-    """Load the sentence transformer model"""
+    """Load the sentence transformer model."""
     global model
     try:
-        model_path = os.getenv('MODEL_PATH', str(_LLM_SERVICE_DIR / 'models' / 'sentence-transformers'))
-        logger.info(f"Loading model from {model_path}")
-        
-        # Check if model files exist
-        config_path = os.path.join(model_path, 'config.json')
+        logger.info("Loading model from configured MODEL_PATH")
+        config_path = os.path.join(MODEL_PATH, "config.json")
         if not os.path.exists(config_path):
-            logger.error(f"Model config.json not found at {config_path}")
+            logger.error("Model config.json not found for MODEL_PATH")
             return False
-        
-        # Force CPU usage to avoid GPU-related issues in containers
-        model = SentenceTransformer(model_path, device='cpu')
+
+        model = SentenceTransformer(MODEL_PATH, device="cpu")
         logger.info("Model loaded successfully")
         return True
-    except Exception as e:
-        logger.error(f"Model loading failed: {str(e)}", exc_info=True)
-        
-        # Try to load from HuggingFace as fallback
+    except Exception as exc:
+        logger.error("Model loading failed: %s", exc, exc_info=True)
         try:
             logger.info("Attempting to load fallback model from HuggingFace...")
-            model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+            model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
             logger.warning("Loaded fallback model from HuggingFace")
             return True
-        except Exception as fallback_e:
-            logger.error(f"Fallback model loading also failed: {str(fallback_e)}")
+        except Exception as fallback_exc:
+            logger.error("Fallback model loading also failed: %s", fallback_exc)
             return False
 
+
 def load_data():
-    """Load location data and pre-computed embeddings"""
-    global df, location_embeddings
+    """Load location data and pre-computed embeddings."""
     try:
-        data_path = os.getenv('DATA_PATH', str(_LLM_SERVICE_DIR / 'data' / 'locations.csv'))
-        embeddings_path = os.getenv('EMBEDDINGS_PATH', str(_LLM_SERVICE_DIR / 'data' / 'location_embeddings.npy'))
-        
-        logger.info(f"Loading data from {data_path}")
-        df = pd.read_csv(data_path)
-        logger.info(f"Loaded {len(df)} locations")
-        
-        logger.info(f"Loading embeddings from {embeddings_path}")
-        location_embeddings = np.load(embeddings_path)
-        location_embeddings = torch.tensor(location_embeddings, dtype=torch.float32)
-        logger.info(f"Loaded embeddings with shape {location_embeddings.shape}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Data loading failed: {str(e)}", exc_info=True)
-        return False
+        logger.info("Loading data from configured DATA_PATH and EMBEDDINGS_PATH")
+        df = pd.read_csv(DATA_PATH)
+        logger.info("Loaded %s locations", len(df))
+
+        embeddings = np.load(EMBEDDINGS_PATH)
+        logger.info("Loaded embeddings with shape %s", embeddings.shape)
+        return df, embeddings
+    except Exception as exc:
+        logger.error("Data loading failed: %s", exc, exc_info=True)
+        return None, None
+
 
 def initialize_service():
-    """Initialize the ML service with model and data"""
-    global initialized, initialization_error
-    
+    """Initialize the ML service with model, data, and FAISS search."""
+    global initialized, initialization_error, search_service
+
     with initialization_lock:
         if initialized:
             return True
-            
+
         logger.info("Starting service initialization...")
-        
-        # Verify files first
+
         files_ok, missing_files = verify_file_paths()
         if not files_ok:
             initialization_error = f"Missing files: {missing_files}"
             return False
-        
-        # Load model and data
+
         model_ok = load_model()
-        data_ok = load_data()
-        
-        if model_ok and data_ok:
-            initialized = True
-            logger.info("Service initialization completed successfully")
-            return True
-        else:
+        df, embeddings = load_data()
+        if not model_ok or df is None or embeddings is None:
             initialization_error = "Failed to load model or data"
             return False
 
+        try:
+            search_service = SearchService.from_startup(
+                df=df,
+                embeddings=embeddings,
+                encoder=model,
+                over_fetch_multiplier=SEARCH_OVERFETCH_MULTIPLIER,
+            )
+        except SearchStartupError as exc:
+            initialization_error = str(exc)
+            logger.error("Search service startup failed: %s", exc)
+            return False
+
+        initialized = True
+        logger.info("Service initialization completed successfully")
+        return True
+
+
 @app.route("/health")
 def health():
-    """Health check endpoint"""
-    if not initialized:
-        return jsonify({
-            'status': 'unhealthy',
-            'initialized': False,
-            'error': initialization_error
-        }), 503
-    
-    # Check if all components are loaded
-    if model is None or df is None or location_embeddings is None:
-        return jsonify({
-            'status': 'unhealthy',
-            'initialized': False,
-            'error': 'Service components not properly loaded'
-        }), 503
-    
-    return jsonify({
-        'status': 'healthy',
-        'initialized': True,
-        'model_loaded': model is not None,
-        'data_loaded': df is not None,
-        'embeddings_loaded': location_embeddings is not None,
-        'total_locations': len(df) if df is not None else 0
-    })
-
-def _create_location_dto(loc_series, similarity_score=None):
-    """Create a location DTO from a pandas series"""
-    return {
-        'id': _safe_to_int(loc_series.get('id', 0)),
-        'name': str(loc_series.get('name', '')),
-        'address': str(loc_series.get('address', '')),
-        'latitude': float(loc_series.get('latitude', 0)),
-        'longitude': float(loc_series.get('longitude', 0)),
-        'type': str(loc_series.get('type', '')),
-        'price': str(loc_series.get('price', '')),
-        'rating': float(loc_series.get('rating', 0)),
-        'zone': str(loc_series.get('zone', '')),
-        'zoneId': _safe_to_int(loc_series.get('zoneId', 0)),
-        'similarity': float(similarity_score) if similarity_score is not None else None
-    }
-
-
-def find_similar_by_embedding(query_text, exclude_names=None, limit=5, candidate_indices=None):
-    """Find top similar locations by cosine similarity on precomputed embeddings."""
-    exclude_names = exclude_names or []
-    exclude_lower = {str(n).lower().strip() for n in exclude_names if n}
-
-    query_embedding = model.encode(query_text, convert_to_tensor=True).cpu()
-    similarities = util.cos_sim(query_embedding, location_embeddings)[0]
-    similarity_scores = similarities.cpu().numpy()
-
-    if candidate_indices is not None:
-        scored = [(idx, similarity_scores[idx]) for idx in candidate_indices]
-        scored.sort(key=lambda x: float(x[1]), reverse=True)
-        iter_pairs = scored
-    else:
-        k = min(len(df), max(limit + len(exclude_lower), limit * 2))
-        top_results = torch.topk(similarities, k=k)
-        iter_pairs = [
-            (idx.item(), val.item())
-            for val, idx in zip(top_results.values, top_results.indices)
-        ]
-
-    results = []
-    for idx, score in iter_pairs:
-        if len(results) >= limit:
-            break
-        loc = df.iloc[idx]
-        name = str(loc.get('name', ''))
-        if name.lower() in exclude_lower:
-            continue
-        results.append(_create_location_dto(loc, score))
-
-    confidence = float(results[0]['similarity']) if results else 0.0
-    return results, confidence
-
-if os.environ.get('FLASK_ENV') == 'development':
-    @app.route('/locations/all', methods=['GET'])
-    def get_all_locations():
-        """Get all locations (for debugging; development only)"""
-        if not initialized:
-            return jsonify({'error': 'Service not initialized'}), 503
-
-        locations = [df.iloc[i].to_dict() for i in range(len(df))]
-        return jsonify({'locations': locations})
-
-@app.route('/search', methods=['POST'])
-def vibe_search():
-    """Main search endpoint with enhanced caching"""
-    if not initialized:
-        return jsonify({
-            'success': False, 
-            'error': 'Service not initialized',
-            'details': initialization_error
-        }), 503
-    
-    # Ensure all components are loaded
-    if model is None or df is None or location_embeddings is None:
-        return jsonify({
-            'success': False,
-            'error': 'Service components not properly loaded'
-        }), 503
-
-    if not request.is_json:
-        return jsonify({
-            'success': False, 
-            'error': 'Content-Type must be application/json'
-        }), 415
-
-    try:
-        data = request.get_json()
-        logger.info(f"ML Service: Received /search request with payload: {data}")
-
-        vibe_desc = data.get('vibeDescription', '').strip()
-        max_results = data.get('maxResults', 10)
-        try:
-            max_results = int(max_results)
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'maxResults must be an integer'}), 400
-        max_results = max(1, min(max_results, 25))
-        location_filter = data.get('location', None)
-        price_range = data.get('priceRange', None)
-
-        # --- Enhanced Caching Logic ---
-        cache_key = generate_cache_key(vibe_desc, max_results, location_filter, price_range)
-        
-        # Clean up expired cache entries
-        cleanup_cache()
-        
-        # Check cache
-        if cache_key in search_cache:
-            cached_result = search_cache[cache_key]
-            if time.time() - cached_result['timestamp'] < SEARCH_CACHE_DURATION:
-                logger.info(f"Returning cached result for query: '{vibe_desc}'")
-                return jsonify(cached_result['response'])
-
-        if not vibe_desc:
-            return jsonify({
-                'success': False, 
-                'error': 'vibeDescription is required'
-            }), 400
-
-        # Start with all data
-        filtered_df = df.copy()
-
-        # Apply location filter
-        if location_filter:
-            logger.info(f"Applying location filter: {location_filter}")
-            filtered_df = filtered_df[
-                filtered_df['zone'].str.contains(location_filter, case=False, na=False)
-            ]
-
-        # Apply price filter
-        if price_range:
-            logger.info(f"Applying price filter: {price_range}")
-            price_map = {
-                'budget': ['very cheap', 'cheap'],
-                'mid': ['moderate', 'mid'],
-                'luxury': ['expensive', 'luxury']
+    """Health check endpoint."""
+    if not initialized or search_service is None:
+        return jsonify(
+            {
+                "status": "unhealthy",
+                "initialized": False,
+                "error": initialization_error,
             }
-            allowed_prices = price_map.get(price_range.lower(), None)
-            if allowed_prices:
-                price_pattern = '|'.join(allowed_prices)
-                filtered_df = filtered_df[
-                    filtered_df['price'].str.contains(price_pattern, case=False, na=False)
-                ]
+        ), 503
 
-        # Get indices of filtered locations
-        filtered_indices = filtered_df.index.tolist()
-        logger.info(f"Filtered to {len(filtered_indices)} locations")
-
-        if not filtered_indices:
-            response = {
-                'success': True,
-                'query': vibe_desc,
-                'results': [],
-                'explanation': "No locations found matching the specified filters.",
-                'confidence': None
-            }
-            
-            # Cache empty results too
-            search_cache[cache_key] = {
-                'timestamp': time.time(),
-                'response': response
-            }
-            
-            return jsonify(response)
-
-        logger.info(f"Encoding query: {vibe_desc}")
-        results, confidence_score = find_similar_by_embedding(
-            vibe_desc,
-            limit=max_results,
-            candidate_indices=filtered_indices,
-        )
-
-        response = {
-            'success': True,
-            'query': vibe_desc,
-            'results': results,
-            'explanation': f"Found {len(results)} locations matching your vibe and filters.",
-            'confidence': confidence_score
+    total_locations = len(search_service._df)
+    return jsonify(
+        {
+            "status": "healthy",
+            "initialized": True,
+            "model_loaded": model is not None,
+            "data_loaded": search_service is not None,
+            "embeddings_loaded": search_service is not None,
+            "total_locations": total_locations,
         }
+    )
 
-        # --- Cache Update ---
-        search_cache[cache_key] = {
-            'timestamp': time.time(),
-            'response': response
+
+def _service_unavailable_response():
+    return jsonify(
+        {
+            "success": False,
+            "error": "Service not initialized",
+            "details": initialization_error,
         }
+    ), 503
 
-        logger.info(f"ML Service: Returning {len(results)} results for query '{vibe_desc}' (cached)")
-        return jsonify(response)
 
-    except Exception as e:
-        logger.error(f"ML Service: Error in /search: {str(e)}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
+def _service_components_unavailable_response():
+    return jsonify(
+        {
+            "success": False,
+            "error": "Service components not properly loaded",
+        }
+    ), 503
 
-@app.route('/similar', methods=['POST'])
-def similar_locations():
-    """Find locations similar to a venue by name, zone, and type attributes."""
-    if not initialized:
-        return jsonify({
-            'success': False,
-            'error': 'Service not initialized',
-            'details': initialization_error
-        }), 503
-
-    if model is None or df is None or location_embeddings is None:
-        return jsonify({
-            'success': False,
-            'error': 'Service components not properly loaded'
-        }), 503
-
-    if not request.is_json:
-        return jsonify({
-            'success': False,
-            'error': 'Content-Type must be application/json'
-        }), 415
-
-    try:
-        data = request.get_json()
-        name = (data.get('name') or '').strip()
-        if not name:
-            return jsonify({
-                'success': False,
-                'error': 'name is required'
-            }), 400
-
-        zone = (data.get('zone') or '').strip()
-        loc_type = (data.get('loc_type') or '').strip()
-        summary = (data.get('summary') or '').strip()
-        tags = data.get('tags')
-
-        limit = data.get('limit', 5)
-        try:
-            limit = int(limit)
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'limit must be an integer'}), 400
-        limit = max(1, min(limit, 25))
-
-        query_parts = [name]
-        if zone:
-            query_parts.append(zone)
-        if loc_type:
-            query_parts.append(loc_type)
-        if summary:
-            query_parts.append(summary)
-        if tags:
-            if isinstance(tags, list):
-                query_parts.extend(str(t).strip() for t in tags if t)
-            elif isinstance(tags, str) and tags.strip():
-                query_parts.append(tags.strip())
-
-        query_text = ' '.join(query_parts)
-        results, confidence = find_similar_by_embedding(
-            query_text,
-            exclude_names=[name],
-            limit=limit,
-        )
-
-        return jsonify({
-            'success': True,
-            'results': results,
-            'confidence': confidence,
-        })
-
-    except Exception as e:
-        logger.error(f"ML Service: Error in /similar: {str(e)}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    """Global exception handler"""
-    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
-    return jsonify({
-        'success': False,
-        'error': 'Internal server error'
-    }), 500
-
-# Initialize service when module is loaded
-logger.info("Attempting to initialize ML service...")
-initialization_success = initialize_service()
-
-if not initialization_success:
-    logger.error(f"Service initialization failed: {initialization_error}")
-    # Don't exit - let the container start so we can debug via health endpoint
-
-# --- Chatbot Logic ---
 
 def _chat_search_helper(query, limit=5):
     """Return top similar locations as formatted chat retrieval context."""
-    if not initialized or model is None or df is None or location_embeddings is None:
+    if not initialized or search_service is None:
         return "Location search is not available at the moment."
 
     try:
-        query_embedding = model.encode(query, convert_to_tensor=True).cpu()
-        similarities = util.cos_sim(query_embedding, location_embeddings)[0]
-        top_results = torch.topk(similarities, k=limit)
+        results = search_service.search(query, limit=limit)
+        if not results:
+            return "No similar locations found."
 
         loc_info_parts = []
-        for _, idx in zip(top_results.values, top_results.indices):
-            loc = df.iloc[idx.item()]
-            loc_type = loc.get("loc_type", "") if hasattr(loc, "get") else loc["loc_type"]
+        for loc in results:
+            loc_type = loc.get("type", "")
             loc_info_parts.append(f"- {loc['name']} ({loc['zone']}): {loc_type}")
 
         return "Here are some similar locations:\n" + "\n".join(loc_info_parts)
@@ -549,39 +200,215 @@ def get_ai_response(query, previous_questions):
         search_helper=_chat_search_helper,
     )
 
-@app.route('/api/chat', methods=['POST'])
+
+if os.environ.get("FLASK_ENV") == "development":
+
+    @app.route("/locations/all", methods=["GET"])
+    def get_all_locations():
+        """Get all locations (for debugging; development only)."""
+        if not initialized or search_service is None:
+            return jsonify({"error": "Service not initialized"}), 503
+
+        locations = [search_service._df.iloc[i].to_dict() for i in range(len(search_service._df))]
+        return jsonify({"locations": locations})
+
+
+@app.route("/search", methods=["POST"])
+def vibe_search():
+    """Main search endpoint with bounded TTL caching."""
+    if not initialized or search_service is None:
+        return _service_unavailable_response()
+
+    if not request.is_json:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Content-Type must be application/json",
+            }
+        ), 415
+
+    try:
+        data = request.get_json()
+        logger.info("ML Service: Received /search request with payload: %s", data)
+
+        vibe_desc = data.get("vibeDescription", "").strip()
+        max_results = data.get("maxResults", 10)
+        try:
+            max_results = int(max_results)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "maxResults must be an integer"}), 400
+        max_results = max(1, min(max_results, 25))
+        location_filter = data.get("location", None)
+        price_range = data.get("priceRange", None)
+
+        cache_key = generate_cache_key(vibe_desc, max_results, location_filter, price_range)
+        cached_result = search_cache.get(cache_key)
+        if cached_result is not None:
+            logger.info("Returning cached result for query: '%s'", vibe_desc)
+            return jsonify(cached_result)
+
+        if not vibe_desc:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "vibeDescription is required",
+                }
+            ), 400
+
+        results = search_service.search(
+            vibe_desc,
+            limit=max_results,
+            location_filter=location_filter,
+            price_range=price_range,
+        )
+
+        if not results:
+            response = {
+                "success": True,
+                "query": vibe_desc,
+                "results": [],
+                "explanation": "No locations found matching the specified filters.",
+                "confidence": None,
+            }
+            search_cache.set(cache_key, response)
+            return jsonify(response)
+
+        confidence_score = float(results[0]["similarity"]) if results else None
+        response = {
+            "success": True,
+            "query": vibe_desc,
+            "results": results,
+            "explanation": f"Found {len(results)} locations matching your vibe and filters.",
+            "confidence": confidence_score,
+        }
+        search_cache.set(cache_key, response)
+
+        logger.info(
+            "ML Service: Returning %s results for query '%s' (cached)",
+            len(results),
+            vibe_desc,
+        )
+        return jsonify(response)
+
+    except Exception as exc:
+        logger.error("ML Service: Error in /search: %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+
+@app.route("/similar", methods=["POST"])
+def similar_locations():
+    """Find locations similar to a venue by name, zone, and type attributes."""
+    if not initialized or search_service is None:
+        return _service_unavailable_response()
+
+    if not request.is_json:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Content-Type must be application/json",
+            }
+        ), 415
+
+    try:
+        data = request.get_json()
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"success": False, "error": "name is required"}), 400
+
+        zone = (data.get("zone") or "").strip()
+        loc_type = (data.get("loc_type") or "").strip()
+        summary = (data.get("summary") or "").strip()
+        tags = data.get("tags")
+
+        limit = data.get("limit", 5)
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "limit must be an integer"}), 400
+        limit = max(1, min(limit, 25))
+
+        query_parts = [name]
+        if zone:
+            query_parts.append(zone)
+        if loc_type:
+            query_parts.append(loc_type)
+        if summary:
+            query_parts.append(summary)
+        if tags:
+            if isinstance(tags, list):
+                query_parts.extend(str(tag).strip() for tag in tags if tag)
+            elif isinstance(tags, str) and tags.strip():
+                query_parts.append(tags.strip())
+
+        query_text = " ".join(query_parts)
+        results = search_service.find_similar(
+            query_text,
+            exclude_names=[name],
+            limit=limit,
+        )
+        confidence = float(results[0]["similarity"]) if results else 0.0
+
+        return jsonify(
+            {
+                "success": True,
+                "results": results,
+                "confidence": confidence,
+            }
+        )
+
+    except Exception as exc:
+        logger.error("ML Service: Error in /similar: %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+
+@app.errorhandler(Exception)
+def handle_exception(exc):
+    """Global exception handler."""
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return jsonify({"success": False, "error": "Internal server error"}), 500
+
+
+logger.info("Attempting to initialize ML service...")
+initialization_success = initialize_service()
+
+if not initialization_success:
+    logger.error("Service initialization failed: %s", initialization_error)
+
+
+@app.route("/api/chat", methods=["POST"])
 def chat_endpoint():
-    """Chat endpoint for AI interactions"""
+    """Chat endpoint for AI interactions."""
     auth_error = validate_chat_jwt()
     if auth_error is not None:
         return auth_error
 
     if not request.is_json:
-        return jsonify({'error': 'Content-Type must be application/json'}), 415
-    
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+
     try:
         data = request.get_json()
-        query = data.get('message', '').strip()
-        previous_questions = data.get('previous_questions', [])
+        query = data.get("message", "").strip()
+        previous_questions = data.get("previous_questions", [])
         if not isinstance(previous_questions, list):
             previous_questions = []
-        previous_questions = [str(q) for q in previous_questions if q][-3:]
-        
+        previous_questions = [str(question) for question in previous_questions if question][-3:]
+
         if not query:
-            return jsonify({'error': 'Message is required'}), 400
-        
+            return jsonify({"error": "Message is required"}), 400
+
         response = get_ai_response(query, previous_questions)
-        return jsonify({'response': response})
-    except Exception as e:
-        logger.error(f"Error in chat endpoint: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({"response": response})
+    except Exception as exc:
+        logger.error("Error in chat endpoint: %s", exc)
+        return jsonify({"error": "Internal server error"}), 500
+
 
 def validate_chat_jwt():
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return chat_auth_error()
 
-    token = auth_header[len("Bearer "):].strip()
+    token = auth_header[len("Bearer ") :].strip()
     if not token:
         return chat_auth_error()
 
@@ -596,15 +423,18 @@ def validate_chat_jwt():
     except InvalidTokenError:
         return chat_auth_error()
 
-def chat_auth_error():
-    return jsonify({
-        "error": "Authentication required",
-        "message": "Authentication required",
-        "status": 401,
-        "code": "AUTHENTICATION_REQUIRED"
-    }), 401
 
-if __name__ == '__main__':
-    # Development server
+def chat_auth_error():
+    return jsonify(
+        {
+            "error": "Authentication required",
+            "message": "Authentication required",
+            "status": 401,
+            "code": "AUTHENTICATION_REQUIRED",
+        }
+    ), 401
+
+
+if __name__ == "__main__":
     logger.info("Running Flask development server...")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False)

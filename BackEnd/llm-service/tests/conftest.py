@@ -140,23 +140,56 @@ def _default_search_rows():
     ]
 
 
+def _row_to_result_dto(row, similarity):
+    return {
+        "id": row.get("id", 0),
+        "name": row.get("name", ""),
+        "address": row.get("address", ""),
+        "latitude": float(row.get("latitude", 0)),
+        "longitude": float(row.get("longitude", 0)),
+        "type": row.get("type", ""),
+        "price": row.get("price", ""),
+        "rating": float(row.get("rating", 0)),
+        "zone": row.get("zone", ""),
+        "zoneId": row.get("zoneId", 0),
+        "similarity": similarity,
+    }
+
+
+class _StubSearchService:
+    def __init__(self, rows):
+        self._df = _FakeDf(rows)
+
+    def search(self, query_text, limit=10, location_filter=None, price_range=None):
+        results = []
+        for index, row in enumerate(self._df._rows):
+            zone = str(row.get("zone", ""))
+            if location_filter and location_filter.lower() not in zone.lower():
+                continue
+            results.append(_row_to_result_dto(row, 0.9 - index * 0.05))
+            if len(results) >= limit:
+                break
+        return results
+
+    def find_similar(self, query_text, exclude_names=None, limit=5):
+        exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
+        results = []
+        for index, row in enumerate(self._df._rows):
+            name = str(row.get("name", ""))
+            if name.lower() in exclude_lower:
+                continue
+            results.append(_row_to_result_dto(row, 0.9 - index * 0.05))
+            if len(results) >= limit:
+                break
+        return results
+
+
 def _ready_chat_app(monkeypatch, rows=None, extra_env=None):
     row_data = rows or _default_search_rows()
     app_module = load_app(monkeypatch, extra_env=extra_env)
     app_module.initialized = True
-    app_module.model = types.SimpleNamespace(
-        encode=lambda query, convert_to_tensor=True: types.SimpleNamespace(
-            cpu=lambda: types.SimpleNamespace(numpy=lambda: [0.95, 0.85, 0.75])
-        )
-    )
-    app_module.location_embeddings = object()
-    app_module.df = _FakeDf(row_data)
-    app_module.torch = types.SimpleNamespace(
-        Tensor=object,
-        tensor=lambda *args, **kwargs: None,
-        float32=object(),
-        topk=_make_topk_stub(len(app_module.df)),
-    )
+    app_module.model = object()
+    app_module.search_service = _StubSearchService(row_data)
     return app_module
 
 
