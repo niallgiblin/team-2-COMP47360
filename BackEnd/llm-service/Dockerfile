@@ -32,12 +32,12 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
-# Copy only the necessary application code into the container
-COPY app.py .
+# Copy application modules into the container
+COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py ./
 
 # Copy the sentence transformer model into the image
 COPY models/ ./models/
 
 # Command to run the application using Gunicorn
 # Use --preload to load the app once before forking workers, which is essential for ML models.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--preload", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--preload", "--timeout", "120", "app:app"]
