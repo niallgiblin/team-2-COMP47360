@@ -118,6 +118,37 @@ describe('computeRoutes', () => {
     );
   });
 
+  test('returns service unavailable message on network failure', async () => {
+    fetch.mockRejectedValueOnce(new Error('Network error'));
+
+    const result = await computeRoutes({
+      origin: { lat: 40.7589, lng: -73.9851 },
+      destination: { lat: 40.7614, lng: -73.9778 },
+      travelMode: 'WALK',
+      apiKey: API_KEY,
+    });
+
+    expect(result.error).toBe(ROUTE_SERVICE_UNAVAILABLE);
+  });
+
+  test('returns service unavailable message when response JSON is invalid', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => {
+        throw new Error('Invalid JSON');
+      },
+    });
+
+    const result = await computeRoutes({
+      origin: { lat: 40.7589, lng: -73.9851 },
+      destination: { lat: 40.7614, lng: -73.9778 },
+      travelMode: 'WALK',
+      apiKey: API_KEY,
+    });
+
+    expect(result.error).toBe(ROUTE_SERVICE_UNAVAILABLE);
+  });
+
   test('returns configuration message when api key is missing', async () => {
     const result = await computeRoutes({
       origin: { lat: 40.7589, lng: -73.9851 },

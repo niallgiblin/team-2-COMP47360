@@ -53,21 +53,25 @@ async function postComputeRoutes({ requestBody, apiKey, fetchImpl = fetch }) {
     return { error: ROUTE_NOT_CONFIGURED };
   }
 
-  const response = await fetchImpl(GOOGLE_ROUTES_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': GOOGLE_ROUTES_FIELD_MASK,
-    },
-    body: JSON.stringify(requestBody),
-  });
+  try {
+    const response = await fetchImpl(GOOGLE_ROUTES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': GOOGLE_ROUTES_FIELD_MASK,
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return { error: ROUTE_SERVICE_UNAVAILABLE };
+    }
+
+    return await response.json();
+  } catch {
     return { error: ROUTE_SERVICE_UNAVAILABLE };
   }
-
-  return response.json();
 }
 
 export async function computeRoutes({
