@@ -45,8 +45,8 @@
 - [x] **ML-01**: LLM service startup, `/health`, `/search`, and `/api/chat` paths are covered by Python smoke tests.
 - [x] **ML-02**: Busyness service startup, `/health`, `/busyness`, live prediction, forecast, weather fallback, and normalization are covered by Python smoke tests.
 - [x] **ML-03**: ML service caches have explicit maximum size, TTL, and invalidation or refresh behavior.
-- [ ] **ML-04**: LLM service worker and memory behavior is measured or documented for the current Gunicorn preload configuration.
-- [ ] **ML-05**: Python runtime versions are aligned or explicitly justified with compatibility notes and smoke-test coverage.
+- [x] **ML-04**: LLM service worker and memory behavior is measured or documented for the current Gunicorn preload configuration.
+- [x] **ML-05**: Python runtime versions are aligned or explicitly justified with compatibility notes and smoke-test coverage.
 - [x] **ML-06**: Keras model compatibility is verified by startup tests for every required model artifact.
 
 ### Frontend Map, Routing, and Forecast Correctness
@@ -140,8 +140,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ML-01 | Phase 5 | Complete |
 | ML-02 | Phase 6 | Complete |
 | ML-03 | Phase 6 | Complete |
-| ML-04 | Phase 7 | Pending |
-| ML-05 | Phase 7 | Pending |
+| ML-04 | Phase 7 | Complete |
+| ML-05 | Phase 7 | Complete |
 | ML-06 | Phase 6 | Complete |
 | MAP-01 | Phase 8 | Pending |
 | MAP-02 | Phase 8 | Pending |

@@ -282,10 +282,10 @@ Plans:
 - [x] 07-04-PLAN.md — Caffeine bounded Java vibe search cache
 
 **Wave 2** *(depends on Python search foundation)*
-- [ ] 07-03-PLAN.md — Flask route integration and chat/cache/config extraction
+- [x] 07-03-PLAN.md — Flask route integration and chat/cache/config extraction
 
 **Wave 3** *(depends on Python route integration and Java cache)*
-- [ ] 07-05-PLAN.md — Python runtime, Gunicorn memory docs, Docker smoke gates
+- [x] 07-05-PLAN.md — Python runtime, Gunicorn memory docs, Docker smoke gates
 
 **Work outline:**
 - Measure or document resident memory behavior under current Gunicorn `--preload` and worker settings.
