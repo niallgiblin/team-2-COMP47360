@@ -344,6 +344,7 @@ class VibeControllerTest {
         loc3.setInformation("Info C");
         loc3.setSummary("Summary C");
         loc3.setTags("");
+        loc3.setZone("Alphabet City");
         loc3.setIsBar(true);
 
         Location loc4 = new Location();
@@ -355,6 +356,7 @@ class VibeControllerTest {
         loc4.setInformation("Info B");
         loc4.setSummary("Summary B");
         loc4.setTags("");
+        loc4.setZone("Central Park");
         loc4.setIsRestaurant(true);
 
         LocationDto dto1 = LocationDto.fromLocation(loc3);
@@ -376,9 +378,13 @@ class VibeControllerTest {
             .andExpect(jsonPath("$.locations[0].id").value(4))
             .andExpect(jsonPath("$.locations[0].name").value("locA"))
             .andExpect(jsonPath("$.locations[0].type").value("Bar"))
+            .andExpect(jsonPath("$.locations[0].zone").value("Alphabet City"))
+            .andExpect(jsonPath("$.locations[0].zoneId").doesNotExist())
             .andExpect(jsonPath("$.locations[1].id").value(5))
             .andExpect(jsonPath("$.locations[1].name").value("locB"))
             .andExpect(jsonPath("$.locations[1].type").value("Restaurant"))
+            .andExpect(jsonPath("$.locations[1].zone").value("Central Park"))
+            .andExpect(jsonPath("$.locations[1].zoneId").doesNotExist())
             .andExpect(jsonPath("$.busyness.zone1").value(5.0))
             .andExpect(jsonPath("$.busyness.zone2").value(3.5));
     }
