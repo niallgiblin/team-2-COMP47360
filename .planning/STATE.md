@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-05-27T20:11:30.000Z"
-last_activity: 2026-05-27 -- Completed 08-01 Wave 0 validation tests
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-05-27T19:13:00.000Z"
+last_activity: 2026-05-27
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 40
-  completed_plans: 30
-  percent: 75
+  completed_plans: 31
+  percent: 78
 ---
 
 # GSD State
@@ -19,7 +19,7 @@ progress:
 ## Current Position
 
 Phase: 08 (map-forecast-routing-and-external-api-correctness) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-05-27
 
@@ -74,6 +74,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 08]: Wave 0 red tests lock map/forecast/route contracts before MapView extraction (plan 08-01).
 - [Phase 08]: MapView integration tests import pages/MapView and assert UI-SPEC route copy (plan 08-01).
 - [Phase 08]: Vitest config uses @vitejs/plugin-react for page component JSX tests (plan 08-01).
+- [Phase 08]: Default forecast fallback returns exactly 12 hourly America/New_York ISO strings starting next hour (plan 08-02).
+- [Phase 08]: Backend zoneId is string-normalized and skips Turf polygon lookup when present (plan 08-02).
 
 ## Blockers
 
@@ -81,8 +83,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-27T20:11:30.000Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-05-27T19:13:00.000Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
 
 ## Notes
