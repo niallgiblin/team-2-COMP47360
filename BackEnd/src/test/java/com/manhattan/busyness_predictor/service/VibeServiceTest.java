@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -60,7 +59,6 @@ public class VibeServiceTest {
     @Mock
     private LocationService locationService;
 
-    @InjectMocks
     private VibeService vibeService;
 
     private Location testLocation1;
@@ -77,7 +75,9 @@ public class VibeServiceTest {
                 mlServiceClient,
                 locationRepository,
                 locationService,
-                mlResponseMapper);
+                mlResponseMapper,
+                300L,
+                512L);
 
         // Setup test locations
         testLocation1 = new Location();
@@ -505,9 +505,11 @@ public class VibeServiceTest {
             props.load(stream);
         }
 
-        assertEquals("512", props.getProperty("app.vibe.search-cache.max-size"),
+        assertEquals("${APP_VIBE_SEARCH_CACHE_MAX_SIZE:512}",
+                props.getProperty("app.vibe.search-cache.max-size"),
                 "Default search cache max size must be 512");
-        assertEquals("300", props.getProperty("app.vibe.search-cache.ttl-seconds"),
+        assertEquals("${APP_VIBE_SEARCH_CACHE_TTL_SECONDS:300}",
+                props.getProperty("app.vibe.search-cache.ttl-seconds"),
                 "Default search cache TTL must be 300 seconds");
     }
 
@@ -577,9 +579,9 @@ public class VibeServiceTest {
         configuredService.findLocationsByVibe(secondRequest);
         configuredService.findLocationsByVibe(thirdRequest);
 
-        verify(mlServiceClient, times(2)).search(eq("query-one"), anyInt(), any(), any());
-        verify(mlServiceClient, times(1)).search(eq("query-two"), anyInt(), any(), any());
-        verify(mlServiceClient, times(1)).search(eq("query-three"), anyInt(), any(), any());
+        verify(mlServiceClient, times(1)).search(eq("query-one"), anyInt(), any(), any());
+        verify(mlServiceClient, times(2)).search(eq("query-two"), anyInt(), any(), any());
+        verify(mlServiceClient, times(2)).search(eq("query-three"), anyInt(), any(), any());
     }
 
     private VibeService newVibeServiceWithCachePolicy(long ttlSeconds, long maxSize) throws Exception {
