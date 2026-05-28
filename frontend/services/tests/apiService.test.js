@@ -219,6 +219,20 @@ describe('production-style relative routes', () => {
     expect(vibeAPI.mapDataUrl()).toBe('/api/vibe/map-data')
   })
 
+  test('vibeAPI.mapDataUrl with bbox appends query string', () => {
+    const url = vibeAPI.mapDataUrl({
+      minLat: 40.7,
+      maxLat: 40.86,
+      minLng: -74.05,
+      maxLng: -73.92,
+    })
+    expect(url).toContain('minLat=')
+    expect(url).toContain('maxLat=')
+    expect(url).toContain('minLng=')
+    expect(url).toContain('maxLng=')
+    expect(url).toMatch(/\/api\/vibe\/map-data\?/)
+  })
+
   test('vibeAPI.trendingUrl resolves to /api/vibe/trending', () => {
     expect(vibeAPI.trendingUrl()).toBe('/api/vibe/trending')
   })

@@ -143,7 +143,19 @@ export const planAPI = {
 // Vibe API — URL builders for vibe/search endpoints (path-builder foundation, D-09)
 export const vibeAPI = {
   searchUrl: () => joinApiPath(resolveApiBaseUrl(), '/vibe/search'),
-  mapDataUrl: () => joinApiPath(resolveApiBaseUrl(), '/vibe/map-data'),
+  mapDataUrl: (bbox) => {
+    const base = joinApiPath(resolveApiBaseUrl(), '/vibe/map-data');
+    if (bbox == null) {
+      return base;
+    }
+    const params = new URLSearchParams({
+      minLat: String(bbox.minLat),
+      maxLat: String(bbox.maxLat),
+      minLng: String(bbox.minLng),
+      maxLng: String(bbox.maxLng),
+    });
+    return `${base}?${params.toString()}`;
+  },
   trendingUrl: () => joinApiPath(resolveApiBaseUrl(), '/vibe/trending'),
 };
 
