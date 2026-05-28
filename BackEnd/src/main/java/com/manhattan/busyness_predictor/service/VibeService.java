@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.Optional;
-import java.time.Instant;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,22 +42,25 @@ public class VibeService {
     // Cache for search results
     private final Cache<String, VibeSearchResponse> searchCache;
 
-    // Cache for busyness data
-    private Map<String, Double> busynessCache = new HashMap<>();
-    private Instant lastBusynessFetch = null;
-    private static final long BUSYNESS_CACHE_DURATION_SECONDS = 600; // 10 minutes
+    // Cache for busyness data (single logical report entry)
+    private final Cache<String, Map<String, Double>> busynessCache;
 
-    // Cache for map data
-    private VibeSearchResponse cachedMapData = null;
-    private Instant lastMapDataFetch = null;
-    private static final long MAP_DATA_CACHE_DURATION_SECONDS = 300; // 5 minutes
+    // Cache for map data (full corpus or bbox-keyed viewport subsets)
+    private final Cache<String, VibeSearchResponse> mapDataCache;
+
+    private static final String BUSYNESS_CACHE_KEY = "report";
+    private static final String MAP_DATA_FULL_KEY = "full";
+    private static final int COORD_DECIMALS = 4;
 
     public VibeService(MlServiceClient mlServiceClient,
             LocationRepository locationRepository,
             LocationService locationService,
             MlResponseMapper mlResponseMapper,
             @Value("${app.vibe.search-cache.ttl-seconds:300}") long searchCacheTtlSeconds,
-            @Value("${app.vibe.search-cache.max-size:512}") long searchCacheMaxSize) {
+            @Value("${app.vibe.search-cache.max-size:512}") long searchCacheMaxSize,
+            @Value("${app.vibe.busyness-cache.ttl-seconds:600}") long busynessCacheTtlSeconds,
+            @Value("${app.vibe.map-data-cache.ttl-seconds:300}") long mapDataCacheTtlSeconds,
+            @Value("${app.vibe.map-data-cache.max-size:64}") long mapDataCacheMaxSize) {
         this.mlServiceClient = mlServiceClient;
         this.locationRepository = locationRepository;
         this.locationService = locationService;
@@ -66,6 +68,16 @@ public class VibeService {
         this.searchCache = Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofSeconds(searchCacheTtlSeconds))
                 .maximumSize(searchCacheMaxSize)
+                .executor(Runnable::run)
+                .build();
+        this.busynessCache = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofSeconds(busynessCacheTtlSeconds))
+                .maximumSize(2)
+                .executor(Runnable::run)
+                .build();
+        this.mapDataCache = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofSeconds(mapDataCacheTtlSeconds))
+                .maximumSize(mapDataCacheMaxSize)
                 .executor(Runnable::run)
                 .build();
     }
@@ -148,6 +160,13 @@ public class VibeService {
             logger.info("Fetching all locations and busyness data for map.");
         }
 
+        String cacheKey = mapDataCacheKey(minLat, maxLat, minLng, maxLng);
+        VibeSearchResponse cached = mapDataCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            logger.info("Using cached map data for key {}", cacheKey);
+            return cached;
+        }
+
         List<Location> locations = bboxActive
                 ? locationRepository.findByLatBetweenAndLngBetween(minLat, maxLat, minLng, maxLng)
                 : locationService.getAllLocations();
@@ -168,7 +187,21 @@ public class VibeService {
         String explanation = "Complete location data for map view.";
         double confidence = 1.0;
 
-        return buildResponse(locations, explanation, confidence, liveBusyness, forecast);
+        VibeSearchResponse response = buildResponse(locations, explanation, confidence, liveBusyness, forecast);
+        mapDataCache.put(cacheKey, response);
+        return response;
+    }
+
+    private String mapDataCacheKey(Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        if (minLat == null || maxLat == null || minLng == null || maxLng == null) {
+            return MAP_DATA_FULL_KEY;
+        }
+        return String.format("bbox:%s,%s,%s,%s",
+                roundCoord(minLat), roundCoord(maxLat), roundCoord(minLng), roundCoord(maxLng));
+    }
+
+    private String roundCoord(double value) {
+        return String.format("%." + COORD_DECIMALS + "f", value);
     }
 
     private void validateBbox(Double minLat, Double maxLat, Double minLng, Double maxLng) {
@@ -207,28 +240,26 @@ public class VibeService {
     }
 
     public Map<String, Double> getLiveBusyness() {
-        // Check if we have recent busyness data in cache
-        if (lastBusynessFetch != null && 
-            Instant.now().isBefore(lastBusynessFetch.plusSeconds(BUSYNESS_CACHE_DURATION_SECONDS)) &&
-            !busynessCache.isEmpty()) {
+        Map<String, Double> cached = busynessCache.getIfPresent(BUSYNESS_CACHE_KEY);
+        if (cached != null) {
             logger.info("Using cached busyness data");
-            return busynessCache;
+            return cached;
         }
 
         try {
             BusynessReportDto report = mlServiceClient.fetchBusynessReport();
             Map<String, Double> newBusyness = mlResponseMapper.toPredictions(report);
             if (!newBusyness.isEmpty()) {
-                busynessCache = new HashMap<>(newBusyness);
-                lastBusynessFetch = Instant.now();
+                busynessCache.put(BUSYNESS_CACHE_KEY, new HashMap<>(newBusyness));
                 logger.info("Updated busyness cache with {} entries", newBusyness.size());
                 return newBusyness;
             }
         } catch (Exception e) {
             logger.error("Failed to fetch busyness data: {}", e.getMessage());
         }
-        
-        return busynessCache.isEmpty() ? new HashMap<>() : busynessCache;
+
+        cached = busynessCache.getIfPresent(BUSYNESS_CACHE_KEY);
+        return cached != null ? cached : new HashMap<>();
     }
 
     private List<Location> fetchMLRecommendations(
