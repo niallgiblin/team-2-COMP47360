@@ -2,6 +2,7 @@ package com.manhattan.busyness_predictor.controller;
 
 import com.manhattan.busyness_predictor.dto.LocationDto;
 import com.manhattan.busyness_predictor.model.Location;
+import com.manhattan.busyness_predictor.security.RateLimitService;
 import com.manhattan.busyness_predictor.service.HistoryService;
 import com.manhattan.busyness_predictor.service.LocationService;
 import com.manhattan.busyness_predictor.service.ReviewService;
@@ -57,6 +58,9 @@ class LocationControllerTest {
 
     @MockBean
     private SharedService sharedService;
+
+    @MockBean
+    private RateLimitService rateLimitService;
 
     @MockBean
     private HistoryService historyService;
