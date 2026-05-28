@@ -35,7 +35,7 @@ import { useBusyness } from "../context/BusynessContext";
 import { STORAGE_KEYS } from "../utils/storageUtils";
 import { authFetch, vibeAPI } from "../../services/apiService";
 
-import { getFallbackForecastTimestamps } from "../utils/forecastTimes";
+import { registerModuleCacheClear } from "../cache/invalidateClientCaches";
 import { enrichVenuesWithZones } from "../utils/zoneEnrichment";
 import {
   computeRoute,
@@ -47,7 +47,7 @@ import {
   buildFallbackPolyline,
   FALLBACK_POLYLINE_NOTICE,
 } from "../utils/routeNormalizer";
-import { createRouteSegmentCache } from "../utils/routeSegmentCache";
+import { routeSegmentCache } from "../utils/routeSegmentCache";
 import {
   createBoundedCache,
   DEFAULT_MAP_BBOX,
@@ -72,7 +72,7 @@ export function clearMapDataCache() {
   mapDataCache.clear();
 }
 
-const routeSegmentCache = createRouteSegmentCache();
+registerModuleCacheClear(clearMapDataCache);
 
 async function fetchCachedSegment(origin, destination, mode, apiKey) {
   const cached = routeSegmentCache.get(origin, destination, mode);

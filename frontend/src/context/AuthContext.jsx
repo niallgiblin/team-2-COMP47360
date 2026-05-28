@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
+import { invalidateClientCaches } from '../cache/invalidateClientCaches';
 
 export const AuthContext = createContext(null);
 
@@ -15,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(() => {
+    invalidateClientCaches();
     setUser(null);
     setToken(null);
     setIsAuthenticated(false);

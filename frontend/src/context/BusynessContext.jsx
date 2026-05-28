@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { authFetch, vibeAPI } from '../../services/apiService';
 import {
   BUSYNESS_SESSION_TTL_MS,
   BUSYNESS_SESSION_MAX_BYTES,
 } from '../utils/boundedCache';
+import { registerBusynessClear } from '../cache/invalidateClientCaches';
 import { useAuth } from '../hooks/useAuth';
 
 const BusynessContext = createContext();
@@ -263,15 +264,19 @@ export const BusynessProvider = ({ children }) => {
     return "Quiet";
   };
 
-  const clearCache = () => {
+  const clearCache = useCallback(() => {
     setBusynessData(null);
     setPredictionData(null);
     setVenueData(null);
     setLastFetchTime(null);
     setIsInitialized(false);
     sessionStorage.removeItem(cacheKey);
-    
-  };
+  }, [cacheKey]);
+
+  useEffect(() => {
+    registerBusynessClear(clearCache);
+    return () => registerBusynessClear(null);
+  }, [clearCache]);
 
   const value = {
     busynessData,

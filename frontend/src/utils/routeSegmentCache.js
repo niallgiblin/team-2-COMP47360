@@ -79,3 +79,5 @@ export function createRouteSegmentCache({
     },
   };
 }
+
+export const routeSegmentCache = createRouteSegmentCache();
