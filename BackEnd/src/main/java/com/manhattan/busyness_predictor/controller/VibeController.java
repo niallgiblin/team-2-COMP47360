@@ -67,11 +67,14 @@ public class VibeController {
             @RequestParam(required = false) Double minLng,
             @RequestParam(required = false) Double maxLng) {
         VibeSearchResponse response;
-        if (minLat == null || maxLat == null || minLng == null || maxLng == null) {
-            response = vibeService.getMapData();
-        } else {
-            response = vibeService.getMapData(minLat, maxLat, minLng, maxLng);
+        boolean anyBbox = minLat != null || maxLat != null || minLng != null || maxLng != null;
+        boolean allBbox = minLat != null && maxLat != null && minLng != null && maxLng != null;
+        if (anyBbox && !allBbox) {
+            throw new IllegalArgumentException("bbox: all four params (minLat, maxLat, minLng, maxLng) are required");
         }
+        response = allBbox
+                ? vibeService.getMapData(minLat, maxLat, minLng, maxLng)
+                : vibeService.getMapData();
 
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Map data fetched successfully");
