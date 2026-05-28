@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
-status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-05-28T13:20:56.569Z"
+status: verifying
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-05-28T13:22:54.047Z"
 last_activity: 2026-05-28
 progress:
   total_phases: 10
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 46
-  completed_plans: 39
-  percent: 85
+  completed_plans: 40
+  percent: 87
 ---
 
 # GSD State
@@ -20,7 +20,7 @@ progress:
 
 Phase: 09 (persistence-import-and-auth-flow-safety) — EXECUTING
 Plan: 5 of 5
-Status: Plan 09-05 complete
+Status: Phase complete — ready for verification
 Last activity: 2026-05-28
 
 ## Project Reference
@@ -86,6 +86,7 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 09]: Location CSV import every startup; user seed empty-table skip unchanged (plan 09-03, D-14).
 - [Phase 09]: PlanController uses @AuthenticationPrincipal; session getCurrentUser() removed (plan 09-05, D-15/D-18).
 - [Phase 09]: PlanControllerTest hydrates SecurityContext from test repository attribute for .with(authentication()) (plan 09-05, D-17).
+- [Phase 09]: Parameterized Location constructor removed; setter-only construction enforced (plan 09-04, D-11/D-12/D-13).
 
 ## Blockers
 
@@ -93,8 +94,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-28T13:20:56.564Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-05-28T13:22:54.043Z
+Stopped at: Completed 09-04-PLAN.md
 Resume file: None
 
 ## Notes

@@ -370,7 +370,7 @@ Plans:
 - [x] 09-05-PLAN.md — PlanController @AuthenticationPrincipal + test alignment (DATA-04)
 
 **Wave 3** *(depends on 09-03)*
-- [ ] 09-04-PLAN.md — Remove broken Location constructor (DATA-03)
+- [x] 09-04-PLAN.md — Remove broken Location constructor (DATA-03)
 
 **Work outline:**
 - Introduce an explicit database migration tool and baseline migration for current schema assumptions.
