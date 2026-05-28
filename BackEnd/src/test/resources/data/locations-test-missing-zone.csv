@@ -1,0 +1,3 @@
+id,lat,long,name,addr,uri,reviews,num_reviews,loc_type,description,price,zone,Info,summary,tags
+90002,40.7128,-74.0060,Valid Zone Venue,123 Main St,http://example.com/,Rating: 4.5,100,Culture,valid description,1,Lower East Side,info,summary,tags
+90003,40.7130,-74.0062,Missing Zone Venue,456 Oak St,http://example.com/,Rating: 4.0,50,Culture,desc,1,,info,summary,tags

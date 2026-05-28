@@ -1,0 +1,2 @@
+id,lat,long,name,addr,uri,reviews,num_reviews,loc_type,description,price,zone,Info,summary,tags
+90001,40.7128,-74.0060,Quoted Comma Venue,"123 Main St, Suite 4, New York, NY",http://example.com/,Rating: 4.5,100,Culture,"A venue with ""embedded"" quotes in description",1,Greenwich Village,Info text,Summary text,"museum, history"
