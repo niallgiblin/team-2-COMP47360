@@ -164,6 +164,15 @@ public class VibeService {
         VibeSearchResponse cached = mapDataCache.getIfPresent(cacheKey);
         if (cached != null) {
             logger.info("Using cached map data for key {}", cacheKey);
+            Map<String, Double> liveBusyness = getLiveBusyness();
+            if (bboxActive) {
+                Set<String> zones = cached.getLocations().stream()
+                        .map(LocationDto::getZone)
+                        .filter(z -> z != null && !z.isBlank())
+                        .collect(Collectors.toSet());
+                liveBusyness = filterBusynessByZones(liveBusyness, zones);
+            }
+            cached.setBusyness(liveBusyness);
             return cached;
         }
 
