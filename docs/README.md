@@ -95,6 +95,17 @@ Once everything is running:
 - **Frontend (Web App):** http://localhost:5173
 - **Backend API:** [http://localhost:8080](http://localhost:8080)
 
+### Reset database schema (development)
+
+When Flyway baseline or migrations change, reset the MySQL volume and restart:
+
+```bash
+docker compose down -v
+docker compose up -d db backend
+```
+
+Flyway applies migrations on backend startup; Hibernate uses `ddl-auto=validate`.
+
 ## Common Docker Commands
 
 ### Starting the Application
