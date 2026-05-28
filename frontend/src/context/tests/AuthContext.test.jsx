@@ -2,18 +2,31 @@ import { vi } from 'vitest';
 import React, { useContext } from 'react';
 import { render, act, waitFor } from '@testing-library/react';
 import { AuthProvider, AuthContext } from '../AuthContext';
+import { BusynessProvider } from '../BusynessContext';
+import * as invalidateModule from '../../cache/invalidateClientCaches';
 
 const mockNavigate = vi.fn();
+const invalidateClientCachesSpy = vi.spyOn(invalidateModule, 'invalidateClientCaches');
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+vi.mock('../../services/apiService', () => ({
+  authFetch: vi.fn(),
+  vibeAPI: {
+    mapDataUrl: () => '/api/vibe/map-data',
+    trendingUrl: () => '/api/vibe/trending',
+  },
+}));
+
 // Mock localStorage with a store object
 let store = {};
+let sessionStore = {};
 
 beforeAll(() => {
   store = {};
+  sessionStore = {};
   Object.defineProperty(window, 'localStorage', {
     value: {
       getItem: vi.fn((key) => store[key] || null),
@@ -29,6 +42,21 @@ beforeAll(() => {
     },
     writable: true,
   });
+  Object.defineProperty(window, 'sessionStorage', {
+    value: {
+      getItem: vi.fn((key) => sessionStore[key] || null),
+      setItem: vi.fn((key, value) => {
+        sessionStore[key] = value.toString();
+      }),
+      removeItem: vi.fn((key) => {
+        delete sessionStore[key];
+      }),
+      clear: vi.fn(() => {
+        sessionStore = {};
+      }),
+    },
+    writable: true,
+  });
 });
 
 // Global fetch mock
@@ -36,8 +64,10 @@ global.fetch = vi.fn();
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   vi.clearAllMocks();
   fetch.mockReset();
+  invalidateClientCachesSpy.mockClear();
 
   fetch.mockResolvedValue({
     ok: true,
@@ -103,6 +133,66 @@ describe('AuthContext', () => {
     await waitFor(() => {
       expect(capturedAuth.isAuthenticated).toBe(false)
     })
+
+    expect(invalidateClientCachesSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('logout invokes invalidateClientCaches before navigating to login (D-10)', async () => {
+    store['token'] = 'valid-token'
+    store['user'] = JSON.stringify({ id: 1, name: 'Test' })
+
+    let capturedAuth
+    const action = (auth) => { capturedAuth = auth }
+
+    render(
+      <AuthProvider>
+        <TestComponent action={action} />
+      </AuthProvider>
+    )
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    await act(async () => {
+      capturedAuth.logout()
+    })
+
+    expect(invalidateClientCachesSpy).toHaveBeenCalledTimes(1)
+    expect(mockNavigate).toHaveBeenCalledWith('/login')
+  })
+
+  test('logout with BusynessProvider clears venueBusynessCache_v3 from sessionStorage (D-10)', async () => {
+    store['token'] = 'valid-token'
+    store['user'] = JSON.stringify({ id: 1, name: 'Test' })
+    sessionStore['venueBusynessCache_v3'] = JSON.stringify({
+      busynessData: [],
+      predictionData: [{ hour: 1 }],
+      venueData: [],
+      lastFetchTime: Date.now(),
+    })
+
+    let capturedAuth
+    const action = (auth) => { capturedAuth = auth }
+
+    render(
+      <AuthProvider>
+        <BusynessProvider>
+          <TestComponent action={action} />
+        </BusynessProvider>
+      </AuthProvider>
+    )
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    await act(async () => {
+      capturedAuth.logout()
+    })
+
+    expect(invalidateClientCachesSpy).toHaveBeenCalledTimes(1)
+    expect(sessionStore['venueBusynessCache_v3']).toBeUndefined()
   })
 
   test('login sets user, token, and localStorage', async () => {
