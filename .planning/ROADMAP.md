@@ -363,7 +363,7 @@ Plans:
 - [x] 09-01-PLAN.md — CSV fixtures, LocationCsvImporter red tests, LocationFieldPreservationTest (DATA-02, DATA-03)
 
 **Wave 1** *(depends on Wave 0)*
-- [ ] 09-02-PLAN.md — Flyway V1 baseline, validate mode, migration smoke (DATA-01)
+- [x] 09-02-PLAN.md — Flyway V1 baseline, validate mode, migration smoke (DATA-01)
 
 **Wave 2** *(depends on Wave 0–1; parallel — no shared files)*
 - [ ] 09-03-PLAN.md — OpenCSV LocationCsvImporter + DataInitializer delegation (DATA-02)
