@@ -144,3 +144,51 @@ Related requirements: DEP-01, DEP-02.
 | `02-02` | API client service (relative URLs, axios instance) | DEP-02 |
 | `02-03` | Baseline-verification update and integration test gates | DEP-01, DEP-02, TEST-01 |
 
+## Phase 10 Verification Gates
+
+Added by Phase 10 Plan 05 (`10-05`). Covers production-like Compose smoke (TEST-05), cache audit trail (MAINT-05), and PERF-05 deferral evidence. This is a **manual/slow tier** — not a Phase 1 metadata gate.
+
+Related requirements: TEST-05, MAINT-05, PERF-05. Cache details: [cache-inventory.md](cache-inventory.md).
+
+### Primary smoke command (manual/slow)
+
+| Command | Prerequisites | Expected outcome | Owner file | Requirement IDs | Phase 10 gate |
+|---------|---------------|------------------|------------|-----------------|---------------|
+| `bash scripts/compose-smoke.sh` | Docker daemon running; populated `.env` with `APP_JWT_SECRET`, `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `HF_TOKEN`, `VITE_GOOGLE_API_KEY` (variable names only — never commit values) | Exit 0; stdout ends with `all checks passed` | `scripts/compose-smoke.sh` | TEST-05 | **Not required** (manual/slow) |
+| `rtk bash scripts/compose-smoke.sh` | Same as above (project RTK wrapper per AGENTS.md) | Same as above | `scripts/compose-smoke.sh` | TEST-05 | **Not required** (manual/slow) |
+| `bash scripts/compose-smoke.sh --teardown` | Same as above | Exit 0; stack torn down after checks | `scripts/compose-smoke.sh` | TEST-05 | **Not required** (manual/slow) |
+
+The script brings up `docker compose --profile prod up -d --build`, waits up to 300s for health, then verifies:
+
+1. Spring Actuator — `curl -sf http://localhost:8080/actuator/health`
+2. LLM service — `docker compose exec -T llm-service curl -sf http://localhost:5000/health`
+3. Busyness service — `docker compose exec -T busyness-service curl -sf http://localhost:5000/health`
+4. Prod Nginx static root — `curl -sfI http://localhost:80` (HTTP 200; must not include Vite or Express dev headers)
+5. Proxied public API — `curl -sf http://localhost:80/api/locations` (JSON 200, no JWT)
+
+**Obsolete probes:** Host curls to `http://localhost:5001/health` and `http://localhost:5002/health` from the Phase 1 manual tier are legacy — ML services only `expose: 5000` on the Docker network and are **not** published to the host. Use `docker compose exec` as above.
+
+### Deferred scaling (v0.2 / backlog)
+
+Per Phase 10 CONTEXT D-05/D-14 and [.planning/codebase/CONCERNS.md](../.planning/codebase/CONCERNS.md):
+
+| Deferred item | Evidence / cross-reference |
+|---------------|----------------------------|
+| Map vector tiles / server-side pagination at **10k+ locations** | Viewport bbox filtering satisfies PERF-05 for the current ~2262-row corpus (plan 10-02). Full-corpus path remains when bbox omitted. See CONCERNS.md **"Public map data returns all locations"** scaling path. |
+| CI-required Docker smoke on every PR | `scripts/compose-smoke.sh` closes TEST-05 for local/operator verification; CI job optional until runner Docker capacity is available. |
+| Distributed cache (Redis, Memcached, CDN) | Out of scope v0.1; all caches process-local or browser-local per [cache-inventory.md](cache-inventory.md). |
+| UI "refresh data" control | Invalidation via auth logout / 401 and programmatic hooks only (plan 10-04). |
+
+### Plan SUMMARY evidence (D-15)
+
+Phase 10 plan executors **must** record in `*-SUMMARY.md`:
+
+1. **Bbox test method names** from `VibeServiceTest` (e.g. `whenGetMapData_withTightBBox_returnsFewerLocationsThanFullCorpus`).
+2. **`N_full` vs `N_bbox` location counts** from test output as PERF-05 mitigation evidence (plan 10-02 recorded **N_full=3, N_bbox=1**).
+
+### Phase 10 plan-to-requirement mapping
+
+| Plan | Deliverable | Requirement IDs |
+|------|-------------|-----------------|
+| `10-05` | `scripts/compose-smoke.sh`, `docs/cache-inventory.md`, Phase 10 baseline tier | TEST-05, MAINT-05, PERF-05 |
+
