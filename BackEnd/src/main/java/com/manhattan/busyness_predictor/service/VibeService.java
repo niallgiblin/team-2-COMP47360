@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.Optional;
 import java.time.Instant;
@@ -134,33 +135,75 @@ public class VibeService {
     }
 
     public VibeSearchResponse getMapData() {
-        logger.info("Fetching all locations and busyness data for map.");
-        
-        // Check if we have cached map data
-        if (lastMapDataFetch != null && 
-            Instant.now().isBefore(lastMapDataFetch.plusSeconds(MAP_DATA_CACHE_DURATION_SECONDS)) &&
-            cachedMapData != null) {
-            logger.info("Using cached map data");
-            return cachedMapData;
+        return getMapData(null, null, null, null);
+    }
+
+    public VibeSearchResponse getMapData(Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        boolean bboxActive = minLat != null && maxLat != null && minLng != null && maxLng != null;
+        if (bboxActive) {
+            validateBbox(minLat, maxLat, minLng, maxLng);
+            logger.info("Fetching bbox-filtered locations for map: [{}, {}] x [{}, {}]",
+                    minLat, maxLat, minLng, maxLng);
+        } else {
+            logger.info("Fetching all locations and busyness data for map.");
         }
-        
-        List<Location> allLocations = locationService.getAllLocations();
+
+        List<Location> locations = bboxActive
+                ? locationRepository.findByLatBetweenAndLngBetween(minLat, maxLat, minLng, maxLng)
+                : locationService.getAllLocations();
 
         BusynessReportDto busynessReport = mlServiceClient.fetchBusynessReport();
         Map<String, Double> liveBusyness = mlResponseMapper.toPredictions(busynessReport);
         List<Object> forecast = mlResponseMapper.toForecast(busynessReport);
 
+        if (bboxActive) {
+            Set<String> returnedZones = locations.stream()
+                    .map(Location::getZone)
+                    .filter(zone -> zone != null && !zone.isBlank())
+                    .collect(Collectors.toSet());
+            liveBusyness = filterBusynessByZones(liveBusyness, returnedZones);
+            forecast = filterForecastByZones(forecast, returnedZones);
+        }
+
         String explanation = "Complete location data for map view.";
         double confidence = 1.0;
 
-        VibeSearchResponse response = buildResponse(allLocations, explanation, confidence, liveBusyness, forecast);
-        
-        // Cache the response
-        cachedMapData = response;
-        lastMapDataFetch = Instant.now();
-        logger.info("Cached map data for {} seconds", MAP_DATA_CACHE_DURATION_SECONDS);
-        
-        return response;
+        return buildResponse(locations, explanation, confidence, liveBusyness, forecast);
+    }
+
+    private void validateBbox(Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        if (minLat > maxLat || minLng > maxLng) {
+            throw new IllegalArgumentException(
+                    "bbox: minLat must be <= maxLat and minLng must be <= maxLng");
+        }
+    }
+
+    private Map<String, Double> filterBusynessByZones(Map<String, Double> busyness, Set<String> zones) {
+        if (busyness == null || busyness.isEmpty() || zones.isEmpty()) {
+            return busyness != null ? busyness : Collections.emptyMap();
+        }
+        return busyness.entrySet().stream()
+                .filter(entry -> zones.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> filterForecastByZones(List<Object> forecast, Set<String> zones) {
+        if (forecast == null || forecast.isEmpty() || zones.isEmpty()) {
+            return forecast != null ? forecast : Collections.emptyList();
+        }
+        return forecast.stream()
+                .filter(item -> {
+                    if (item instanceof Map<?, ?> map) {
+                        Object zoneId = map.get("zoneId");
+                        if (zoneId == null) {
+                            zoneId = map.get("zone");
+                        }
+                        return zoneId != null && zones.contains(zoneId.toString());
+                    }
+                    return false;
+                })
+                .collect(Collectors.toList());
     }
 
     public Map<String, Double> getLiveBusyness() {

@@ -61,8 +61,17 @@ public class VibeController {
     }
 
     @GetMapping("/map-data")
-    public ResponseEntity<Map<String, Object>> getMapData() {
-        VibeSearchResponse response = vibeService.getMapData();
+    public ResponseEntity<Map<String, Object>> getMapData(
+            @RequestParam(required = false) Double minLat,
+            @RequestParam(required = false) Double maxLat,
+            @RequestParam(required = false) Double minLng,
+            @RequestParam(required = false) Double maxLng) {
+        VibeSearchResponse response;
+        if (minLat == null || maxLat == null || minLng == null || maxLng == null) {
+            response = vibeService.getMapData();
+        } else {
+            response = vibeService.getMapData(minLat, maxLat, minLng, maxLng);
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Map data fetched successfully");

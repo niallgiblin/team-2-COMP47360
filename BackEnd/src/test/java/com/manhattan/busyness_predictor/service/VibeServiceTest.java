@@ -319,6 +319,8 @@ public class VibeServiceTest {
         List<Location> allLocations = Arrays.asList(locA, locB, locC);
 
         when(locationService.getAllLocations()).thenReturn(allLocations);
+        when(locationRepository.findByLatBetweenAndLngBetween(40.75, 40.77, -74.01, -73.99))
+                .thenReturn(List.of(locA));
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
 
         VibeSearchResponse fullResponse = vibeService.getMapData();
@@ -341,6 +343,8 @@ public class VibeServiceTest {
         report.setPredictions(Map.of("ZONE_A", 0.8, "ZONE_B", 0.6, "ZONE_C", 0.4));
 
         when(locationService.getAllLocations()).thenReturn(allLocations);
+        when(locationRepository.findByLatBetweenAndLngBetween(40.75, 40.77, -74.01, -73.99))
+                .thenReturn(List.of(locA));
         when(mlServiceClient.fetchBusynessReport()).thenReturn(report);
 
         VibeSearchResponse boxedResponse = invokeGetMapDataWithBBox(40.75, 40.77, -74.01, -73.99);
@@ -722,16 +726,7 @@ public class VibeServiceTest {
 
     private VibeSearchResponse invokeGetMapDataWithBBox(
             Double minLat, Double maxLat, Double minLng, Double maxLng) {
-        try {
-            Method method = VibeService.class.getMethod(
-                    "getMapData", Double.class, Double.class, Double.class, Double.class);
-            return (VibeSearchResponse) method.invoke(vibeService, minLat, maxLat, minLng, maxLng);
-        } catch (NoSuchMethodException ex) {
-            fail("getMapData(Double, Double, Double, Double) not implemented — complete plan 10-02");
-            return null;
-        } catch (ReflectiveOperationException ex) {
-            throw new RuntimeException(ex);
-        }
+        return vibeService.getMapData(minLat, maxLat, minLng, maxLng);
     }
 
 }

@@ -388,4 +388,39 @@ class VibeControllerTest {
             .andExpect(jsonPath("$.busyness.zone1").value(5.0))
             .andExpect(jsonPath("$.busyness.zone2").value(3.5));
     }
+
+    @Test
+    @DisplayName("Map data forwards bbox params to service when all four are present")
+    void mapData_ShouldForwardBboxParams() throws Exception {
+        VibeSearchResponse response = new VibeSearchResponse();
+        response.setLocations(List.of());
+        response.setBusyness(Map.of());
+
+        when(vibeService.getMapData(40.75, 40.77, -74.01, -73.99)).thenReturn(response);
+
+        mockMvc.perform(get("/api/vibe/map-data")
+                .param("minLat", "40.75")
+                .param("maxLat", "40.77")
+                .param("minLng", "-74.01")
+                .param("maxLng", "-73.99"))
+            .andExpect(status().isOk());
+
+        verify(vibeService).getMapData(40.75, 40.77, -74.01, -73.99);
+        verify(vibeService, never()).getMapData();
+    }
+
+    @Test
+    @DisplayName("Map data rejects inverted bbox with bad request")
+    void mapData_ShouldRejectInvertedBbox() throws Exception {
+        when(vibeService.getMapData(40.77, 40.75, -74.01, -73.99))
+            .thenThrow(new IllegalArgumentException(
+                    "bbox: minLat must be <= maxLat and minLng must be <= maxLng"));
+
+        mockMvc.perform(get("/api/vibe/map-data")
+                .param("minLat", "40.77")
+                .param("maxLat", "40.75")
+                .param("minLng", "-74.01")
+                .param("maxLng", "-73.99"))
+            .andExpect(status().isBadRequest());
+    }
 }
