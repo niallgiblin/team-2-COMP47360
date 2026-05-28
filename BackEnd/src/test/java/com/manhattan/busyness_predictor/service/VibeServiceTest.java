@@ -81,7 +81,10 @@ public class VibeServiceTest {
                 locationService,
                 mlResponseMapper,
                 300L,
-                512L);
+                512L,
+                600L,
+                300L,
+                64L);
 
         // Setup test locations
         testLocation1 = new Location();
@@ -578,6 +581,83 @@ public class VibeServiceTest {
     }
 
     @Test
+    void applicationPropertiesExposeVibeMapDataCacheDefaults() throws Exception {
+        Properties props = new Properties();
+        try (InputStream stream = getClass().getClassLoader().getResourceAsStream("application.properties")) {
+            assertNotNull(stream, "application.properties must exist");
+            props.load(stream);
+        }
+
+        assertEquals("${APP_VIBE_BUSYNESS_CACHE_TTL_SECONDS:600}",
+                props.getProperty("app.vibe.busyness-cache.ttl-seconds"),
+                "Default busyness cache TTL must be 600 seconds");
+        assertEquals("${APP_VIBE_MAP_DATA_CACHE_TTL_SECONDS:300}",
+                props.getProperty("app.vibe.map-data-cache.ttl-seconds"),
+                "Default map-data cache TTL must be 300 seconds");
+        assertEquals("${APP_VIBE_MAP_DATA_CACHE_MAX_SIZE:64}",
+                props.getProperty("app.vibe.map-data-cache.max-size"),
+                "Default map-data cache max size must be 64");
+    }
+
+    @Test
+    void busynessCacheUsesCaffeineNotConcurrentHashMap() throws Exception {
+        Field cacheField = VibeService.class.getDeclaredField("busynessCache");
+        cacheField.setAccessible(true);
+        Object cache = cacheField.get(vibeService);
+
+        assertFalse(cache instanceof ConcurrentHashMap,
+                "VibeService busyness cache must use Caffeine, not ConcurrentHashMap");
+        assertTrue(cache.getClass().getName().contains("caffeine.cache"),
+                "busyness cache implementation must be com.github.benmanes.caffeine.cache.Cache");
+    }
+
+    @Test
+    void mapDataCacheUsesCaffeineNotConcurrentHashMap() throws Exception {
+        Field cacheField = VibeService.class.getDeclaredField("mapDataCache");
+        cacheField.setAccessible(true);
+        Object cache = cacheField.get(vibeService);
+
+        assertFalse(cache instanceof ConcurrentHashMap,
+                "VibeService map-data cache must use Caffeine, not ConcurrentHashMap");
+        assertTrue(cache.getClass().getName().contains("caffeine.cache"),
+                "map-data cache implementation must be com.github.benmanes.caffeine.cache.Cache");
+    }
+
+    @Test
+    void mapDataCacheHitsOnRepeatedBboxQuery() {
+        Location locA = bboxTestLocation(1, "Venue A", 40.755, -73.995, "ZONE_A");
+        when(locationRepository.findByLatBetweenAndLngBetween(40.75, 40.77, -74.01, -73.99))
+                .thenReturn(List.of(locA));
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+
+        vibeService.getMapData(40.75, 40.77, -74.01, -73.99);
+        vibeService.getMapData(40.75, 40.77, -74.01, -73.99);
+
+        verify(locationRepository, times(1)).findByLatBetweenAndLngBetween(40.75, 40.77, -74.01, -73.99);
+        verify(locationService, never()).getAllLocations();
+    }
+
+    @Test
+    void mapDataCacheDoesNotCrossContaminateBboxKeys() {
+        Location locA = bboxTestLocation(1, "Venue A", 40.755, -73.995, "ZONE_A");
+        Location locB = bboxTestLocation(2, "Venue B", 40.800, -73.950, "ZONE_B");
+
+        when(locationRepository.findByLatBetweenAndLngBetween(40.75, 40.77, -74.01, -73.99))
+                .thenReturn(List.of(locA));
+        when(locationRepository.findByLatBetweenAndLngBetween(40.80, 40.80, -73.95, -73.95))
+                .thenReturn(List.of(locB));
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+
+        VibeSearchResponse first = vibeService.getMapData(40.75, 40.77, -74.01, -73.99);
+        VibeSearchResponse second = vibeService.getMapData(40.80, 40.80, -73.95, -73.95);
+
+        assertEquals(1, first.getLocations().size());
+        assertEquals("Venue A", first.getLocations().get(0).getName());
+        assertEquals(1, second.getLocations().size());
+        assertEquals("Venue B", second.getLocations().get(0).getName());
+    }
+
+    @Test
     void searchCacheUsesCaffeineNotConcurrentHashMap() throws Exception {
         Field cacheField = VibeService.class.getDeclaredField("searchCache");
         cacheField.setAccessible(true);
@@ -591,7 +671,7 @@ public class VibeServiceTest {
 
     @Test
     void configuredSearchCacheHitsMlServiceOnceForIdenticalQueries() throws Exception {
-        VibeService configuredService = newVibeServiceWithCachePolicy(300L, 512L);
+        VibeService configuredService = newVibeServiceWithCachePolicy(300L, 512L, 600L, 300L, 64L);
 
         MlSearchResponse mlResponse = mlSearchResponseWithLocation(
                 1, "Cozy Coffee Shop", "123 Main St", 40.7128, -74.0060, 0.85);
@@ -607,7 +687,7 @@ public class VibeServiceTest {
 
     @Test
     void configuredSearchCacheEvictsOldestEntryWhenMaxSizeExceeded() throws Exception {
-        VibeService configuredService = newVibeServiceWithCachePolicy(300L, 2L);
+        VibeService configuredService = newVibeServiceWithCachePolicy(300L, 2L, 600L, 300L, 64L);
 
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
         when(locationRepository.findById(1)).thenReturn(Optional.of(testLocation1));
@@ -648,7 +728,12 @@ public class VibeServiceTest {
         verify(mlServiceClient, times(2)).search(eq("query-three"), anyInt(), any(), any());
     }
 
-    private VibeService newVibeServiceWithCachePolicy(long ttlSeconds, long maxSize) throws Exception {
+    private VibeService newVibeServiceWithCachePolicy(
+            long searchTtlSeconds,
+            long searchMaxSize,
+            long busynessTtlSeconds,
+            long mapDataTtlSeconds,
+            long mapDataMaxSize) throws Exception {
         Constructor<VibeService> constructor;
         try {
             constructor = VibeService.class.getConstructor(
@@ -657,9 +742,12 @@ public class VibeServiceTest {
                     LocationService.class,
                     MlResponseMapper.class,
                     long.class,
+                    long.class,
+                    long.class,
+                    long.class,
                     long.class);
         } catch (NoSuchMethodException ex) {
-            fail("VibeService must expose cache TTL/max-size constructor for app.vibe.search-cache (512 default, 300 TTL)");
+            fail("VibeService must expose cache TTL/max-size constructor for app.vibe.* cache properties");
             return vibeService;
         }
 
@@ -668,8 +756,11 @@ public class VibeServiceTest {
                 locationRepository,
                 locationService,
                 mlResponseMapper,
-                ttlSeconds,
-                maxSize);
+                searchTtlSeconds,
+                searchMaxSize,
+                busynessTtlSeconds,
+                mapDataTtlSeconds,
+                mapDataMaxSize);
     }
 
     private MlSearchResponse mlSearchResponseWithLocation(
