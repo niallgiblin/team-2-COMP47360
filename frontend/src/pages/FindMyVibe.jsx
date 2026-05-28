@@ -122,7 +122,19 @@ export default function FindMyVibe() {
     // Check cache first
     const cachedResults = getCachedResults();
     if (cachedResults) {
-      setAllResults(cachedResults);
+      const refreshed = cachedResults.map((venue) => {
+        if (!venue.zoneId || !contextBusynessData?.length) return venue;
+        const entry = contextBusynessData.find(
+          (item) => String(item.LocationID) === String(venue.zoneId)
+        );
+        if (!entry) return venue;
+        return {
+          ...venue,
+          busynessValue: entry.busyness,
+          busynessLabel: getBusynessLabel(entry.busyness),
+        };
+      });
+      setAllResults(refreshed);
       setHasSearched(true);
       return;
     }
