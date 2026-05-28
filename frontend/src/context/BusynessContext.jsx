@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { authFetch, vibeAPI } from '../../services/apiService';
+import {
+  BUSYNESS_SESSION_TTL_MS,
+  BUSYNESS_SESSION_MAX_BYTES,
+} from '../utils/boundedCache';
 import { useAuth } from '../hooks/useAuth';
 
 const BusynessContext = createContext();
@@ -41,7 +45,7 @@ export const BusynessProvider = ({ children }) => {
         const { busynessData: cachedBusyness, predictionData: cachedPrediction, venueData: cachedVenues, lastFetchTime: cachedTime } = JSON.parse(cached);
         if (
           cachedTime &&
-          Date.now() - cachedTime < 30 * 60 * 1000 &&
+          Date.now() - cachedTime < BUSYNESS_SESSION_TTL_MS &&
           hasForecastData(cachedPrediction)
         ) {
           setBusynessData(cachedBusyness);
@@ -71,7 +75,14 @@ export const BusynessProvider = ({ children }) => {
           venueData,
           lastFetchTime: Date.now()
         };
-        sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        const serialized = JSON.stringify(cacheData);
+        if (serialized.length > BUSYNESS_SESSION_MAX_BYTES) {
+          console.warn(
+            'Busyness session snapshot exceeds size guard; skipping sessionStorage persist'
+          );
+          return;
+        }
+        sessionStorage.setItem(cacheKey, serialized);
       } catch (err) {
         console.warn('Failed to save data to cache:', err);
       }
@@ -82,7 +93,7 @@ export const BusynessProvider = ({ children }) => {
     // If we have recent data (less than 30 minutes old) with forecast, use cached state
     if (
       lastFetchTime &&
-      Date.now() - lastFetchTime < 30 * 60 * 1000 &&
+      Date.now() - lastFetchTime < BUSYNESS_SESSION_TTL_MS &&
       hasForecastData(predictionData)
     ) {
       return { busynessData, predictionData, venueData };
