@@ -243,7 +243,7 @@ public class VibeService {
         Map<String, Double> cached = busynessCache.getIfPresent(BUSYNESS_CACHE_KEY);
         if (cached != null) {
             logger.info("Using cached busyness data");
-            return cached;
+            return new HashMap<>(cached);
         }
 
         try {
@@ -252,14 +252,14 @@ public class VibeService {
             if (!newBusyness.isEmpty()) {
                 busynessCache.put(BUSYNESS_CACHE_KEY, new HashMap<>(newBusyness));
                 logger.info("Updated busyness cache with {} entries", newBusyness.size());
-                return newBusyness;
+                return new HashMap<>(newBusyness);
             }
         } catch (Exception e) {
             logger.error("Failed to fetch busyness data: {}", e.getMessage());
         }
 
         cached = busynessCache.getIfPresent(BUSYNESS_CACHE_KEY);
-        return cached != null ? cached : new HashMap<>();
+        return cached != null ? new HashMap<>(cached) : new HashMap<>();
     }
 
     private List<Location> fetchMLRecommendations(
