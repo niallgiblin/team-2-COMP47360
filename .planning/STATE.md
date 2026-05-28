@@ -3,32 +3,32 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
 status: executing
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-05-27T19:14:29.655Z"
-last_activity: 2026-05-27
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-05-28T13:07:00.000Z"
+last_activity: 2026-05-28 -- Completed plan 09-01
 progress:
   total_phases: 10
-  completed_phases: 6
-  total_plans: 40
-  completed_plans: 33
-  percent: 83
+  completed_phases: 7
+  total_plans: 46
+  completed_plans: 36
+  percent: 78
 ---
 
 # GSD State
 
 ## Current Position
 
-Phase: 08 (map-forecast-routing-and-external-api-correctness) — EXECUTING
-Plan: 5 of 5
+Phase: 09 (persistence-import-and-auth-flow-safety) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-05-27
+Last activity: 2026-05-28
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-25)
 
 **Core value:** Users can reliably discover, compare, route to, and plan venue visits using trustworthy busyness and location intelligence.
-**Current focus:** Phase 08 — map-forecast-routing-and-external-api-correctness
+**Current focus:** Phase 09 — persistence-import-and-auth-flow-safety
 
 ## Milestone Summary
 
@@ -78,6 +78,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 08]: Backend zoneId is string-normalized and skips Turf polygon lookup when present (plan 08-02).
 - [Phase 08]: Route cache keys round coordinates to four decimals for stable 08-01 test parity (plan 08-03).
 - [Phase 08]: Google Routes field mask uses explicit leg/step/transit/polyline fields without wildcard (plan 08-03).
+- [Phase 09]: Wave 0 red tests lock D-10 CSV edge cases before OpenCSV importer (plan 09-01).
+- [Phase 09]: Embedded quotes D-10 case tested via quoted-commas fixture description field (plan 09-01).
+- [Phase 09]: importFromResource overload isolates CSV tests from production locations.csv (plan 09-01).
 
 ## Blockers
 
@@ -85,8 +88,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-27T19:14:29.651Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-05-28T13:07:00.000Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
 
 ## Notes

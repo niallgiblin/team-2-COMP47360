@@ -327,7 +327,7 @@ Plans:
 - [x] 08-05-PLAN.md — Backend zoneId DTO support and Google key restriction docs
 
 **Wave 2** *(depends on Wave 1)*
-- [ ] 08-04-PLAN.md — MapView and direction drawer wiring
+- [x] 08-04-PLAN.md — MapView and direction drawer wiring
 
 **Work outline:**
 - Fix timestamp generation to produce 12 hourly forecast labels.
@@ -355,6 +355,22 @@ Plans:
 - Plan controller mixes stateless JWT with session fallback.
 
 **Requirements:** DATA-01, DATA-02, DATA-03, DATA-04
+
+**Plans:** 5 plans
+
+Plans:
+**Wave 0** *(Nyquist validation foundation)*
+- [x] 09-01-PLAN.md — CSV fixtures, LocationCsvImporter red tests, LocationFieldPreservationTest (DATA-02, DATA-03)
+
+**Wave 1** *(depends on Wave 0)*
+- [ ] 09-02-PLAN.md — Flyway V1 baseline, validate mode, migration smoke (DATA-01)
+
+**Wave 2** *(depends on Wave 0–1; parallel — no shared files)*
+- [ ] 09-03-PLAN.md — OpenCSV LocationCsvImporter + DataInitializer delegation (DATA-02)
+- [ ] 09-05-PLAN.md — PlanController @AuthenticationPrincipal + test alignment (DATA-04)
+
+**Wave 3** *(depends on 09-03)*
+- [ ] 09-04-PLAN.md — Remove broken Location constructor (DATA-03)
 
 **Work outline:**
 - Introduce an explicit database migration tool and baseline migration for current schema assumptions.
