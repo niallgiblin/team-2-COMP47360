@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
 status: executing
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-05-28T14:52:00.000Z"
-last_activity: 2026-05-28 -- Completed Phase 10 plan 03
+stopped_at: Completed 10-04-PLAN.md
+last_updated: "2026-05-28T14:54:00.000Z"
+last_activity: 2026-05-28 -- Completed Phase 10 plan 04
 progress:
   total_phases: 10
   completed_phases: 8
   total_plans: 51
-  completed_plans: 43
-  percent: 84
+  completed_plans: 44
+  percent: 86
 ---
 
 # GSD State
@@ -19,9 +19,9 @@ progress:
 ## Current Position
 
 Phase: 10 (cache-ownership-map-scaling-and-docker-smoke-closure) — EXECUTING
-Plan: 4 of 5
-Status: Ready to execute plan 10-04
-Last activity: 2026-05-28 -- Completed Phase 10 plan 03
+Plan: 5 of 5
+Status: Ready to execute plan 10-05
+Last activity: 2026-05-28 -- Completed Phase 10 plan 04
 
 ## Project Reference
 
@@ -96,6 +96,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 10]: MapView uses DEFAULT_MAP_BBOX for map-data fetch; no moveend refetch in plan 10-03 (plan 10-03, D-02).
 - [Phase 10]: createBoundedCache async getOrSet deduplicates concurrent map-data loads (plan 10-03).
 - [Phase 10]: clearMapDataCache and clearSearchCache exported for plan 10-04 invalidation (plan 10-03, D-06).
+- [Phase 10]: Module cache registry avoids MapView/FindMyVibe import cycle with AuthContext (plan 10-04).
+- [Phase 10]: invalidateClientCaches on logout and 401 clears busyness sessionStorage and bounded module caches (plan 10-04, D-10).
+- [Phase 10]: BusynessContext payload size guard skips oversized sessionStorage persist (plan 10-04, D-07).
 
 ## Blockers
 
@@ -103,9 +106,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-28T14:52:00.000Z
-Stopped at: Completed 10-03-PLAN.md
-Resume file: .planning/phases/10-cache-ownership-map-scaling-and-docker-smoke-closure/10-04-PLAN.md
+Last session: 2026-05-28T14:54:00.000Z
+Stopped at: Completed 10-04-PLAN.md
+Resume file: .planning/phases/10-cache-ownership-map-scaling-and-docker-smoke-closure/10-05-PLAN.md
 
 ## Notes
 
