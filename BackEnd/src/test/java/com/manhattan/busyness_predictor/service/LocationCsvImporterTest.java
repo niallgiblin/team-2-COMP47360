@@ -3,6 +3,7 @@ package com.manhattan.busyness_predictor.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -37,8 +38,8 @@ class LocationCsvImporterTest {
 
     @BeforeEach
     void setUp() {
-        when(locationRepository.findById(any())).thenReturn(Optional.empty());
-        when(locationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(locationRepository.findById(any())).thenReturn(Optional.empty());
+        lenient().when(locationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
