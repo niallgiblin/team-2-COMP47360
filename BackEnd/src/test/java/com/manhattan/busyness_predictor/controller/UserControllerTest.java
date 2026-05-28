@@ -6,10 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manhattan.busyness_predictor.model.User;
+import com.manhattan.busyness_predictor.security.CustomUserDetailsService;
 import com.manhattan.busyness_predictor.security.JwtAuthenticationFilter;
 import com.manhattan.busyness_predictor.security.JwtTokenProvider;
+import com.manhattan.busyness_predictor.security.RateLimitService;
 import com.manhattan.busyness_predictor.security.UserPrincipal;
-import com.manhattan.busyness_predictor.security.CustomUserDetailsService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class UserControllerTest {
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private RateLimitService rateLimitService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
