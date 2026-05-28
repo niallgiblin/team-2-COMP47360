@@ -71,7 +71,7 @@
 - [x] **DATA-01**: Database schema changes are managed through an explicit migration workflow rather than implicit JPA drift.
 - [x] **DATA-02**: CSV import uses a parser library that handles quoted fields and supports deterministic upsert/version behavior.
 - [x] **DATA-03**: `Location` construction preserves `information`, `summary`, and `tags` when those values are provided.
-- [ ] **DATA-04**: Plan controller authentication uses stateless JWT principal injection consistently without HTTP session fallback.
+- [x] **DATA-04**: Plan controller authentication uses stateless JWT principal injection consistently without HTTP session fallback.
 
 ### Maintainability and Decomposition
 
@@ -157,7 +157,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-01 | Phase 9 | Complete |
 | DATA-02 | Phase 9 | Complete |
 | DATA-03 | Phase 9 | Complete |
-| DATA-04 | Phase 9 | Pending |
+| DATA-04 | Phase 9 | Complete |
 | MAINT-01 | Phase 8 | Complete |
 | MAINT-02 | Phase 5 | Complete |
 | MAINT-03 | Phase 5 | Complete |

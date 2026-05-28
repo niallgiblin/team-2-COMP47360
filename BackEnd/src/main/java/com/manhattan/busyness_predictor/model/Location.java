@@ -90,28 +90,6 @@ public class Location {
     public Location() {
     }
 
-    public Location(Double lat, Double lng, String name, String address, String uri,
-            Float review, Integer numReviews, Boolean isRestaurant, Boolean isLandmark,
-            Boolean isClub, Boolean isBar, String description, Integer price, String zone) {
-        this.lat = lat;
-        this.lng = lng;
-        this.name = name;
-        this.address = address;
-        this.uri = uri;
-        this.review = review;
-        this.numReviews = numReviews;
-        this.isRestaurant = isRestaurant;
-        this.isLandmark = isLandmark;
-        this.isClub = isClub;
-        this.isBar = isBar;
-        this.description = description;
-        this.price = price;
-        this.zone = zone;
-        this.information = information;
-        this.summary = summary;
-        this.tags = tags;
-    }
-
     // Getters and Setters
     public Integer getId() {
         return id;

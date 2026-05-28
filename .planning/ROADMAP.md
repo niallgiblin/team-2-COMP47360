@@ -367,7 +367,7 @@ Plans:
 
 **Wave 2** *(depends on Wave 0–1; parallel — no shared files)*
 - [x] 09-03-PLAN.md — OpenCSV LocationCsvImporter + DataInitializer delegation (DATA-02)
-- [ ] 09-05-PLAN.md — PlanController @AuthenticationPrincipal + test alignment (DATA-04)
+- [x] 09-05-PLAN.md — PlanController @AuthenticationPrincipal + test alignment (DATA-04)
 
 **Wave 3** *(depends on 09-03)*
 - [ ] 09-04-PLAN.md — Remove broken Location constructor (DATA-03)
