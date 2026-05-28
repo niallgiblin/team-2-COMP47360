@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-05-28T13:16:37.769Z"
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-05-28T13:18:20.111Z"
 last_activity: 2026-05-28
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 46
-  completed_plans: 37
-  percent: 80
+  completed_plans: 38
+  percent: 83
 ---
 
 # GSD State
@@ -19,7 +19,7 @@ progress:
 ## Current Position
 
 Phase: 09 (persistence-import-and-auth-flow-safety) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-05-28
 
@@ -82,6 +82,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 09]: Embedded quotes D-10 case tested via quoted-commas fixture description field (plan 09-01).
 - [Phase 09]: importFromResource overload isolates CSV tests from production locations.csv (plan 09-01).
 - [Phase 09]: Flyway V1 baseline with ddl-auto=validate; flyway-core+flyway-mysql; dev reset via compose down -v (plan 09-02, D-01–D-05).
+- [Phase 09]: LocationCsvImporter upserts via copyAllMappedFields on managed entity; new rows save incoming (plan 09-03).
+- [Phase 09]: Location CSV import every startup; user seed empty-table skip unchanged (plan 09-03, D-14).
 
 ## Blockers
 
@@ -89,8 +91,8 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-28T13:16:37.764Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-05-28T13:18:20.106Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None
 
 ## Notes

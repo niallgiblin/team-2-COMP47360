@@ -366,7 +366,7 @@ Plans:
 - [x] 09-02-PLAN.md — Flyway V1 baseline, validate mode, migration smoke (DATA-01)
 
 **Wave 2** *(depends on Wave 0–1; parallel — no shared files)*
-- [ ] 09-03-PLAN.md — OpenCSV LocationCsvImporter + DataInitializer delegation (DATA-02)
+- [x] 09-03-PLAN.md — OpenCSV LocationCsvImporter + DataInitializer delegation (DATA-02)
 - [ ] 09-05-PLAN.md — PlanController @AuthenticationPrincipal + test alignment (DATA-04)
 
 **Wave 3** *(depends on 09-03)*
