@@ -20,10 +20,19 @@ import PlanSummary from "../components/PlanSummary";
 import { useBusyness } from "../context/BusynessContext";
 import { authFetch, vibeAPI } from "../../services/apiService";
 import { enrichVenueZone } from "../utils/zoneEnrichment";
+import {
+  createBoundedCache,
+  SEARCH_CACHE_TTL_MS,
+} from "../utils/boundedCache";
 
-// Cache for search results
-const searchCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const searchCache = createBoundedCache({
+  maxEntries: 64,
+  ttlMs: SEARCH_CACHE_TTL_MS,
+});
+
+export function clearSearchCache() {
+  searchCache.clear();
+}
 
 // main page component
 export default function FindMyVibe() {
@@ -55,11 +64,7 @@ export default function FindMyVibe() {
   // Check if we have cached results
   const getCachedResults = useCallback(() => {
     const cached = searchCache.get(searchKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-
-      return cached.results;
-    }
-    return null;
+    return cached ?? null;
   }, [searchKey]);
 
   // Fetch busyness data on mount (only once)
@@ -225,11 +230,7 @@ export default function FindMyVibe() {
         return enriched;
       });
       
-      // Cache the results
-      searchCache.set(searchKey, {
-        results: transformed,
-        timestamp: Date.now()
-      });
+      searchCache.set(searchKey, transformed);
       
       setAllResults(transformed);
     } catch (err) {

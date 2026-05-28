@@ -49,16 +49,28 @@ import {
 } from "../utils/routeNormalizer";
 import { createRouteSegmentCache } from "../utils/routeSegmentCache";
 import {
+  createBoundedCache,
+  DEFAULT_MAP_BBOX,
+  formatBBoxCacheKey,
+  MAP_DATA_CACHE_TTL_MS,
+} from "../utils/boundedCache";
+import {
   ROUTE_LOAD_ERROR,
 } from "../components/DirectionSidebar";
 
-// Cache for map data
-const mapDataCache = {
-  zoneData: null,
-  venuesData: null,
-  timestamp: null,
-  duration: 10 * 60 * 1000 // 10 minutes
-};
+const ZONE_CACHE_KEY = "zones:geojson";
+const mapDataCache = createBoundedCache({
+  maxEntries: 32,
+  ttlMs: MAP_DATA_CACHE_TTL_MS,
+});
+
+function venuesCacheKey() {
+  return `venues:${formatBBoxCacheKey(DEFAULT_MAP_BBOX)}`;
+}
+
+export function clearMapDataCache() {
+  mapDataCache.clear();
+}
 
 const routeSegmentCache = createRouteSegmentCache();
 
@@ -269,17 +281,11 @@ export default function MapView() {
     }
   }, [selectedVenueFromState, currentPlan, setContextFromPlan]);
 
-  // Check if we have cached map data
   const getCachedMapData = () => {
-    if (mapDataCache.zoneData && 
-        mapDataCache.venuesData && 
-        mapDataCache.timestamp && 
-        Date.now() - mapDataCache.timestamp < mapDataCache.duration) {
-
-      return {
-        zoneData: mapDataCache.zoneData,
-        venuesData: mapDataCache.venuesData
-      };
+    const zoneData = mapDataCache.get(ZONE_CACHE_KEY);
+    const venuesData = mapDataCache.get(venuesCacheKey());
+    if (zoneData && venuesData) {
+      return { zoneData, venuesData };
     }
     return null;
   };
@@ -328,15 +334,7 @@ export default function MapView() {
         if (!response.ok) throw new Error("Failed to fetch zone data");
         const json = await response.json();
         setZoneData(json);
-        
-        // Cache the zone data
-        try {
-          mapDataCache.zoneData = json;
-          mapDataCache.timestamp = Date.now();
-
-        } catch (e) {
-          console.warn('Failed to cache zone data:', e.message);
-        }
+        mapDataCache.set(ZONE_CACHE_KEY, json);
       } catch (err) {
         console.error("Error loading GeoJSON:", err);
         setIsMock(true); // Fallback if zones fail
@@ -356,32 +354,28 @@ export default function MapView() {
 
       setLoading(true);
       try {
-        const res = await authFetch(vibeAPI.mapDataUrl());
-        if (!res.ok) throw new Error("Server error on map-data fetch");
-        const data = await res.json();
-        const venuesData = data.locations || [];
-        setVenues(venuesData);
-        
-        // Cache the venues data with essential fields only
-        try {
-          const essentialVenues = venuesData.map(venue => ({
-            id: venue.id,
-            name: venue.name,
-            address: venue.address,
-            lat: venue.lat || venue.latitude,
-            lng: venue.lng || venue.longitude,
-            zone: venue.zone,
-            zoneId: venue.zoneId,
-            type: venue.type,
-            price: venue.price,
-            rating: venue.rating
-          }));
-          mapDataCache.venuesData = essentialVenues;
-          mapDataCache.timestamp = Date.now();
-
-        } catch (e) {
-          console.warn('Failed to cache venues data:', e.message);
-        }
+        const essentialVenues = await mapDataCache.getOrSet(
+          venuesCacheKey(),
+          async () => {
+            const res = await authFetch(vibeAPI.mapDataUrl(DEFAULT_MAP_BBOX));
+            if (!res.ok) throw new Error("Server error on map-data fetch");
+            const data = await res.json();
+            const venuesData = data.locations || [];
+            return venuesData.map((venue) => ({
+              id: venue.id,
+              name: venue.name,
+              address: venue.address,
+              lat: venue.lat || venue.latitude,
+              lng: venue.lng || venue.longitude,
+              zone: venue.zone,
+              zoneId: venue.zoneId,
+              type: venue.type,
+              price: venue.price,
+              rating: venue.rating,
+            }));
+          }
+        );
+        setVenues(essentialVenues);
       } catch (err) {
         // Fallback to mock data
         console.warn("Falling back to mock data due to fetch error:", err);
