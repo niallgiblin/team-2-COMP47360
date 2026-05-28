@@ -4,13 +4,16 @@ import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,6 +41,7 @@ import org.mockito.quality.Strictness;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manhattan.busyness_predictor.dto.BusynessReportDto;
+import com.manhattan.busyness_predictor.dto.LocationDto;
 import com.manhattan.busyness_predictor.dto.MlLocationDto;
 import com.manhattan.busyness_predictor.dto.MlSearchResponse;
 import com.manhattan.busyness_predictor.dto.SimilarLocationsResult;
@@ -305,6 +309,62 @@ public class VibeServiceTest {
         assertEquals(1.0, response.getConfidence());
 
         verify(locationService).getAllLocations();
+    }
+
+    @Test
+    void whenGetMapData_withTightBBox_returnsFewerLocationsThanFullCorpus() {
+        Location locA = bboxTestLocation(1, "Venue A", 40.755, -73.995, "ZONE_A");
+        Location locB = bboxTestLocation(2, "Venue B", 40.800, -73.950, "ZONE_B");
+        Location locC = bboxTestLocation(3, "Venue C", 40.700, -74.050, "ZONE_C");
+        List<Location> allLocations = Arrays.asList(locA, locB, locC);
+
+        when(locationService.getAllLocations()).thenReturn(allLocations);
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+
+        VibeSearchResponse fullResponse = vibeService.getMapData();
+        int fullCount = fullResponse.getLocations().size();
+        assertEquals(3, fullCount);
+
+        VibeSearchResponse boxedResponse = invokeGetMapDataWithBBox(40.75, 40.77, -74.01, -73.99);
+        assertEquals(1, boxedResponse.getLocations().size());
+        assertTrue(boxedResponse.getLocations().size() < fullCount);
+    }
+
+    @Test
+    void whenGetMapData_withTightBBox_busynessKeysMatchReturnedZones() {
+        Location locA = bboxTestLocation(1, "Venue A", 40.755, -73.995, "ZONE_A");
+        Location locB = bboxTestLocation(2, "Venue B", 40.800, -73.950, "ZONE_B");
+        Location locC = bboxTestLocation(3, "Venue C", 40.700, -74.050, "ZONE_C");
+        List<Location> allLocations = Arrays.asList(locA, locB, locC);
+
+        BusynessReportDto report = new BusynessReportDto();
+        report.setPredictions(Map.of("ZONE_A", 0.8, "ZONE_B", 0.6, "ZONE_C", 0.4));
+
+        when(locationService.getAllLocations()).thenReturn(allLocations);
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(report);
+
+        VibeSearchResponse boxedResponse = invokeGetMapDataWithBBox(40.75, 40.77, -74.01, -73.99);
+
+        Set<String> returnedZones = boxedResponse.getLocations().stream()
+                .map(LocationDto::getZone)
+                .collect(Collectors.toSet());
+        Set<String> busynessKeys = boxedResponse.getBusyness().keySet();
+
+        assertTrue(returnedZones.containsAll(busynessKeys));
+        assertFalse(busynessKeys.contains("ZONE_B"));
+        assertFalse(busynessKeys.contains("ZONE_C"));
+    }
+
+    @Test
+    void whenGetMapData_withoutBBox_stillReturnsFullCorpus() {
+        when(locationService.getAllLocations()).thenReturn(Arrays.asList(testLocation1, testLocation2));
+        when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
+
+        VibeSearchResponse response = vibeService.getMapData();
+
+        assertEquals(2, response.getLocations().size());
+        assertEquals("Complete location data for map view.", response.getExplanation());
+        assertEquals(1.0, response.getConfidence());
     }
 
     @Test
@@ -646,6 +706,32 @@ public class VibeServiceTest {
         location.setLng(-74.0);
         location.setSimilarity(0.9);
         return location;
+    }
+
+    private Location bboxTestLocation(int id, String name, double lat, double lng, String zone) {
+        Location location = new Location();
+        location.setId(id);
+        location.setName(name);
+        location.setAddress("bbox test address");
+        location.setLat(lat);
+        location.setLng(lng);
+        location.setZone(zone);
+        location.setIsRestaurant(true);
+        return location;
+    }
+
+    private VibeSearchResponse invokeGetMapDataWithBBox(
+            Double minLat, Double maxLat, Double minLng, Double maxLng) {
+        try {
+            Method method = VibeService.class.getMethod(
+                    "getMapData", Double.class, Double.class, Double.class, Double.class);
+            return (VibeSearchResponse) method.invoke(vibeService, minLat, maxLat, minLng, maxLng);
+        } catch (NoSuchMethodException ex) {
+            fail("getMapData(Double, Double, Double, Double) not implemented — complete plan 10-02");
+            return null;
+        } catch (ReflectiveOperationException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
 }
