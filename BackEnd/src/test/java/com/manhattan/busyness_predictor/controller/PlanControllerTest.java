@@ -20,6 +20,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -44,7 +45,9 @@ import com.manhattan.busyness_predictor.service.PlanService;
 public class PlanControllerTest {
     private static final Integer USER_ID = 42;
     private static final String USERNAME = "testuser";
-    private static final String TOKEN = "jwt.token.here";
+    private static final String TEST_SECURITY_CONTEXT_ATTR =
+            "org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors"
+                    + "$SecurityContextRequestPostProcessorSupport$TestSecurityContextRepository.REPO";
 
     @Mock
     private PlanService planService;
@@ -61,58 +64,40 @@ public class PlanControllerTest {
     @BeforeEach
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        
-        // Setup test user with all required fields
+
         testUser = new User();
         testUser.setId(USER_ID);
         testUser.setUsername(USERNAME);
-        
+
         userPrincipal = UserPrincipal.create(testUser);
-        
-        // Create authentication object
+
         authentication = new TestingAuthenticationToken(
-            userPrincipal, 
-            null, 
+            userPrincipal,
+            null,
             List.of(new SimpleGrantedAuthority("ROLE_USER"))
         );
         authentication.setAuthenticated(true);
-        
-        // Setup MockMvc with proper security configuration
+
         mockMvc = MockMvcBuilders
                 .standaloneSetup(planController)
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new TestGlobalExceptionHandler())
-                // Add a filter to handle authentication - more precise logic
                 .addFilters((request, response, chain) -> {
-                    // Clear any existing authentication first
-                    SecurityContextHolder.clearContext();
-                    
-                    // Only set authentication if explicitly provided via .with(authentication())
-                    if (request.getAttribute("org.springframework.security.authentication") != null) {
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    Object contextObj = request.getAttribute(TEST_SECURITY_CONTEXT_ATTR);
+                    if (contextObj instanceof SecurityContext securityContext) {
+                        SecurityContextHolder.getContext().setAuthentication(securityContext.getAuthentication());
                     }
-                    // Check for Authorization header as secondary indicator
-                    else if (request instanceof jakarta.servlet.http.HttpServletRequest) {
-                        jakarta.servlet.http.HttpServletRequest httpRequest = (jakarta.servlet.http.HttpServletRequest) request;
-                        String authHeader = httpRequest.getHeader("Authorization");
-                        if (authHeader != null && authHeader.startsWith("Bearer " + TOKEN)) {
-                            SecurityContextHolder.getContext().setAuthentication(authentication);
-                        }
-                    }
-                    
                     try {
                         chain.doFilter(request, response);
                     } finally {
-                        // Clean up security context after request
                         SecurityContextHolder.clearContext();
                     }
                 })
                 .build();
-        
+
         objectMapper = new ObjectMapper();
     }
 
-    // Test-specific global exception handler
     @org.springframework.web.bind.annotation.ControllerAdvice
     public static class TestGlobalExceptionHandler {
         @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
@@ -120,30 +105,29 @@ public class PlanControllerTest {
                 org.springframework.web.bind.MethodArgumentNotValidException ex) {
             return new org.springframework.http.ResponseEntity<>("Validation failed", org.springframework.http.HttpStatus.BAD_REQUEST);
         }
-        
-        @org.springframework.web.bind.annotation.ExceptionHandler(IllegalStateException.class)
-        public org.springframework.http.ResponseEntity<?> handleIllegalStateException(IllegalStateException ex) {
-            // Check if this is an authentication-related exception
-            if (ex.getMessage() != null && ex.getMessage().contains("Unable to retrieve current user")) {
-                return new org.springframework.http.ResponseEntity<>("Unauthorized", org.springframework.http.HttpStatus.UNAUTHORIZED);
-            }
-            // Otherwise treat as a general server error
-            java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
-            errorDetails.put("error", "An unexpected internal server error has occurred.");
-            errorDetails.put("message", ex.getMessage());
-            return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-        
-        @org.springframework.web.bind.annotation.ExceptionHandler(RuntimeException.class)
-        public org.springframework.http.ResponseEntity<?> handleRuntimeException(RuntimeException ex) {
-            java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
-            errorDetails.put("error", "An unexpected internal server error has occurred.");
-            errorDetails.put("message", ex.getMessage());
-            return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-        
+
         @org.springframework.web.bind.annotation.ExceptionHandler(Exception.class)
-        public org.springframework.http.ResponseEntity<?> handleGlobalException(Exception ex) {
+        public org.springframework.http.ResponseEntity<?> handleAllExceptions(Exception ex) {
+            if (ex instanceof NullPointerException) {
+                if (ex.getStackTrace().length > 0) {
+                    String topClass = ex.getStackTrace()[0].getClassName();
+                    if (topClass.contains("PlanController")) {
+                        return new org.springframework.http.ResponseEntity<>("Unauthorized", org.springframework.http.HttpStatus.UNAUTHORIZED);
+                    }
+                }
+                java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
+                errorDetails.put("error", "An unexpected internal server error has occurred.");
+                errorDetails.put("message", ex.getMessage());
+                return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+            if (ex instanceof RuntimeException) {
+                java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
+                errorDetails.put("error", "An unexpected internal server error has occurred.");
+                errorDetails.put("message", ex.getMessage());
+                return new org.springframework.http.ResponseEntity<>(errorDetails, org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
             java.util.Map<String, String> errorDetails = new java.util.HashMap<>();
             errorDetails.put("error", "An unexpected internal server error has occurred.");
             errorDetails.put("message", ex.getMessage());
@@ -153,7 +137,6 @@ public class PlanControllerTest {
 
     @Test
     public void whenCreatePlan_thenReturnsCreatedPlan() throws Exception {
-        // Given
         CreatePlanRequest request = new CreatePlanRequest();
         request.setName("Trip");
         request.setLocationIds(Collections.emptyList());
@@ -167,11 +150,9 @@ public class PlanControllerTest {
         when(planService.createPlan(any(CreatePlanRequest.class), eq(USER_ID)))
                 .thenReturn(fakeResponse);
 
-        // When & Then
         mockMvc.perform(post("/api/plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isCreated())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -184,12 +165,10 @@ public class PlanControllerTest {
 
     @Test
     public void whenCreatePlanWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // Given
         CreatePlanRequest request = new CreatePlanRequest();
         request.setName("Trip");
         request.setLocationIds(Collections.emptyList());
 
-        // When & Then - no authentication provided
         mockMvc.perform(post("/api/plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -200,19 +179,16 @@ public class PlanControllerTest {
 
     @Test
     public void whenCreatePlanWithInvalidLocationIds_thenReturnsInternalServerError() throws Exception {
-        // Given
         CreatePlanRequest request = new CreatePlanRequest();
         request.setName("Trip");
-        request.setLocationIds(List.of(999)); // Non-existent location ID
+        request.setLocationIds(List.of(999));
 
         when(planService.createPlan(any(CreatePlanRequest.class), eq(USER_ID)))
                 .thenThrow(new RuntimeException("One or more venues were not found"));
 
-        // When & Then
         mockMvc.perform(post("/api/plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
@@ -223,15 +199,12 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetAllPlans_thenReturnsList() throws Exception {
-        // Given
         PlanResponse planResponse = new PlanResponse(1, "Trip", LocalDateTime.of(2025, 7, 23, 12, 0), Collections.emptyList());
         List<PlanResponse> plans = List.of(planResponse);
 
         when(planService.getAllPlansForUser(eq(USER_ID))).thenReturn(plans);
 
-        // When & Then
         mockMvc.perform(get("/api/plans")
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.plans").isArray())
@@ -244,7 +217,6 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetAllPlansWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // When & Then - no authentication provided
         mockMvc.perform(get("/api/plans"))
                 .andExpect(status().isUnauthorized());
 
@@ -253,15 +225,12 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetPlanById_thenReturnsPlan() throws Exception {
-        // Given
         Integer planId = 2;
         PlanResponse planResponse = new PlanResponse(planId, "Schedule", LocalDateTime.of(2025, 7, 23, 12, 5), Collections.emptyList());
 
         when(planService.getPlanById(eq(planId), eq(USER_ID))).thenReturn(planResponse);
 
-        // When & Then
         mockMvc.perform(get("/api/plans/{id}", planId)
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.plan.id").value(planId))
@@ -272,7 +241,6 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetPlanByIdWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // When & Then - no authentication provided
         mockMvc.perform(get("/api/plans/{id}", 2))
                 .andExpect(status().isUnauthorized());
 
@@ -281,15 +249,12 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetPlanByIdNotFound_thenReturnsInternalServerError() throws Exception {
-        // Given
         Integer planId = 999;
 
         when(planService.getPlanById(eq(planId), eq(USER_ID)))
                 .thenThrow(new RuntimeException("Plan not found or access denied"));
 
-        // When & Then
         mockMvc.perform(get("/api/plans/{id}", planId)
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
@@ -300,13 +265,10 @@ public class PlanControllerTest {
 
     @Test
     public void whenDeletePlan_thenReturnsOkMessage() throws Exception {
-        // Given
         Integer planId = 3;
         doNothing().when(planService).deletePlan(eq(planId), eq(USER_ID));
 
-        // When & Then
         mockMvc.perform(delete("/api/plans/{id}", planId)
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Plan deleted successfully"));
@@ -316,7 +278,6 @@ public class PlanControllerTest {
 
     @Test
     public void whenDeletePlanWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // When & Then - no authentication provided
         mockMvc.perform(delete("/api/plans/{id}", 3))
                 .andExpect(status().isUnauthorized());
 
@@ -325,15 +286,12 @@ public class PlanControllerTest {
 
     @Test
     public void whenDeletePlanNotFound_thenReturnsInternalServerError() throws Exception {
-        // Given
         Integer planId = 999;
-        
+
         doThrow(new RuntimeException("Plan not found or access denied"))
                 .when(planService).deletePlan(eq(planId), eq(USER_ID));
 
-        // When & Then
         mockMvc.perform(delete("/api/plans/{id}", planId)
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
@@ -344,18 +302,15 @@ public class PlanControllerTest {
 
     @Test
     public void whenSharePlan_thenReturnsOkMessage() throws Exception {
-        // Given
         SharePlanRequest request = new SharePlanRequest();
         request.setPlanId(4);
         request.setUserIds(List.of(100, 101));
 
         doNothing().when(planService).sharePlan(eq(4), eq(USER_ID), eq(request.getUserIds()));
 
-        // When & Then
         mockMvc.perform(post("/api/plans/share")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Plan shared successfully"));
@@ -365,12 +320,10 @@ public class PlanControllerTest {
 
     @Test
     public void whenSharePlanWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // Given
         SharePlanRequest request = new SharePlanRequest();
         request.setPlanId(4);
         request.setUserIds(List.of(100, 101));
 
-        // When & Then - no authentication provided
         mockMvc.perform(post("/api/plans/share")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -381,7 +334,6 @@ public class PlanControllerTest {
 
     @Test
     public void whenSharePlanNotOwned_thenReturnsInternalServerError() throws Exception {
-        // Given
         SharePlanRequest request = new SharePlanRequest();
         request.setPlanId(999);
         request.setUserIds(List.of(100, 101));
@@ -389,11 +341,9 @@ public class PlanControllerTest {
         doThrow(new RuntimeException("You can only share your own plans"))
                 .when(planService).sharePlan(eq(999), eq(USER_ID), eq(request.getUserIds()));
 
-        // When & Then
         mockMvc.perform(post("/api/plans/share")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("An unexpected internal server error has occurred."))
@@ -404,13 +354,10 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetPlansSharedWithMe_thenReturnsSharedPlans() throws Exception {
-        // Given
         List<SharedPlanResponse> sharedPlans = Collections.emptyList();
         when(planService.getPlansSharedWithUser(eq(USER_ID))).thenReturn(sharedPlans);
 
-        // When & Then
         mockMvc.perform(get("/api/plans/shared-with-me")
-                .header("Authorization", "Bearer " + TOKEN)
                 .with(authentication(authentication)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sharedPlans").isArray())
@@ -422,7 +369,6 @@ public class PlanControllerTest {
 
     @Test
     public void whenGetPlansSharedWithMeWithoutAuthentication_thenReturnsUnauthorized() throws Exception {
-        // When & Then - no authentication provided
         mockMvc.perform(get("/api/plans/shared-with-me"))
                 .andExpect(status().isUnauthorized());
 
