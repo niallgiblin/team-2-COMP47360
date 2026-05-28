@@ -316,6 +316,7 @@ public class VibeServiceTest {
 
     @Test
     void whenGetMapData_withTightBBox_returnsFewerLocationsThanFullCorpus() {
+        // D-15: N_full=3 vs N_bbox=1 — tight bbox returns strictly fewer locations than full corpus.
         Location locA = bboxTestLocation(1, "Venue A", 40.755, -73.995, "ZONE_A");
         Location locB = bboxTestLocation(2, "Venue B", 40.800, -73.950, "ZONE_B");
         Location locC = bboxTestLocation(3, "Venue C", 40.700, -74.050, "ZONE_C");
@@ -376,22 +377,22 @@ public class VibeServiceTest {
 
     @Test
     public void whenGetMapData_withCachedData_thenReturnsCachedResults() {
-        // Given - First call to populate cache
+        // Caffeine mapDataCache uses "full" key; repeat calls must not re-query getAllLocations.
+        // D-15 evidence: full corpus N_full=1 in this fixture; bbox N_bbox=1 in tight-bbox tests above.
         List<Location> allLocations = Arrays.asList(testLocation1);
         when(locationService.getAllLocations()).thenReturn(allLocations);
         when(mlServiceClient.fetchBusynessReport()).thenReturn(null);
 
-        // First call
+        // First call populates mapDataCache with key "full"
         VibeSearchResponse firstResponse = vibeService.getMapData();
 
-        // When - Second call (should use cache)
+        // Second call should hit Caffeine cache
         VibeSearchResponse cachedResponse = vibeService.getMapData();
 
-        // Then
         assertEquals(firstResponse.getLocations().size(), cachedResponse.getLocations().size());
 
-        // Verify services were called only once
         verify(locationService, times(1)).getAllLocations();
+        verify(mlServiceClient, times(1)).fetchBusynessReport();
     }
 
     @Test
