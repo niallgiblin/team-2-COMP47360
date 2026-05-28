@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-05-28T13:48:00.000Z"
-last_activity: 2026-05-28 -- Completed Phase 10 plan 01
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-05-28T14:00:00.000Z"
+last_activity: 2026-05-28 -- Completed Phase 10 plan 02
 progress:
   total_phases: 10
   completed_phases: 8
   total_plans: 51
-  completed_plans: 41
-  percent: 80
+  completed_plans: 42
+  percent: 82
 ---
 
 # GSD State
@@ -19,9 +19,9 @@ progress:
 ## Current Position
 
 Phase: 10 (cache-ownership-map-scaling-and-docker-smoke-closure) — EXECUTING
-Plan: 2 of 5
-Status: Ready to execute plan 10-02
-Last activity: 2026-05-28 -- Completed Phase 10 plan 01
+Plan: 3 of 5
+Status: Ready to execute plan 10-03
+Last activity: 2026-05-28 -- Completed Phase 10 plan 02
 
 ## Project Reference
 
@@ -90,6 +90,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 10]: Wave 0 red tests lock bbox, boundedCache, and compose-smoke contracts before green implementation (plan 10-01).
 - [Phase 10]: Reflection helper invokes getMapData bbox overload until plan 10-02 adds production signature (plan 10-01, D-04).
 - [Phase 10]: boundedCache TTL constants mirror MapView 10m, FindMyVibe 5m, BusynessContext session 30m (plan 10-01, D-06).
+- [Phase 10]: Bbox cache keys round coordinates to 4 decimals for stable frontend parity (plan 10-02, D-08).
+- [Phase 10]: Busyness and map-data JVM caches use Caffeine with APP_VIBE_* env placeholders (plan 10-02, MAINT-05).
+- [Phase 10]: Viewport map-data filters busyness/forecast to returned zones; N_full=3 vs N_bbox=1 in tests (plan 10-02, PERF-05/D-15).
 
 ## Blockers
 
@@ -97,9 +100,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-28T13:48:00.000Z
-Stopped at: Completed 10-01-PLAN.md
-Resume file: .planning/phases/10-cache-ownership-map-scaling-and-docker-smoke-closure/10-02-PLAN.md
+Last session: 2026-05-28T14:00:00.000Z
+Stopped at: Completed 10-02-PLAN.md
+Resume file: .planning/phases/10-cache-ownership-map-scaling-and-docker-smoke-closure/10-03-PLAN.md
 
 ## Notes
 

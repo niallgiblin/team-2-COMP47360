@@ -17,7 +17,7 @@
 | 7 | LLM Search Scaling and Python Service Maintainability | Reduce semantic-search scaling risk and document worker/runtime dependency boundaries. | ML-04, ML-05, PERF-03, PERF-06, MAINT-04 |
 | 8 | Map, Forecast, Routing, and External API Correctness | Fix known frontend map bugs and reduce duplicated geospatial/route work. | SEC-08, MAP-01, MAP-02, MAP-03, MAP-04, MAP-05, PERF-04, MAINT-01 |
 | 9 | 5/5 | Complete    | 2026-05-28 |
-| 10 | 1/5 | In Progress|  |
+| 10 | 2/5 | In Progress|  |
 
 ## Phase Details
 
@@ -397,14 +397,14 @@ Plans:
 
 **Requirements:** PERF-05, MAINT-05, TEST-05
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 Plans:
 **Wave 0** *(Nyquist red tests + smoke skeleton)*
 - [x] 10-01-PLAN.md — Bbox red tests, boundedCache red tests, compose-smoke stub (PERF-05, MAINT-05, TEST-05 partial)
 
 **Wave 1** *(depends on Wave 0)*
-- [ ] 10-02-PLAN.md — Backend bbox filtering + Caffeine busyness/map-data caches (PERF-05, MAINT-05)
+- [x] 10-02-PLAN.md — Backend bbox filtering + Caffeine busyness/map-data caches (PERF-05, MAINT-05)
 
 **Wave 2** *(depends on Wave 1)*
 - [ ] 10-03-PLAN.md — Frontend createBoundedCache + MapView bbox fetch (PERF-05, MAINT-05)
