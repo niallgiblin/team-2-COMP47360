@@ -24,6 +24,7 @@ import {
   createBoundedCache,
   SEARCH_CACHE_TTL_MS,
 } from "../utils/boundedCache";
+import { registerModuleCacheClear } from "../cache/invalidateClientCaches";
 
 const searchCache = createBoundedCache({
   maxEntries: 64,
@@ -33,6 +34,8 @@ const searchCache = createBoundedCache({
 export function clearSearchCache() {
   searchCache.clear();
 }
+
+registerModuleCacheClear(clearSearchCache);
 
 // main page component
 export default function FindMyVibe() {
