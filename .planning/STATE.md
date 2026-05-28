@@ -2,33 +2,33 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Address Codebase Concerns
-status: verifying
-stopped_at: Completed 09-04-PLAN.md
-last_updated: "2026-05-28T13:22:54.047Z"
-last_activity: 2026-05-28
+status: executing
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-05-28T13:48:00.000Z"
+last_activity: 2026-05-28 -- Completed Phase 10 plan 01
 progress:
   total_phases: 10
   completed_phases: 8
-  total_plans: 46
-  completed_plans: 40
-  percent: 87
+  total_plans: 51
+  completed_plans: 41
+  percent: 80
 ---
 
 # GSD State
 
 ## Current Position
 
-Phase: 09 (persistence-import-and-auth-flow-safety) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-05-28
+Phase: 10 (cache-ownership-map-scaling-and-docker-smoke-closure) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute plan 10-02
+Last activity: 2026-05-28 -- Completed Phase 10 plan 01
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-25)
 
 **Core value:** Users can reliably discover, compare, route to, and plan venue visits using trustworthy busyness and location intelligence.
-**Current focus:** Phase 09 — persistence-import-and-auth-flow-safety
+**Current focus:** Phase 10 — cache-ownership-map-scaling-and-docker-smoke-closure
 
 ## Milestone Summary
 
@@ -36,7 +36,7 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Pending Decisions
 
-- Decide whether map-data scaling should use pagination, viewport bounds, tiles, or staged filtering during Phase 10.
+(None — map scaling resolved to viewport bbox per Phase 10 CONTEXT D-01–D-05.)
 
 ## Decisions
 
@@ -87,6 +87,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 - [Phase 09]: PlanController uses @AuthenticationPrincipal; session getCurrentUser() removed (plan 09-05, D-15/D-18).
 - [Phase 09]: PlanControllerTest hydrates SecurityContext from test repository attribute for .with(authentication()) (plan 09-05, D-17).
 - [Phase 09]: Parameterized Location constructor removed; setter-only construction enforced (plan 09-04, D-11/D-12/D-13).
+- [Phase 10]: Wave 0 red tests lock bbox, boundedCache, and compose-smoke contracts before green implementation (plan 10-01).
+- [Phase 10]: Reflection helper invokes getMapData bbox overload until plan 10-02 adds production signature (plan 10-01, D-04).
+- [Phase 10]: boundedCache TTL constants mirror MapView 10m, FindMyVibe 5m, BusynessContext session 30m (plan 10-01, D-06).
 
 ## Blockers
 
@@ -94,9 +97,9 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-28T13:22:54.043Z
-Stopped at: Completed 09-04-PLAN.md
-Resume file: None
+Last session: 2026-05-28T13:48:00.000Z
+Stopped at: Completed 10-01-PLAN.md
+Resume file: .planning/phases/10-cache-ownership-map-scaling-and-docker-smoke-closure/10-02-PLAN.md
 
 ## Notes
 

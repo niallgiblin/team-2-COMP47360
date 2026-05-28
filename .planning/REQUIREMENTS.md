@@ -63,7 +63,7 @@
 - [x] **PERF-02**: Busyness forecasts can be precomputed, batched, or cached by input and forecast hour.
 - [x] **PERF-03**: LLM semantic search avoids full DataFrame copies and full-corpus sort work where candidate limiting or vector indexing is available.
 - [x] **PERF-04**: Route planning caches route segments by origin, destination, and mode.
-- [ ] **PERF-05**: Map data can be paginated, tiled, or viewport-filtered instead of returning all locations for every map load.
+- [x] **PERF-05**: Map data can be paginated, tiled, or viewport-filtered instead of returning all locations for every map load.
 - [x] **PERF-06**: Java vibe search cache is bounded with maximum size in addition to TTL.
 
 ### Data and Persistence
@@ -79,7 +79,7 @@
 - [x] **MAINT-02**: `FindMyVibe.jsx` API calls, enrichment, and caching behavior are extracted into focused modules with tests.
 - [x] **MAINT-03**: `VibeService.java` separates ML service client calls, response mapping, cache ownership, and business response assembly.
 - [x] **MAINT-04**: `BackEnd/llm-service/app.py` separates endpoint handlers from model loading, search, cache, and chat integration logic.
-- [ ] **MAINT-05**: Browser and process-global caches are replaced or wrapped by explicit cache owners with clear refresh paths.
+- [x] **MAINT-05**: Browser and process-global caches are replaced or wrapped by explicit cache owners with clear refresh paths.
 
 ### Testing and Verification
 
@@ -87,7 +87,7 @@
 - [ ] **TEST-02**: Security tests cover public versus authenticated routes, expensive endpoint controls, CORS, uploads, JWT failures, and exception payloads.
 - [x] **TEST-03**: Frontend service tests cover the single API client, relative production routes, chat URL configuration, and auth header behavior.
 - [x] **TEST-04**: Python service tests run locally without requiring production model paths or live external services.
-- [ ] **TEST-05**: Docker Compose smoke checks verify frontend static serving, backend health, LLM health, busyness health, and proxy routing.
+- [x] **TEST-05**: Docker Compose smoke checks verify frontend static serving, backend health, LLM health, busyness health, and proxy routing.
 - [x] **TEST-06**: Every roadmap phase has observable success criteria and maps all completed code changes back to requirement IDs.
 
 ## v0.2 Requirements
@@ -152,7 +152,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-02 | Phase 6 | Complete |
 | PERF-03 | Phase 7 | Complete |
 | PERF-04 | Phase 8 | Complete |
-| PERF-05 | Phase 10 | Pending |
+| PERF-05 | Phase 10 | Complete |
 | PERF-06 | Phase 7 | Complete |
 | DATA-01 | Phase 9 | Complete |
 | DATA-02 | Phase 9 | Complete |
@@ -162,12 +162,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAINT-02 | Phase 5 | Complete |
 | MAINT-03 | Phase 5 | Complete |
 | MAINT-04 | Phase 7 | Complete |
-| MAINT-05 | Phase 10 | Pending |
+| MAINT-05 | Phase 10 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 4 | Pending |
 | TEST-03 | Phase 2 | Complete |
 | TEST-04 | Phase 5 | Complete |
-| TEST-05 | Phase 10 | Pending |
+| TEST-05 | Phase 10 | Complete |
 | TEST-06 | Phase 1 | Complete |
 
 **Coverage:**

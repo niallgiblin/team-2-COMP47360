@@ -29,6 +29,9 @@ public interface LocationRepository extends JpaRepository<Location, Integer>, Jp
                         "(:type = 'landmark' AND l.isLandmark = true)")
         List<Location> findByType(@Param("type") String type);
 
+        List<Location> findByLatBetweenAndLngBetween(
+                        Double minLat, Double maxLat, Double minLng, Double maxLng);
+
         List<Location> findByNameOrDescription(String name, String description);
 
         List<Location> findByIsRestaurantTrueAndPriceBetween(Integer minPrice, Integer maxPrice);
