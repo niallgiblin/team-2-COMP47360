@@ -26,7 +26,14 @@ export const authFetch = async (url, options = {}) => {
     headers['Content-Type'] = 'application/json';
   }
 
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    const { invalidateClientCaches } = await import('../src/cache/invalidateClientCaches');
+    invalidateClientCaches();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }
+  return response;
 };
 
 // Unauthenticated JSON request helper (used by authAPI, friendsAPI)
