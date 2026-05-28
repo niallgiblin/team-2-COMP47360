@@ -9,6 +9,17 @@ import { useAuth } from '../hooks/useAuth';
 
 const BusynessContext = createContext();
 
+/** Invalidation hook for cache inventory (D-10, plan 10-05); context value `clearCache` is canonical. */
+let busynessSnapshotClear = null;
+
+export function invalidateBusynessSnapshot() {
+  if (typeof busynessSnapshotClear === 'function') {
+    busynessSnapshotClear();
+    return;
+  }
+  sessionStorage.removeItem('venueBusynessCache_v3');
+}
+
 export const useBusyness = () => {
   const context = useContext(BusynessContext);
   if (!context) {
@@ -274,8 +285,12 @@ export const BusynessProvider = ({ children }) => {
   }, [cacheKey]);
 
   useEffect(() => {
+    busynessSnapshotClear = clearCache;
     registerBusynessClear(clearCache);
-    return () => registerBusynessClear(null);
+    return () => {
+      busynessSnapshotClear = null;
+      registerBusynessClear(null);
+    };
   }, [clearCache]);
 
   const value = {
