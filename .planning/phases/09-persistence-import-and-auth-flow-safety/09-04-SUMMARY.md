@@ -68,7 +68,7 @@ Each task was committed atomically:
 1. **Task 1: Remove broken parameterized Location constructor (D-11)** - `1c4ee358` (fix)
 2. **Task 2: Verify preservation tests and setter construction paths (D-12, D-13)** - `87385ea1` (test)
 
-**Plan metadata:** pending (docs: complete plan)
+**Plan metadata:** `f2641e87` (docs: complete plan)
 
 ## Files Created/Modified
 
