@@ -31,6 +31,9 @@ def load_app(monkeypatch, extra_env=None):
         post=lambda *args, **kwargs: None,
         exceptions=types.SimpleNamespace(Timeout=Exception, RequestException=Exception),
     ))
+    import loader
+
+    monkeypatch.setattr(loader, "validate_corpus_at_startup", lambda: (True, []))
     sys.modules.pop("app", None)
     return importlib.import_module("app")
 
