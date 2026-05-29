@@ -61,3 +61,11 @@ def test_row_count_matches_embeddings():
     df = pd.read_csv(FIXTURE_DIR / "venues.csv")
     embeddings = np.load(npy_path)
     assert len(df) <= embeddings.shape[0]
+
+
+def test_production_manifest_matches():
+    prod_root = SERVICE_DIR / "corpus" / "v1"
+    if not (prod_root / "venues.csv").is_file():
+        pytest.skip("production corpus/v1 not present")
+    errors = validate_corpus_dir(prod_root)
+    assert errors == []
