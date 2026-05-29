@@ -1,0 +1,55 @@
+{
+  "corpus_version": "v1",
+  "schema_version": "1.0.0",
+  "created_at": "2026-05-29T00:00:00Z",
+  "venues_csv": {
+    "path": "venues.csv",
+    "sha256": "9ad28a62ce87924ca99ba77d84023b7d3728aa5f4a07552b183e1ead8c95cbcf",
+    "row_count": 2261,
+    "columns": [
+      "id",
+      "lat",
+      "long",
+      "name",
+      "addr",
+      "uri",
+      "reviews",
+      "num_reviews",
+      "loc_type",
+      "description",
+      "price",
+      "zone",
+      "Info",
+      "summary",
+      "tags"
+    ]
+  },
+  "document_model": {
+    "format": "labeled_lines",
+    "one_document_per_venue": true,
+    "embed_fields": [
+      "name",
+      "description",
+      "zone",
+      "price",
+      "loc_type",
+      "tags",
+      "summary",
+      "Info"
+    ],
+    "metadata_fields": [
+      "id",
+      "lat",
+      "long",
+      "addr",
+      "uri",
+      "reviews",
+      "num_reviews"
+    ]
+  },
+  "field_mapping_ref": "SCHEMA.md",
+  "spring_sync": {
+    "target": "BackEnd/src/main/resources/data/locations.csv",
+    "policy": "same_commit_manual_sync"
+  }
+}
