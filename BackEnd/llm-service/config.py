@@ -8,6 +8,16 @@ logger = logging.getLogger(__name__)
 
 _LLM_SERVICE_DIR = Path(__file__).parent.resolve()
 
+_RAW_CORPUS_VERSION = os.getenv("CORPUS_VERSION", "v1")
+if ".." in Path(_RAW_CORPUS_VERSION).parts or Path(_RAW_CORPUS_VERSION).is_absolute():
+    logger.error("Invalid CORPUS_VERSION=%r; using v1", _RAW_CORPUS_VERSION)
+    _CORPUS_VERSION = "v1"
+else:
+    _CORPUS_VERSION = _RAW_CORPUS_VERSION
+
+_CORPUS_ROOT = _LLM_SERVICE_DIR / "corpus" / _CORPUS_VERSION
+CORPUS_VERSION = _CORPUS_VERSION
+
 
 def _env_int(name, default):
     raw = os.getenv(name)
@@ -21,7 +31,8 @@ def _env_int(name, default):
 
 
 MODEL_PATH = os.getenv("MODEL_PATH", str(_LLM_SERVICE_DIR / "models" / "sentence-transformers"))
-DATA_PATH = os.getenv("DATA_PATH", str(_LLM_SERVICE_DIR / "data" / "locations.csv"))
+DATA_PATH = os.getenv("DATA_PATH", str(_CORPUS_ROOT / "venues.csv"))
+MANIFEST_PATH = os.getenv("MANIFEST_PATH", str(_CORPUS_ROOT / "manifest.json"))
 EMBEDDINGS_PATH = os.getenv(
     "EMBEDDINGS_PATH",
     str(_LLM_SERVICE_DIR / "data" / "location_embeddings.npy"),

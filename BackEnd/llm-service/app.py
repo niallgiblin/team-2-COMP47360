@@ -24,7 +24,7 @@ from config import (
     SEARCH_OVERFETCH_MULTIPLIER,
     parse_allowed_origins,
 )
-from loader import verify_file_paths
+from loader import validate_corpus_at_startup, verify_file_paths
 from search_service import VALID_PRICE_RANGES, SearchService, SearchStartupError
 
 logging.basicConfig(
@@ -97,6 +97,13 @@ def initialize_service():
         if not files_ok:
             initialization_error = f"Missing files: {missing_files}"
             return False
+
+        corpus_ok, corpus_messages = validate_corpus_at_startup()
+        if not corpus_ok:
+            initialization_error = f"Corpus validation failed: {', '.join(corpus_messages)}"
+            return False
+        for warning in corpus_messages:
+            logger.warning("Corpus validation warning: %s", warning)
 
         model_ok = load_model()
         df, embeddings = load_data()
