@@ -10,8 +10,10 @@ from conftest import _FakeDf, _LocRow
 from loader import (
     DATA_PATH,
     EMBEDDINGS_PATH,
+    MANIFEST_PATH,
     MODEL_PATH,
     StartupLoadError,
+    validate_corpus_at_startup,
     validate_embeddings_matrix,
     validate_startup_data,
     verify_file_paths,
@@ -41,14 +43,17 @@ def test_verify_file_paths_accepts_present_files(monkeypatch, tmp_path):
     model_dir = tmp_path / "model"
     model_dir.mkdir()
     (model_dir / "config.json").write_text("{}", encoding="utf-8")
-    data_file = tmp_path / "locations.csv"
+    data_file = tmp_path / "venues.csv"
     emb_file = tmp_path / "embeddings.npy"
+    manifest_file = tmp_path / "manifest.json"
     data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    manifest_file.write_text("{}", encoding="utf-8")
     np.save(emb_file, np.ones((1, 4), dtype="float32"))
 
     monkeypatch.setenv("MODEL_PATH", str(model_dir))
     monkeypatch.setenv("DATA_PATH", str(data_file))
     monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
 
     ok, missing = verify_file_paths()
 
@@ -88,6 +93,7 @@ def test_loader_exports_path_variable_names():
     assert MODEL_PATH == "MODEL_PATH"
     assert DATA_PATH == "DATA_PATH"
     assert EMBEDDINGS_PATH == "EMBEDDINGS_PATH"
+    assert MANIFEST_PATH == "MANIFEST_PATH"
 
 
 def test_missing_file_list_never_leaks_resolved_paths(monkeypatch, tmp_path):
@@ -99,8 +105,50 @@ def test_missing_file_list_never_leaks_resolved_paths(monkeypatch, tmp_path):
 
     assert ok is False
     for name in missing:
-        assert name in {"MODEL_PATH", "DATA_PATH", "EMBEDDINGS_PATH"}
+        assert name in {"MODEL_PATH", "DATA_PATH", "EMBEDDINGS_PATH", "MANIFEST_PATH"}
         assert "secret" not in name
+
+
+def test_validate_corpus_at_startup_fails_missing_manifest(monkeypatch, tmp_path):
+    import loader
+
+    service_dir = tmp_path / "service"
+    service_dir.mkdir()
+    corpus_root = service_dir / "corpus" / "v1"
+    corpus_root.mkdir(parents=True)
+    (corpus_root / "venues.csv").write_text("id\n1\n", encoding="utf-8")
+    (corpus_root / "SCHEMA.md").write_text("# schema\n", encoding="utf-8")
+
+    monkeypatch.setattr(loader, "__file__", str(service_dir / "loader.py"))
+    monkeypatch.setenv("CORPUS_VERSION", "v1")
+
+    ok, messages = validate_corpus_at_startup()
+
+    assert ok is False
+    assert "MANIFEST_PATH" in messages
+
+
+def test_validate_corpus_at_startup_warns_checksum_mismatch(monkeypatch, tmp_path):
+    import loader
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "corpus_v1"
+    service_dir = tmp_path / "service"
+    service_dir.mkdir()
+    corpus_root = service_dir / "corpus" / "v1"
+    corpus_root.mkdir(parents=True)
+    for name in ("venues.csv", "manifest.json", "SCHEMA.md"):
+        (corpus_root / name).write_text((fixture / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    venues = corpus_root / "venues.csv"
+    venues.write_text(venues.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    monkeypatch.setattr(loader, "__file__", str(service_dir / "loader.py"))
+    monkeypatch.setenv("CORPUS_VERSION", "v1")
+
+    ok, messages = validate_corpus_at_startup()
+
+    assert ok is True
+    assert any("Checksum mismatch" in message for message in messages)
 
 
 @pytest.mark.xfail(reason="unblocks in 11-03 — loader.py must add MANIFEST_PATH check")
