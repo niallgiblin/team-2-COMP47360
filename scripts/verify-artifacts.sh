@@ -135,6 +135,75 @@ else
 fi
 
 echo ""
+echo "Verifying index build artifacts (Phase 12)..."
+echo "=============================================="
+
+INDEX_METADATA="BackEnd/llm-service/corpus/v1/index/metadata.json"
+INDEX_FILE="BackEnd/llm-service/corpus/v1/index/faiss.index"
+
+if [ -f "$ROOT/$INDEX_METADATA" ]; then
+  echo "INFO  Found index metadata; validating fields..."
+
+  # Verify metadata JSON structure and required fields.
+  index_ok="true"
+  for field in build_timestamp corpus_checksum row_count dimensions index_type; do
+    val="$(python3 -c "
+import json, sys
+m = json.load(open(sys.argv[1], encoding='utf-8'))
+print(m.get(sys.argv[2], ''))
+" "$ROOT/$INDEX_METADATA" "$field")"
+    if [ -z "$val" ]; then
+      echo "FAIL  index metadata missing field: $field"
+      failures=$((failures + 1))
+      index_ok="false"
+    fi
+  done
+
+  # Verify metadata corpus_checksum matches manifest checksum.
+  if [ "$index_ok" = "true" ]; then
+    meta_checksum="$(python3 -c "
+import json, sys
+m = json.load(open(sys.argv[1], encoding='utf-8'))
+print(m['corpus_checksum'])
+" "$ROOT/$INDEX_METADATA")"
+    if [ "$meta_checksum" != "$expected_corpus_sha" ]; then
+      echo "FAIL  index metadata corpus_checksum mismatch"
+      echo "      manifest: $expected_corpus_sha"
+      echo "      metadata: $meta_checksum"
+      failures=$((failures + 1))
+    else
+      echo "PASS  index metadata corpus_checksum matches manifest"
+    fi
+
+    # Verify metadata row_count matches manifest row_count.
+    meta_rows="$(python3 -c "
+import json, sys
+m = json.load(open(sys.argv[1], encoding='utf-8'))
+print(m['row_count'])
+" "$ROOT/$INDEX_METADATA")"
+    manifest_rows="$(python3 -c "
+import json, sys
+m = json.load(open(sys.argv[1], encoding='utf-8'))
+print(m['venues_csv']['row_count'])
+" "$ROOT/$CORPUS_MANIFEST")"
+    if [ "$meta_rows" != "$manifest_rows" ]; then
+      echo "FAIL  index metadata row_count mismatch: metadata=$meta_rows manifest=$manifest_rows"
+      failures=$((failures + 1))
+    else
+      echo "PASS  index metadata row_count matches manifest ($meta_rows)"
+    fi
+  fi
+
+  if [ -f "$ROOT/$INDEX_FILE" ]; then
+    echo "PASS  index file present: $INDEX_FILE"
+  else
+    echo "WARN  index metadata present but faiss.index not found — index may need rebuild"
+  fi
+else
+  echo "SKIP  No index metadata found — index not yet built (run scripts/build_index.py)"
+fi
+
+echo ""
 echo "Checked $checked file(s); failures: $failures"
 
 if [ "$failures" -gt 0 ]; then

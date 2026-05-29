@@ -93,10 +93,12 @@ def initialize_service():
 
         logger.info("Starting service initialization...")
 
-        files_ok, missing_files = verify_file_paths()
+        files_ok, missing_files, index_warnings = verify_file_paths()
         if not files_ok:
             initialization_error = f"Missing files: {missing_files}"
             return False
+        for warning in index_warnings:
+            logger.warning("Path validation warning: %s", warning)
 
         corpus_ok, corpus_messages = validate_corpus_at_startup()
         if not corpus_ok:
@@ -149,6 +151,7 @@ def health():
             "data_loaded": search_service is not None,
             "embeddings_loaded": search_service is not None,
             "total_locations": total_locations,
+            "index_source": getattr(search_service, "_index_source", "unknown"),
         }
     )
 
@@ -173,28 +176,31 @@ def _service_components_unavailable_response():
 
 
 def _chat_search_helper(query, limit=5):
-    """Return top similar locations as formatted chat retrieval context."""
+    """Return top similar locations as raw location DTOs (list of dicts).
+
+    The caller (chat_service) is responsible for formatting and citation
+    construction.  Returns an empty list when the service is unavailable
+    or when no results are found.
+    """
     if not initialized or search_service is None:
-        return "Location search is not available at the moment."
+        return []
 
     try:
         results = search_service.search(query, limit=limit)
-        if not results:
-            return "No similar locations found."
-
-        loc_info_parts = []
-        for loc in results:
-            loc_type = loc.get("type", "")
-            loc_info_parts.append(f"- {loc['name']} ({loc['zone']}): {loc_type}")
-
-        return "Here are some similar locations:\n" + "\n".join(loc_info_parts)
+        return results  # list of location DTOs or empty list
     except Exception as exc:
         logger.error("Error in chat search helper: %s", exc)
-        return "I'm having trouble finding similar locations right now."
+        return []
 
 
 def get_ai_response(query, previous_questions):
-    """Route-owned wrapper delegating prompt assembly and HF call to chat_service."""
+    """Route-owned wrapper delegating prompt assembly and HF call to chat_service.
+
+    Returns
+    -------
+    tuple[str, list[dict]]
+        ``(response_text, citations)``
+    """
     return _chat_get_ai_response(
         query,
         previous_questions,
@@ -406,8 +412,9 @@ def chat_endpoint():
         if not query:
             return jsonify({"error": "Message is required"}), 400
 
-        response = get_ai_response(query, previous_questions)
-        return jsonify({"response": response})
+        response, citations = get_ai_response(query, previous_questions)
+        logger.info("Chat response: %d citations returned", len(citations))
+        return jsonify({"response": response, "citations": citations})
     except Exception as exc:
         logger.error("Error in chat endpoint: %s", exc)
         return jsonify({"error": "Internal server error"}), 500

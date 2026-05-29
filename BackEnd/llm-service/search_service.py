@@ -141,6 +141,7 @@ class SearchService:
         encoder,
         over_fetch_multiplier=3,
         allow_torch_fallback=False,
+        index_source="npy-built",
     ):
         self._df = df
         self._embeddings = np.asarray(embeddings, dtype="float32")
@@ -149,6 +150,7 @@ class SearchService:
         self._over_fetch_multiplier = max(1, int(over_fetch_multiplier))
         self._allow_torch_fallback = allow_torch_fallback
         self.uses_faiss_index = True
+        self._index_source = index_source
 
     @classmethod
     def from_startup(
@@ -158,7 +160,19 @@ class SearchService:
         encoder,
         over_fetch_multiplier=3,
         allow_torch_fallback=None,
+        index_path=None,
     ):
+        import logging
+        import os
+
+        logger = logging.getLogger(__name__)
+
+        # Resolve index_path from config if not explicitly provided.
+        if index_path is None:
+            from config import INDEX_PATH as _cfg_index_path
+
+            index_path = _cfg_index_path
+
         try:
             matrix = validate_startup_data(df, embeddings)
         except StartupLoadError as exc:
@@ -172,23 +186,75 @@ class SearchService:
         if matrix.shape[1] == 0:
             raise SearchStartupError("Embedding dimension must be greater than zero")
 
-        probe = np.asarray(
-            encoder.encode("", convert_to_numpy=True),
-            dtype="float32",
-        ).reshape(-1)
-        if probe.size and probe.shape[0] != matrix.shape[1]:
-            raise SearchStartupError(
-                f"Embedding dimension ({matrix.shape[1]}) does not match encoder dimension ({probe.shape[0]})"
+        # --- Persisted index path ---
+        index_source = "npy-built"
+        vector_index = None
+        persisted_attempted = False
+
+        index_dir = os.path.join(index_path, "") if index_path else ""
+        faiss_file = os.path.join(index_path, "faiss.index") if index_path else ""
+        metadata_file = os.path.join(index_path, "metadata.json") if index_path else ""
+
+        if index_path and os.path.isfile(faiss_file) and os.path.isfile(metadata_file):
+            persisted_attempted = True
+            logger.info(
+                "Persisted index detected at %s — attempting load", index_path
             )
+            try:
+                from retrieval.index_loader import load_persisted_index
 
-        try:
-            vector_index = build_vector_index(matrix)
-        except SearchStartupError:
-            raise
-        except Exception as exc:
-            raise SearchStartupError(f"index construction failed: {exc}") from exc
+                # Resolve manifest path for checksum validation.
+                from config import MANIFEST_PATH as _cfg_manifest_path
 
-        if len(df) != matrix.shape[0]:
+                manifest_path = _cfg_manifest_path if os.path.isfile(_cfg_manifest_path) else None
+
+                vector_index = load_persisted_index(
+                    index_dir=index_path,
+                    manifest_path=manifest_path,
+                    encoder_dimensions=encoder.get_sentence_embedding_dimension(),
+                )
+                index_source = "persisted"
+                logger.info(
+                    "Loaded persisted index: %d vectors, %d dimensions",
+                    vector_index.index.ntotal,
+                    vector_index.dimensions,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Persisted index load failed (%s); falling back to .npy-built index",
+                    exc,
+                )
+
+        # --- Fallback: build from .npy embeddings ---
+        if vector_index is None:
+            if persisted_attempted:
+                logger.info("Falling back to .npy-built index")
+            else:
+                logger.info(
+                    "No persisted index at %s — building from .npy embeddings", index_path
+                )
+
+            # Validate encoder dimension against embeddings before building.
+            probe = np.asarray(
+                encoder.encode("", convert_to_numpy=True),
+                dtype="float32",
+            ).reshape(-1)
+            if probe.size and probe.shape[0] != matrix.shape[1]:
+                raise SearchStartupError(
+                    f"Embedding dimension ({matrix.shape[1]}) does not match encoder dimension ({probe.shape[0]})"
+                )
+
+            try:
+                vector_index = build_vector_index(matrix)
+            except SearchStartupError:
+                raise
+            except Exception as exc:
+                raise SearchStartupError(f"index construction failed: {exc}") from exc
+
+            index_source = "npy-built"
+
+        # --- Post-construction validation ---
+        if len(df) != vector_index.row_ids.shape[0]:
             raise SearchStartupError("Embedding row-count mismatch with location data")
 
         resolved_torch_fallback = (
@@ -196,6 +262,7 @@ class SearchService:
             if allow_torch_fallback is not None
             else ALLOW_TORCH_FULL_SCAN_FALLBACK
         )
+        logger.info("SearchService index_source=%s", index_source)
         return cls(
             df=df,
             embeddings=matrix,
@@ -203,6 +270,7 @@ class SearchService:
             encoder=encoder,
             over_fetch_multiplier=over_fetch_multiplier,
             allow_torch_fallback=resolved_torch_fallback,
+            index_source=index_source,
         )
 
     def _encode_query(self, query_text):

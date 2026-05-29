@@ -10,11 +10,13 @@ from conftest import _FakeDf, _LocRow
 from loader import (
     DATA_PATH,
     EMBEDDINGS_PATH,
+    INDEX_PATH,
     MANIFEST_PATH,
     MODEL_PATH,
     StartupLoadError,
     validate_corpus_at_startup,
     validate_embeddings_matrix,
+    validate_index_metadata,
     validate_startup_data,
     verify_file_paths,
 )
@@ -34,7 +36,7 @@ def test_verify_file_paths_reports_variable_names_only(monkeypatch, tmp_path):
     monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
     monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
 
-    ok, missing = verify_file_paths()
+    ok, missing, _warnings = verify_file_paths()
 
     assert ok is False
     assert missing == ["MODEL_PATH"]
@@ -58,7 +60,7 @@ def test_verify_file_paths_accepts_present_files(monkeypatch, tmp_path):
     monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
     monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
 
-    ok, missing = verify_file_paths()
+    ok, missing, _warnings = verify_file_paths()
 
     assert ok is True
     assert missing == []
@@ -96,6 +98,7 @@ def test_loader_exports_path_variable_names():
     assert MODEL_PATH == "MODEL_PATH"
     assert DATA_PATH == "DATA_PATH"
     assert EMBEDDINGS_PATH == "EMBEDDINGS_PATH"
+    assert INDEX_PATH == "INDEX_PATH"
     assert MANIFEST_PATH == "MANIFEST_PATH"
 
 
@@ -104,7 +107,7 @@ def test_missing_file_list_never_leaks_resolved_paths(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_PATH", str(tmp_path / "secret-data.csv"))
     monkeypatch.setenv("EMBEDDINGS_PATH", str(tmp_path / "secret.npy"))
 
-    ok, missing = verify_file_paths()
+    ok, missing, _warnings = verify_file_paths()
 
     assert ok is False
     for name in missing:
@@ -221,7 +224,7 @@ def test_verify_file_paths_includes_manifest_path(monkeypatch, tmp_path):
     monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
     monkeypatch.setenv("MANIFEST_PATH", str(missing_manifest))
 
-    ok, missing = verify_file_paths()
+    ok, missing, _warnings = verify_file_paths()
 
     assert ok is False
     assert "MANIFEST_PATH" in missing
@@ -263,3 +266,144 @@ def test_production_corpus_layout():
 
     errors = validate_corpus_dir(prod_root)
     assert errors == []
+
+
+def test_verify_file_paths_warns_missing_index(monkeypatch, tmp_path):
+    """INDEX_PATH pointing to nonexistent dir should trigger optional warning, not hard failure."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    data_file = tmp_path / "venues.csv"
+    data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    emb_file = tmp_path / "embeddings.npy"
+    np.save(emb_file, np.ones((1, 4), dtype="float32"))
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+    missing_index = tmp_path / "nonexistent-index"
+
+    monkeypatch.setenv("MODEL_PATH", str(model_dir))
+    monkeypatch.setenv("DATA_PATH", str(data_file))
+    monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
+    monkeypatch.setenv("INDEX_PATH", str(missing_index))
+
+    ok, missing, warnings = verify_file_paths()
+
+    assert ok is True
+    assert missing == []
+    assert any("INDEX_PATH" in w for w in warnings)
+    assert any("fall back" in w for w in warnings)
+
+
+def test_verify_file_paths_warns_incomplete_index_files(monkeypatch, tmp_path):
+    """INDEX_PATH dir exists but faiss.index missing — warning, not failure."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    data_file = tmp_path / "venues.csv"
+    data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    emb_file = tmp_path / "embeddings.npy"
+    np.save(emb_file, np.ones((1, 4), dtype="float32"))
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+    index_dir = tmp_path / "index"
+    index_dir.mkdir()
+
+    monkeypatch.setenv("MODEL_PATH", str(model_dir))
+    monkeypatch.setenv("DATA_PATH", str(data_file))
+    monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
+    monkeypatch.setenv("INDEX_PATH", str(index_dir))
+
+    ok, missing, warnings = verify_file_paths()
+
+    assert ok is True
+    assert missing == []
+    assert any("faiss.index missing" in w for w in warnings)
+
+
+def test_validate_index_metadata_missing_dir(monkeypatch, tmp_path):
+    missing = tmp_path / "no-such-index"
+    monkeypatch.setenv("INDEX_PATH", str(missing))
+    exists, meta_ok, detail = validate_index_metadata()
+    assert exists is False
+    assert meta_ok is False
+
+
+def test_validate_index_metadata_dir_exists_no_files(monkeypatch, tmp_path):
+    index_dir = tmp_path / "index"
+    index_dir.mkdir()
+    monkeypatch.setenv("INDEX_PATH", str(index_dir))
+    exists, meta_ok, detail = validate_index_metadata()
+    assert exists is False  # no faiss.index
+    assert meta_ok is False
+
+
+def test_validate_index_metadata_valid(monkeypatch, tmp_path):
+    index_dir = tmp_path / "index"
+    index_dir.mkdir()
+    (index_dir / "faiss.index").write_text("dummy", encoding="utf-8")
+    import json
+
+    metadata = {
+        "build_timestamp": "2025-01-01T00:00:00",
+        "corpus_checksum": "abc123",
+        "row_count": 10,
+        "dimensions": 384,
+        "index_type": "faiss.IndexFlatIP",
+    }
+    (index_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setenv("INDEX_PATH", str(index_dir))
+    exists, meta_ok, detail = validate_index_metadata()
+    assert exists is True
+    assert meta_ok is True
+    assert detail == ""
+
+
+def test_validate_index_metadata_missing_fields(monkeypatch, tmp_path):
+    index_dir = tmp_path / "index"
+    index_dir.mkdir()
+    (index_dir / "faiss.index").write_text("dummy", encoding="utf-8")
+    import json
+
+    (index_dir / "metadata.json").write_text(
+        json.dumps({"build_timestamp": "x"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("INDEX_PATH", str(index_dir))
+    exists, meta_ok, detail = validate_index_metadata()
+    assert exists is True
+    assert meta_ok is False
+    assert "missing fields" in detail
+
+
+def test_validate_index_metadata_unreadable_json(monkeypatch, tmp_path):
+    index_dir = tmp_path / "index"
+    index_dir.mkdir()
+    (index_dir / "faiss.index").write_text("dummy", encoding="utf-8")
+    (index_dir / "metadata.json").write_text("not json", encoding="utf-8")
+    monkeypatch.setenv("INDEX_PATH", str(index_dir))
+    exists, meta_ok, detail = validate_index_metadata()
+    assert exists is True
+    assert meta_ok is False
+    assert "unreadable" in detail
+
+
+def test_validate_index_metadata_bad_dimensions(monkeypatch, tmp_path):
+    index_dir = tmp_path / "index"
+    index_dir.mkdir()
+    (index_dir / "faiss.index").write_text("dummy", encoding="utf-8")
+    import json
+
+    metadata = {
+        "build_timestamp": "2025-01-01T00:00:00",
+        "corpus_checksum": "abc123",
+        "row_count": 10,
+        "dimensions": 0,
+        "index_type": "faiss.IndexFlatIP",
+    }
+    (index_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setenv("INDEX_PATH", str(index_dir))
+    exists, meta_ok, detail = validate_index_metadata()
+    assert exists is True
+    assert meta_ok is False
+    assert "dimensions" in detail

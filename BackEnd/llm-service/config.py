@@ -37,6 +37,7 @@ EMBEDDINGS_PATH = os.getenv(
     "EMBEDDINGS_PATH",
     str(_LLM_SERVICE_DIR / "data" / "location_embeddings.npy"),
 )
+INDEX_PATH = os.getenv("INDEX_PATH", str(_CORPUS_ROOT / "index"))
 
 
 def parse_allowed_origins():
