@@ -120,6 +120,7 @@ services:
       - DATA_PATH=/app/corpus/v1/venues.csv
       - MANIFEST_PATH=/app/corpus/v1/manifest.json
       - PYTHONUNBUFFERED=1
+      - BUSYNESS_SERVICE_URL=http://busyness-service:5000
     networks:
       - app-network
     # Gunicorn command matches BackEnd/llm-service/Dockerfile CMD exactly

@@ -55,7 +55,12 @@ def _safe_to_float(value, default=0.0):
 
 
 def create_location_dto(row, similarity_score=None):
-    """Create a location DTO dict preserving the current /search contract."""
+    """Create a location DTO dict preserving the current /search contract.
+
+    Includes optional enriched fields (description, summary, tags, reviews,
+    num_reviews) when available in the source row, supporting richer RAG
+    retrieval context.
+    """
     getter = row.get if hasattr(row, "get") else lambda key, default="": row[key] if key in row else default
 
     # The venue CSV uses 'addr' / 'loc_type' / 'lat' / 'long' column names.
@@ -66,7 +71,7 @@ def create_location_dto(row, similarity_score=None):
     _latitude = _safe_to_float(getter("latitude", 0) or getter("lat", 0))
     _longitude = _safe_to_float(getter("longitude", 0) or getter("long", 0))
 
-    return {
+    dto = {
         "id": _safe_to_int(getter("id", 0)),
         "name": str(getter("name", "")),
         "address": _address,
@@ -82,7 +87,15 @@ def create_location_dto(row, similarity_score=None):
             if similarity_score is not None
             else None
         ),
+        # Enriched fields for RAG context (default to empty when absent)
+        "description": str(getter("description", "")),
+        "summary": str(getter("summary", "")),
+        "tags": str(getter("tags", "")),
+        "reviews": str(getter("reviews", "")),
+        "num_reviews": _safe_to_int(getter("num_reviews", 0)),
     }
+
+    return dto
 
 
 def create_citation_dto(result):

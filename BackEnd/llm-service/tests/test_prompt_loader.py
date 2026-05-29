@@ -34,7 +34,7 @@ def test_load_shipped_template_succeeds():
     template = load_prompt_template()
 
     assert isinstance(template, dict)
-    assert template["version"] == "1.0"
+    assert template["version"] == "1.1"
     assert isinstance(template["metadata"], dict)
     assert template["metadata"]["corpus_version"] == "v1"
     assert template["metadata"]["model"] == "meta-llama/Llama-3.1-8B-Instruct"

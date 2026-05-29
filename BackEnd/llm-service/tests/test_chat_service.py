@@ -1,5 +1,5 @@
 """Tests for chat_service.py — covers prompt assembly, HF API calls,
-retrieval-context formatting, and structured citations (R005)."""
+retrieval-context formatting, busyness context, and structured citations (R005)."""
 
 import types
 
@@ -7,14 +7,76 @@ import pytest
 
 from chat_service import (
     HF_CHAT_MODEL,
+    NO_BUSYNESS_MESSAGE,
     NO_VENUES_MESSAGE,
+    _busyness_label,
+    build_busyness_context,
     build_chat_messages,
     build_retrieval_context,
+    fetch_busyness_predictions,
+    format_busyness_context,
     format_retrieval_context,
     get_ai_response,
     huggingface_chat_api_call,
 )
 from dto import create_citation_dto, create_location_dto
+
+# Reusable busyness-context stub to avoid real HTTP calls in build_chat_messages tests.
+_STUB_BUSYNESS = "Current Manhattan busyness levels:\n  Zone 100: 0.30 (quiet)\n  Zone 107: 0.91 (packed)"
+
+
+# ---------------------------------------------------------------------------
+# _busyness_label
+# ---------------------------------------------------------------------------
+
+class TestBusynessLabel:
+    def test_packed(self):
+        assert _busyness_label(0.85) == "packed"
+        assert _busyness_label(0.80) == "packed"
+
+    def test_busy(self):
+        assert _busyness_label(0.75) == "busy"
+        assert _busyness_label(0.60) == "busy"
+
+    def test_moderate(self):
+        assert _busyness_label(0.55) == "moderate"
+        assert _busyness_label(0.40) == "moderate"
+
+    def test_quiet(self):
+        assert _busyness_label(0.35) == "quiet"
+        assert _busyness_label(0.20) == "quiet"
+
+    def test_very_quiet(self):
+        assert _busyness_label(0.15) == "very quiet"
+        assert _busyness_label(0.0) == "very quiet"
+
+    def test_none_unknown(self):
+        assert _busyness_label(None) == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# format_busyness_context
+# ---------------------------------------------------------------------------
+
+class TestFormatBusynessContext:
+    def test_none_returns_not_available(self):
+        assert format_busyness_context(None) == NO_BUSYNESS_MESSAGE
+
+    def test_empty_dict_returns_not_available(self):
+        assert format_busyness_context({}) == NO_BUSYNESS_MESSAGE
+
+    def test_small_set_lists_all_zones(self):
+        predictions = {"100": 0.25, "107": 0.91, "113": 0.55}
+        ctx = format_busyness_context(predictions)
+        assert "Zone 100: 0.25 (quiet)" in ctx
+        assert "Zone 107: 0.91 (packed)" in ctx
+        assert "Zone 113: 0.55 (moderate)" in ctx
+
+    def test_large_set_shows_busiest_and_quietest(self):
+        predictions = {str(i): i / 100.0 for i in range(20)}
+        ctx = format_busyness_context(predictions)
+        assert "Busiest zones:" in ctx
+        assert "Quietest zones:" in ctx
 
 
 # ---------------------------------------------------------------------------
@@ -27,12 +89,14 @@ class TestFormatRetrievalContext:
         assert ctx == NO_VENUES_MESSAGE
         assert citations == []
 
-    def test_single_result_returns_formatted_context_and_one_citation(self):
+    def test_single_result_returns_rich_context_and_one_citation(self):
         dto = create_location_dto(
             {"id": 42, "name": "Blue Note", "zone": "Greenwich Village",
              "type": "Jazz Club", "address": "131 W 3rd St",
              "latitude": 40.73, "longitude": -74.0,
-             "price": "moderate", "rating": 4.5, "zoneId": 1},
+             "price": "moderate", "rating": 4.5, "zoneId": 1,
+             "description": "Legendary jazz club", "summary": "Great jazz vibes",
+             "tags": "jazz, music, cocktails", "num_reviews": 500},
             similarity_score=0.92,
         )
         ctx, citations = format_retrieval_context([dto])
@@ -40,6 +104,11 @@ class TestFormatRetrievalContext:
         assert "Blue Note" in ctx
         assert "Greenwich Village" in ctx
         assert "Jazz Club" in ctx
+        assert "moderate" in ctx or "Price" in ctx
+        assert "4.5/5" in ctx or "Rating" in ctx
+        assert "Legendary jazz club" in ctx
+        assert "Great jazz vibes" in ctx
+        assert "jazz, music, cocktails" in ctx
         assert len(citations) == 1
         cit = citations[0]
         assert cit["venue_id"] == 42
@@ -47,6 +116,22 @@ class TestFormatRetrievalContext:
         assert "Jazz Club" in cit["snippet"]
         assert "Greenwich Village" in cit["snippet"]
         assert cit["score"] == 0.92
+
+    def test_minimal_dto_omits_empty_fields_gracefully(self):
+        dto = create_location_dto(
+            {"id": 1, "name": "Minimal", "zone": "Z", "type": "T",
+             "address": "", "latitude": 0, "longitude": 0,
+             "price": "", "rating": 0, "zoneId": 0},
+            similarity_score=0.5,
+        )
+        ctx, citations = format_retrieval_context([dto])
+        assert "Minimal" in ctx
+        assert "Zone: Z" in ctx
+        assert "Type: T" in ctx
+        # Empty fields should not appear as blank labels.
+        assert "Price:" not in ctx  # price was empty string
+        assert "Rating:" not in ctx  # rating was 0
+        assert len(citations) == 1
 
     def test_multiple_results_produce_one_citation_each(self):
         dtos = [
@@ -62,6 +147,21 @@ class TestFormatRetrievalContext:
         assert len(citations) == 3
         assert citations[0]["venue_id"] == 0
         assert citations[2]["venue_id"] == 2
+
+    def test_rich_dto_includes_description_summary_tags(self):
+        dto = create_location_dto(
+            {"id": 5, "name": "Test Venue", "zone": "Midtown", "type": "Bar",
+             "address": "123 Main", "latitude": 0, "longitude": 0,
+             "price": "moderate", "rating": 4.2, "zoneId": 2,
+             "description": "A cozy spot", "summary": "Busy on weekends",
+             "tags": "trendy, cocktails", "num_reviews": 1200},
+            similarity_score=0.88,
+        )
+        ctx, _ = format_retrieval_context([dto])
+        assert "A cozy spot" in ctx
+        assert "Busy on weekends" in ctx
+        assert "trendy, cocktails" in ctx
+        assert "1200" in ctx  # num_reviews
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +254,7 @@ class TestBuildChatMessages:
             query="find jazz bars",
             previous_questions=previous,
             retrieval_context="- Blue Note (Greenwich Village): Bar",
+            busyness_context=_STUB_BUSYNESS,
         )
 
         user_content = messages[-1]["content"]
@@ -182,6 +283,7 @@ class TestBuildChatMessages:
             query="late night jazz",
             previous_questions=[],
             search_helper=fake_search,
+            busyness_context=_STUB_BUSYNESS,
         )
 
         assert captured["limit"] == 5
@@ -194,18 +296,19 @@ class TestBuildChatMessages:
         """Verify the system message contains the template's key phrases
         (not just the hardcoded fallback) when no explicit retrieval_context
         is provided."""
-        # Pass a retrieval_context string directly to avoid needing a real search_helper,
-        # but still exercise the template loading path.
         messages, citations = build_chat_messages(
             query="where to go",
             previous_questions=[],
             retrieval_context="- Test Venue (Zone): Type",
+            busyness_context=_STUB_BUSYNESS,
         )
         system = messages[0]["content"]
         # Template signature phrases
         assert "CRITICAL RULES" in system
         assert "RETRIEVAL CONTEXT:" in system
+        assert "LIVE BUSYNESS DATA" in system
         assert "Test Venue" in system
+        assert _STUB_BUSYNESS in system
         assert citations == []
 
     def test_fallback_system_prompt_when_template_unavailable(self, monkeypatch):
@@ -223,11 +326,34 @@ class TestBuildChatMessages:
             query="q",
             previous_questions=[],
             retrieval_context="- Foo (Bar): Baz",
+            busyness_context=_STUB_BUSYNESS,
         )
         system = messages[0]["content"]
         assert "Here's what you know about similar locations" in system
+        assert "Current busyness levels" in system
         assert "CRITICAL RULES" not in system
         assert citations == []
+
+    def test_busyness_auto_fetches_when_not_provided(self, monkeypatch):
+        """When busyness_context is None, build_busyness_context is called."""
+        import chat_service as cs_mod
+
+        fetch_called = []
+
+        def fake_build_busyness():
+            fetch_called.append(True)
+            return "auto-fetched busyness"
+
+        monkeypatch.setattr(cs_mod, "build_busyness_context", fake_build_busyness)
+
+        messages, _ = build_chat_messages(
+            query="q",
+            previous_questions=[],
+            retrieval_context="- Foo (Bar): Baz",
+            busyness_context=None,
+        )
+        assert fetch_called
+        assert "auto-fetched busyness" in messages[0]["content"]
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +432,7 @@ class TestGetAiResponse:
             previous_questions=["earlier question"],
             search_helper=fake_search,
             hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
         )
 
         assert reply == "stubbed reply"
@@ -333,6 +460,7 @@ class TestGetAiResponse:
             previous_questions=[],
             search_helper=fake_search,
             hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
         )
 
         assert reply == "no matching venues found"
@@ -361,6 +489,7 @@ class TestGetAiResponse:
             previous_questions=[],
             search_helper=fake_search,
             hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
         )
 
         assert "trouble" in reply.lower()
