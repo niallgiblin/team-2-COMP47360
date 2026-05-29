@@ -25,6 +25,34 @@ The application is built on a microservice architecture, orchestrated with Docke
 -   **`busyness-service`**: A Python Flask microservice that predicts and serves location busyness levels using Keras DNN and LSTM models. Includes startup checksum verification, process-local TTL caches, and weather-fallback forecast generation.
 -   **`db`**: A MySQL database with Flyway schema migrations and CSV-based venue data import.
 
+## RAG Pipeline Architecture
+
+The "Find My Vibe" semantic search and AI Chatbot features are powered by a Retrieval-Augmented Generation (RAG) pipeline. The diagram below shows how venue data flows from raw CSV through embedding, indexing, retrieval, chat response generation, and offline evaluation.
+
+```mermaid
+flowchart TD
+    A["corpus/v1/venues.csv<br/>2,200+ Manhattan venues"] --> B["venue_corpus/compose_document_text()<br/>Build labeled-line document per venue"]
+    B --> C["sentence-transformers<br/>all-MiniLM-L6-v2 encoder<br/>384-dim embeddings"]
+    C --> D["FAISS IndexFlatIP<br/>Inner-product index over<br/>L2-normalized vectors"]
+    D --> E["SearchService.search()<br/>Encode query → normalize →<br/>FAISS top-k with over-fetch"]
+    E --> F["chat_service.format_retrieval_context()<br/>Resolve citations +<br/>build system-prompt context"]
+    F --> G["citations + LLM response<br/>Hugging Face chat API<br/>with structured venue citations"]
+    G --> H["scripts/run_eval.py<br/>Automated evaluation runner"]
+    H --> I["data/benchmark.jsonl<br/>Categorized test queries<br/>with expected venue IDs"]
+    I --> J["recall@5 report<br/>Per-category verdicts<br/>(retrieval, abstention, adversarial)"]
+```
+
+**Pipeline stages:**
+
+1. **Corpus ingestion** — `corpus/v1/venues.csv` is the versioned venue catalog. Each row contains name, description, zone, price, type, tags, and other attributes.
+2. **Document composition** — `venue_corpus.compose_document_text()` converts each CSV row into a labeled-line text document (e.g. `Name: ...\nDescription: ...\nZone: ...`), skipping empty/NA fields.
+3. **Embedding** — A `sentence-transformers` model (`all-MiniLM-L6-v2`, 384 dimensions) encodes every document into a dense float32 vector. The model is stored under `BackEnd/llm-service/models/` (Git LFS).
+4. **Vector indexing** — `search_service.build_vector_index()` L2-normalizes all embeddings and builds an in-memory `faiss.IndexFlatIP` for exact inner-product similarity search. A persisted index (`faiss.index` + `metadata.json`) is preferred when available; otherwise the index is built fresh from `.npy` embeddings at startup.
+5. **Semantic search** — `SearchService.search()` encodes the user query with the same model, normalizes it, and queries the FAISS index with an over-fetch multiplier to compensate for post-filtering (location zone, price range, exclusions).
+6. **Retrieval context assembly** — `chat_service.format_retrieval_context()` converts the ranked result DTOs into (a) a natural-language context string listing venue names, zones, and types, and (b) a structured citations list with `venue_id`, `name`, `snippet`, and `score`.
+7. **LLM response** — `chat_service.build_chat_messages()` assembles the system prompt (including retrieval context) and user message (including truncated chat history), then calls the Hugging Face chat completions API. The response is returned alongside the structured citations for frontend display.
+8. **Offline evaluation** — `scripts/run_eval.py` loads `data/benchmark.jsonl` (categorized test queries with expected venue IDs), runs each query through the live `SearchService`, computes recall@5 and citation accuracy, and outputs a structured report with per-category verdicts (pass/fail) against configurable thresholds.
+
 ---
 
 ## Documentation Index
