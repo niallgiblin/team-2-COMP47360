@@ -34,7 +34,7 @@ Compose overrides the Dockerfile `CMD` with the same command string so runtime b
 With `--preload`, the master process loads shared read-only memory for:
 
 - **Sentence-transformer model** (`MODEL_PATH`) — largest single allocation
-- **Location DataFrame** (`DATA_PATH`) — pandas catalog loaded at startup
+- **Location DataFrame** (`DATA_PATH`) — pandas catalog from `corpus/vN/venues.csv` loaded at startup
 - **Precomputed embeddings** (`EMBEDDINGS_PATH`) — NumPy float32 array from Git LFS
 - **FAISS index** — built in-process from normalized embeddings at startup (not committed to Git)
 
@@ -44,7 +44,7 @@ Docker Compose sets a **3 GiB memory limit** and **2 GiB reservation** on `llm-s
 
 ## FAISS Index Policy
 
-The FAISS vector index is **built at startup** from the committed `location_embeddings.npy` artifact and the location catalog. Generated index files (`.faiss`, `.index`, or new `.npy` outputs) are **not committed**. See [artifacts.md](artifacts.md#llm-service-runtime-and-faiss-index).
+The FAISS vector index is **built at startup** from the committed `location_embeddings.npy` artifact and the versioned venue catalog at `corpus/vN/venues.csv`. Generated index files (`.faiss`, `.index`, or new `.npy` outputs) are **not committed**. See [artifacts.md](artifacts.md#llm-service-runtime-and-faiss-index).
 
 ## Operator Commands
 

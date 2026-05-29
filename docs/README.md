@@ -1,26 +1,43 @@
 # Urban Gala
 
-Urban Gala is a full-stack web application designed to help users discover trending locations around Manhattan at what kind of crowds to expect. It features an interactive map with live and forecasted busyness levels, personalized internal LLM recommendations based on user-described "vibes", and an AI-powered chatbot for conversational search.
+Urban Gala is a full-stack web application that helps users discover, compare, and plan visits to Manhattan venues using trustworthy busyness and location intelligence. It combines real-time crowd predictions, semantic vector search (FAISS), walking/transit directions, itinerary planning, and an LLM-powered chatbot into a single React + Spring Boot + Flask platform.
 
 ## Key Features
 
--   **Interactive Map:** Visualize venues across Manhattan with real-time busyness data.
--   **Vibe-Based Search:** Use natural language to find locations that match your desired atmosphere (e.g., "a quiet cafe with good coffee").
--   **AI Chatbot:** Engage in a conversation to get location suggestions and information.
--   **Itinerary Planning:** Create and save custom plans for your outings.
--   **User Authentication & Profiles:** Sign up, log in, and share with your friends.
+-   **Interactive Map:** Browse 2,200+ Manhattan venues on a live map with real-time busyness heatmaps and 12-hour forecasts.
+-   **Find My Vibe:** Use natural language to search venues by atmosphere (e.g., "a quiet coffee shop in Greenwich Village"). Powered by FAISS vector similarity search over sentence-transformer embeddings.
+-   **AI Chatbot:** Conversational venue discovery with cited responses — chat with the LLM to get personalized recommendations informed by real venue data.
+-   **Walking & Transit Directions:** Multi-stop route planning via Google Routes API with turn-by-turn directions, distance, and duration.
+-   **Itinerary Planning:** Create, edit, share, and save custom outing plans. Share plans with friends via a shareable link.
+-   **Favorites & Friends:** Save favorite venues, manage a friends list, view friends' favorites, and see shared plans.
+-   **User Authentication & Profiles:** Sign up, log in, upload an avatar, manage your profile. JWT-based stateless auth with rate limiting on expensive endpoints.
 
 ## Architecture Overview
 
 The application is built on a microservice architecture, orchestrated with Docker Compose.
 
--   **`frontend`**: A React application built with Vite, using Material-UI for components.
--   **`backend`**: A Java Spring Boot application that serves as the main API gateway, handling user authentication, plans, and core business logic.
--   **`llm-service`**: A Python Flask microservice that handles:
-    -   Semantic search for the "Find My Vibe" feature.
-    -   Orchestration for the AI Chatbot, communicating with the Hugging Face API.
--   **`busyness-service`**: A Python Flask microservice that predicts and serves location busyness data.
--   **`db`**: A MySQL database for persistent storage.
+-   **`frontend`**: A React application built with Vite, using Material-UI. Production builds served via Nginx.
+-   **`backend`**: A Java Spring Boot application that serves as the main API gateway, handling authentication, plans, favorites, friends, locations, and core business logic. Includes in-memory Caffeine caching with per-cache TTL/size limits.
+-   **`llm-service`**: A Python 3.11 Flask microservice (Gunicorn, 2 workers, preload) that handles:
+    -   FAISS vector similarity search for "Find My Vibe" (index built at startup from committed embeddings).
+    -   AI Chatbot orchestration via Hugging Face API with conversation history.
+    -   In-process bounded TTL cache for search results.
+-   **`busyness-service`**: A Python Flask microservice that predicts and serves location busyness levels using Keras DNN and LSTM models. Includes startup checksum verification, process-local TTL caches, and weather-fallback forecast generation.
+-   **`db`**: A MySQL database with Flyway schema migrations and CSV-based venue data import.
+
+---
+
+## Documentation Index
+
+| Document | Purpose |
+|----------|---------|
+| [Artifact Policy](artifacts.md) | Runtime model artifacts, Git LFS ownership, SHA-256 checksum table, path expectations |
+| [Baseline Verification](baseline-verification.md) | Tiered verification matrix, smoke checks, per-phase verification gates |
+| [Cache Inventory](cache-inventory.md) | All JVM, Python, and browser caches with TTL, size limits, and invalidation paths |
+| [LLM Runtime](llm-runtime.md) | Gunicorn configuration, memory measurements, FAISS index policy, operator commands |
+| [Security](SECURITY.md) | Secrets management, rotation runbooks, JWT auth, CORS, rate limiting, Google API key restrictions |
+| [Testing](TESTING.md) | Test suite overview: backend (25 Java files), frontend (11 Vitest files), Python ML (14 files), Cypress E2E, compose-smoke |
+| [Evaluation Strategy](EVALUATION_STRATEGY.md) | Test-driven architecture decisions, coverage metrics, ML model evaluation |
 
 ---
 
@@ -31,7 +48,7 @@ Follow these instructions to set up and run the project locally.
 ### Prerequisites
 
 -   **Docker Desktop:** Download and install. This includes Docker Compose.
--   **Git LFS:** Required for handling large model files. Install from here.
+-   **Git LFS:** Required for handling large model files. Install from [git-lfs.com](https://git-lfs.com).
 
 Before starting services, read [Runtime Artifact Policy](artifacts.md) for **runtime model artifacts** — expected repository paths, ownership (Git LFS vs source-owned metadata), manual checksum verification with `scripts/verify-artifacts.sh`, busyness startup checksum enforcement, and process-local busyness cache behavior.
 
@@ -84,16 +101,18 @@ docker-compose up --build
 
 **First time running?** This will take a few minutes as Docker downloads and builds all the necessary components.
 
-### Step 3: Wait for Startup
+### 3. Wait for Startup
 You'll see lots of log messages. Wait until you see these key messages:
-- `urban-gala-db: ready for connections` 
+- `urban-gala-db: ready for connections`
 - `urban-gala-backend: Started BusynessPredictorApplication`
 - `urban-gala-frontend: Local: http://localhost:5173/`
 
-### Step 4: Access the Application
+### 4. Access the Application
 Once everything is running:
 - **Frontend (Web App):** http://localhost:5173
-- **Backend API:** [http://localhost:8080](http://localhost:8080)
+- **Backend API:** http://localhost:8080
+- **LLM Service:** `docker compose exec llm-service curl http://localhost:5000/health` (internal only)
+- **Busyness Service:** `docker compose exec busyness-service curl http://localhost:5000/health` (internal only)
 
 ### Reset database schema (development)
 
@@ -105,6 +124,16 @@ docker compose up -d db backend
 ```
 
 Flyway applies migrations on backend startup; Hibernate uses `ddl-auto=validate`.
+
+### Production Smoke Check
+
+Verify the full production-like stack with one command:
+
+```bash
+bash scripts/compose-smoke.sh --teardown
+```
+
+Brings up the prod profile (Nginx static frontend), waits for all services to become healthy, then verifies Spring Actuator, LLM health, busyness health, static Nginx serving, and proxied API routing. See [baseline-verification.md](baseline-verification.md) for the full smoke gate specification.
 
 ## Common Docker Commands
 
@@ -207,14 +236,41 @@ docker-compose up --build
 
 ```
 team-2-COMP47360/
-├── docker-compose.yml          # Defines all services
+├── docker-compose.yml           # Defines all services (dev + prod profiles)
+├── env.example                  # Template for required .env variables
+├── scripts/
+│   ├── compose-smoke.sh         # Production-like Docker smoke verification
+│   ├── verify-artifacts.sh      # SHA-256 checksum verification for 70 runtime binaries
+│   ├── run-tests.sh             # Unified test runner (Maven + Vitest + Cypress)
+│   └── check-tests.sh           # Quick test status check
+├── docs/                        # Project documentation (see index above)
 ├── frontend/
-│   ├── Dockerfile             # Frontend container setup
-│   └── [frontend files]
+│   ├── Dockerfile               # Multi-stage build (Vite → Nginx for prod)
+│   ├── nginx.conf               # Nginx reverse proxy config (chat, API, avatars)
+│   ├── cypress/                 # Cypress E2E test suites
+│   └── src/
+│       ├── pages/               # Page components (Home, MapView, FindMyVibe, etc.)
+│       ├── components/          # Shared UI components (AIChatWidget, ForecastSlider, etc.)
+│       ├── services/            # API client, auth, route, chat services
+│       ├── contexts/            # React contexts (Auth, Plan, Busyness)
+│       └── cache/               # Browser cache modules + invalidation hooks
 ├── BackEnd/
-│   ├── Dockerfile             # Backend container setup
-│   └── [backend files]
-└── README.md                  # This file
+│   ├── Dockerfile               # Spring Boot container (Maven build)
+│   ├── src/
+│   │   ├── main/java/.../controller/  # 8 REST controllers (Auth, Vibe, Plan, etc.)
+│   │   ├── main/java/.../service/    # 12 service classes with Caffeine caching
+│   │   └── test/                      # 25 JUnit/MockMvc test classes
+│   ├── llm-service/              # Python Flask LLM microservice
+│   │   ├── app.py                # Gunicorn entry point (FAISS, search, chat)
+│   │   ├── corpus/v1/            # Versioned venue catalog (venues.csv, manifest.json)
+│   │   ├── data/                 # location_embeddings.npy (Git LFS)
+│   │   ├── models/               # sentence-transformers model (Git LFS)
+│   │   └── tests/                # 10 Python test files
+│   └── busyness-service/         # Python Flask busyness microservice
+│       ├── app.py                # Busyness prediction + weather fallback
+│       ├── models/               # Keras DNN + LSTM models (Git LFS) + checksums.sha256
+│       └── tests/                # 4 Python test files
+└── config/                       # Shared configuration files
 ```
 
 ## Understanding the Setup
