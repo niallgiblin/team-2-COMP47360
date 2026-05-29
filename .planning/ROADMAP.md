@@ -157,7 +157,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–10 | v0.1 | 51/51 | Complete | 2026-05-29 |
-| 11 | v0.2 | 0/3 | Not started | — |
+| 11 | v0.2 | 3/3 | Complete | 2026-05-29 |
 | 12 | v0.2 | 0/TBD | Not started | — |
 | 13 | v0.2 | 0/TBD | Not started | — |
 | 14 | v0.2 | 0/TBD | Not started | — |
@@ -166,11 +166,11 @@ Plans:
 
 ## Next
 
-**Phase 11: RAG Architecture and Corpus Design** — Define versioned corpus schema, document model, and artifact layout.
+**Phase 12: Embedding and Index Pipeline** — Replace manual `.npy` regeneration with a documented CLI that encodes the corpus and builds a persisted FAISS index.
 
-`/gsd-discuss-phase 11` — gather context and clarify approach
+`/gsd-discuss-phase 12` — gather context and clarify approach
 
-Also: `/gsd-plan-phase 11` — skip discussion, plan directly
+Also: `/gsd-plan-phase 12` — skip discussion, plan directly
 
 ---
-*Last updated: 2026-05-29 — Milestone v0.2 roadmap created*
+*Last updated: 2026-05-29 — Phase 11 UAT complete*
