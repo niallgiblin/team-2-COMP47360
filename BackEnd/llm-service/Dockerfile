@@ -33,7 +33,10 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application modules into the container
-COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py ./
+COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py ./
+COPY retrieval/ ./retrieval/
+COPY venue_corpus/ ./venue_corpus/
+COPY prompts/ ./prompts/
 
 # Copy the sentence transformer model into the image
 COPY models/ ./models/
