@@ -53,14 +53,20 @@ def test_resolve_corpus_root_rejects_traversal():
 
 
 def test_row_count_matches_embeddings():
-    npy_path = SERVICE_DIR / "data" / "location_embeddings.npy"
+    import importlib
+
+    import config
+
+    importlib.reload(config)
+    npy_path = Path(config.EMBEDDINGS_PATH)
     if not npy_path.is_file():
         pytest.skip("location_embeddings.npy not present locally")
+
     import numpy as np
 
-    df = pd.read_csv(FIXTURE_DIR / "venues.csv")
+    df = pd.read_csv(config.DATA_PATH)
     embeddings = np.load(npy_path)
-    assert len(df) <= embeddings.shape[0]
+    assert len(df) == embeddings.shape[0]
 
 
 def test_production_manifest_matches():

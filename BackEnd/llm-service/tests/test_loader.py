@@ -24,12 +24,15 @@ def test_verify_file_paths_reports_variable_names_only(monkeypatch, tmp_path):
     missing_dir = tmp_path / "missing-model"
     data_file = tmp_path / "locations.csv"
     emb_file = tmp_path / "embeddings.npy"
+    manifest_file = tmp_path / "manifest.json"
     data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    manifest_file.write_text("{}", encoding="utf-8")
     np.save(emb_file, np.ones((1, 4), dtype="float32"))
 
     monkeypatch.setenv("MODEL_PATH", str(missing_dir))
     monkeypatch.setenv("DATA_PATH", str(data_file))
     monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
 
     ok, missing = verify_file_paths()
 
@@ -149,9 +152,6 @@ def test_validate_corpus_at_startup_warns_checksum_mismatch(monkeypatch, tmp_pat
 
     assert ok is True
     assert any("Checksum mismatch" in message for message in messages)
-
-
-@pytest.mark.xfail(reason="unblocks in 11-03 — loader.py must add MANIFEST_PATH check")
 def test_verify_file_paths_includes_manifest_path(monkeypatch, tmp_path):
     model_dir = tmp_path / "model"
     model_dir.mkdir()
@@ -175,7 +175,6 @@ def test_verify_file_paths_includes_manifest_path(monkeypatch, tmp_path):
     assert not any("\\" in item or "/" in item for item in missing)
 
 
-@pytest.mark.xfail(reason="unblocks in 11-03 — config.DATA_PATH default moves to corpus/v1/venues.csv")
 def test_default_data_path_relative_corpus():
     import importlib
 
@@ -183,3 +182,30 @@ def test_default_data_path_relative_corpus():
 
     importlib.reload(config)
     assert config.DATA_PATH.endswith("corpus/v1/venues.csv")
+
+
+def test_row_count_matches_embeddings():
+    import importlib
+
+    import config
+    import pandas as pd
+
+    importlib.reload(config)
+    npy_path = Path(config.EMBEDDINGS_PATH)
+    if not npy_path.is_file():
+        pytest.skip("location_embeddings.npy not present locally")
+
+    df = pd.read_csv(config.DATA_PATH)
+    embeddings = np.load(npy_path)
+    assert len(df) == embeddings.shape[0]
+
+
+def test_production_corpus_layout():
+    from venue_corpus.validate import validate_corpus_dir
+
+    prod_root = Path(__file__).resolve().parent.parent / "corpus" / "v1"
+    if not (prod_root / "venues.csv").is_file():
+        pytest.skip("production corpus/v1 not present")
+
+    errors = validate_corpus_dir(prod_root)
+    assert errors == []
