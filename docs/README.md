@@ -210,6 +210,33 @@ docker ps
 docker ps -a
 ```
 
+## Evaluation Results
+
+The RAG pipeline is evaluated against a curated benchmark of **41 questions** across **5 categories**, executed automatically via `scripts/run_eval.py`. The benchmark measures recall@5 and citation accuracy with category-specific thresholds.
+
+| Category | Questions | Description | Threshold |
+|----------|-----------|-------------|-----------|
+| Retrieval | 9 | Open-ended semantic queries (jazz clubs, rooftop bars, museums, etc.) | recall@5 ≥ 0.60 |
+| Filtered | 8 | Zone- and price-filtered searches (East Village bars, Chinatown budget eats, etc.) | recall@5 ≥ 0.60 |
+| Conversational | 8 | Context-dependent follow-ups ("cheaper options?", "anything in East Village instead?") | recall@5 ≥ 0.60 |
+| Adversarial | 8 | Queries targeting out-of-corpus attributes (hours, phone numbers, dress codes, ratings) | citation accuracy |
+| Abstention | 8 | Out-of-domain queries (Chicago pizza, dentists, hotels, hiking) — system should return nothing | ≥ 70% pass rate |
+
+**Eval runner capabilities** (`scripts/run_eval.py`):
+
+- Loads any benchmark JSONL (default: `data/benchmark.jsonl`) and executes every question through the live `SearchService` against the FAISS index.
+- Computes recall@5 for retrieval, filtered, and conversational categories and enforces category-level pass/fail thresholds.
+- For adversarial questions, validates that citations are well-formed and traceable to retrieved results — no fabricated attributes.
+- For abstention questions, verifies the system returns no results or only low-similarity results (< 0.3).
+- Produces a structured console report with per-category verdicts and an optional JSON report (`--report`).
+- Exits 0 when all categories meet their thresholds, exits 1 on any breach.
+
+The eval harness itself is covered by **30 unit and integration tests** (`tests/test_eval.py`), covering pure-function recall computation, citation accuracy checking, CLI argument parsing, benchmark schema validation, abstention detection, filtered-search parameter passthrough, threshold enforcement, JSON report structure, and a mini-benchmark integration smoke test — all passing.
+
+## Portfolio Summary
+
+Urban Gala's RAG pipeline brings retrieval-augmented generation to Manhattan venue discovery. Over a single milestone, we built a versioned 2,200+-venue corpus, a FAISS inner-product vector index over sentence-transformer embeddings, a unified retrieval service with zone and price filtering, grounded LLM citations, and an automated evaluation harness covering 41 benchmark questions across 5 categories — all containerized and ready for interview demonstration.
+
 ## Troubleshooting
 
 ### Problem: "Port already in use" error
