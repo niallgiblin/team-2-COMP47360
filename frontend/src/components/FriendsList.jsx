@@ -14,6 +14,7 @@ import { usePlan } from '../context/PlanContext';
 import { useNavigate } from 'react-router-dom';
 import { useState as useReactState } from 'react';
 import { useFriendRequests } from '../context/FriendRequestContext';
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 import { Tabs, Tab } from '@mui/material';
 
 
@@ -40,7 +41,7 @@ export default function FriendsList() {
   const fetchSentAndReceived = useCallback(async () => {
     if (!token) return;
     try {
-      const response = await makeAuthenticatedRequest(`/api/friends/list`);
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/friends/list'));
       const data = await response.json();
       setSentRequests(data.sent || []);
       setReceivedRequests(data.received || []);
@@ -53,7 +54,7 @@ export default function FriendsList() {
   const fetchSharedPlans = useCallback(async () => {
     if (!token) return;
     try {
-      const response = await makeAuthenticatedRequest(`/api/plans/shared-with-me`);
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans/shared-with-me'));
       const data = await response.json();
       setSharedPlans(data.sharedPlans || []);
     } catch {
@@ -70,7 +71,7 @@ export default function FriendsList() {
 
   const handleAccept = async (requesterId) => {
     try {
-      await makeAuthenticatedRequest(`/api/friends/accept/${requesterId}`, { method: 'POST' });
+      await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), `/friends/accept/${requesterId}`), { method: 'POST' });
       setMessage({ type: 'success', text: 'Friend request accepted!' });
       fetchFriendRequests();
       fetchAcceptedFriends();
@@ -83,7 +84,7 @@ export default function FriendsList() {
 
   const handleDecline = async (requesterId) => {
     try {
-      await makeAuthenticatedRequest(`/api/friends/decline/${requesterId}`, { method: 'POST' });
+      await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), `/friends/decline/${requesterId}`), { method: 'POST' });
       setMessage({ type: 'info', text: 'Friend request declined.' });
       fetchFriendRequests();
       fetchSentAndReceived();
@@ -100,7 +101,7 @@ export default function FriendsList() {
     }
 
     try {
-      const response = await makeAuthenticatedRequest(`/api/friends/add`, {
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/friends/add'), {
         method: "POST",
         body: JSON.stringify({ username: usernameToAdd.trim() }),
       });

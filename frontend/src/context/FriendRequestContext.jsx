@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useAuth } from '../hooks/useAuth'; // Assuming useAuth provides makeAuthenticatedRequest
+import { useAuth } from '../hooks/useAuth';
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 
 const FriendRequestContext = createContext(null);
 
@@ -21,7 +22,7 @@ export const FriendRequestProvider = ({ children }) => {
 
     try {
       // Use the centralized request function which handles token and base URL
-      const response = await makeAuthenticatedRequest('/api/friends/list'); 
+      const response = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/friends/list'));
       const data = await response.json();
       if (data) {
         // The backend returns an object with keys: accepted, sent, received

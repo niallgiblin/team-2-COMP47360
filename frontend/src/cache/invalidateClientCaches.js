@@ -1,10 +1,23 @@
 import { routeSegmentCache } from '../utils/routeSegmentCache';
 
 let registeredBusynessClear = null;
+let registeredAuthLogout = null;
 const moduleCacheClears = [];
 
 export function registerBusynessClear(fn) {
   registeredBusynessClear = fn;
+}
+
+export function registerAuthLogout(fn) {
+  registeredAuthLogout = fn;
+}
+
+export function invokeAuthLogout() {
+  if (typeof registeredAuthLogout === 'function') {
+    registeredAuthLogout();
+    return true;
+  }
+  return false;
 }
 
 export function registerModuleCacheClear(fn) {

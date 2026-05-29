@@ -203,6 +203,7 @@ export default function MapView() {
   // State for user location and directions
   const [userLocation, setUserLocation] = useState(null);
   const [manualStart, setManualStart] = useState("");
+  const [startLocationError, setStartLocationError] = useState("");
   const [manualDestination, setManualDestination] = useState("");
   const [showDirections, setShowDirections] = useState(false);
   const [directions, setDirections] = useState(null);
@@ -294,11 +295,14 @@ export default function MapView() {
   // Handler for setting location on button click
   const handleSetLocation = async () => {
     if (manualStart.trim()) {
+      setStartLocationError("");
       const loc = await geocodeAddress(manualStart);
       if (loc && isInNYC(loc.lat, loc.lng)) {
         setUserLocation(loc);
       } else if (loc) {
-        alert("The selected location is not in New York City. Please enter a valid NYC address.");
+        setStartLocationError("The selected location is not in New York City. Please enter a valid NYC address.");
+      } else {
+        setStartLocationError("Could not find that address. Please try a different NYC location.");
       }
     }
   };
@@ -905,7 +909,10 @@ export default function MapView() {
                 placeholder={fromPlan && plan.length > 1 ? "Enter address or leave empty to start from first venue" : "Enter address or location"}
                 variant="outlined"
                 value={manualStart}
-                onChange={(e) => setManualStart(e.target.value)}
+                onChange={(e) => {
+                  setManualStart(e.target.value);
+                  if (startLocationError) setStartLocationError("");
+                }}
                 data-testid="location-filter"
                 sx={{
                   width: 280,
@@ -923,6 +930,11 @@ export default function MapView() {
                 }}
                 InputLabelProps={{ shrink: true }}
               />
+              {startLocationError ? (
+                <Typography variant="body2" color="error" sx={{ width: 280, mt: -2 }}>
+                  {startLocationError}
+                </Typography>
+              ) : null}
 
 
               <TextField

@@ -24,6 +24,7 @@ import SharePlanModal from './SharePlanModal';
 
 // Custom auth hook to make authenticated API calls
 import { useAuth } from '../hooks/useAuth';
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 
 
 // Main component for displaying the user's saved plans
@@ -46,7 +47,7 @@ export default function SavedPlans() {
 
   // Sends a POST request to the backend to share a plan with a friend
   const sharePlanWithFriend = async (planId, friendId) => {
-    await makeAuthenticatedRequest(`/api/plans/share`, {
+    await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans/share'), {
       method: 'POST',
       body: JSON.stringify({ planId, userIds: [friendId] }),
     });

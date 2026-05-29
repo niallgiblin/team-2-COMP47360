@@ -1,5 +1,5 @@
 ---
-status: resolved
+status: complete
 phase: 05-api-contract-alignment-and-llm-smoke-tests
 source:
   - 05-01-SUMMARY.md
