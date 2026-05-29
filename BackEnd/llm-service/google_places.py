@@ -155,8 +155,20 @@ def fetch_reviews_for_venue(name: str, address: str = "") -> Optional[dict]:
     """
     place_id = find_place_id(name, address)
     if not place_id:
+        logger.info("Google Places: no match for '%s'", name[:60])
         return None
-    return get_place_details(place_id)
+    details = get_place_details(place_id)
+    if details:
+        rating = details.get("rating", "?")
+        total = details.get("user_ratings_total", 0)
+        review_count = len(details.get("reviews", []))
+        logger.info(
+            "Google Places: %s — %.1f★ (%d reviews, %d fetched)",
+            name[:60], rating, total, review_count
+        )
+    else:
+        logger.info("Google Places: no details for '%s'", name[:60])
+    return details
 
 
 def format_reviews_for_context(place_details: Optional[dict], max_reviews: int = 3) -> str:
