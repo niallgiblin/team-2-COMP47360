@@ -166,6 +166,7 @@ export const vibeAPI = {
     return `${base}?${params.toString()}`;
   },
   trendingUrl: () => joinApiPath(resolveApiBaseUrl(), '/vibe/trending'),
+  googleReviewsUrl: (locationId) => joinApiPath(resolveApiBaseUrl(), `/vibe/venue/${locationId}/google-reviews`),
 };
 
 // Chat API — proxied Flask route requires the same Bearer JWT boundary as Spring.

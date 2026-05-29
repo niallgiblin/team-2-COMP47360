@@ -6,15 +6,19 @@ import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.manhattan.busyness_predictor.dto.GooglePlacesReviewDto;
 import com.manhattan.busyness_predictor.dto.SimilarLocationsResult;
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
+import com.manhattan.busyness_predictor.model.Location;
+import com.manhattan.busyness_predictor.service.GooglePlacesService;
 import com.manhattan.busyness_predictor.service.VibeService;
 
 import jakarta.validation.Valid;
@@ -24,9 +28,11 @@ import jakarta.validation.Valid;
 public class VibeController {
 
     private final VibeService vibeService;
+    private final GooglePlacesService googlePlacesService;
 
-    public VibeController(VibeService vibeService) {
+    public VibeController(VibeService vibeService, GooglePlacesService googlePlacesService) {
         this.vibeService = vibeService;
+        this.googlePlacesService = googlePlacesService;
     }
     // Find My Vibe - Search by natural language description
 
@@ -104,5 +110,42 @@ public class VibeController {
         response.put("totalResults", result.getLocations().size());
 
         return ResponseEntity.ok(response);
+    }
+
+    // Google Places Reviews - fetch real reviews from Google Places API
+    @GetMapping("/venue/{locationId}/google-reviews")
+    public ResponseEntity<Map<String, Object>> getGoogleReviews(
+            @PathVariable Integer locationId) {
+        Location location = vibeService.getLocationById(locationId);
+        if (location == null) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Location not found");
+            error.put("locationId", locationId);
+            return ResponseEntity.status(404).body(error);
+        }
+
+        GooglePlacesReviewDto reviews = googlePlacesService.getPlaceReviews(location);
+
+        Map<String, Object> result = new HashMap<>();
+        if (reviews.getError() != null) {
+            result.put("error", reviews.getError());
+            result.put("locationId", locationId);
+            result.put("venueName", location.getName());
+            // Still return partial data if available
+            if (reviews.getGoogleRating() != null) {
+                result.put("googleRating", reviews.getGoogleRating());
+            }
+            return ResponseEntity.ok(result);
+        }
+
+        result.put("locationId", locationId);
+        result.put("venueName", reviews.getPlaceName());
+        result.put("placeId", reviews.getPlaceId());
+        result.put("googleRating", reviews.getGoogleRating());
+        result.put("totalRatings", reviews.getTotalRatings());
+        result.put("reviews", reviews.getReviews());
+        result.put("attribution", reviews.getAttribution());
+
+        return ResponseEntity.ok(result);
     }
 }

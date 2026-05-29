@@ -2,6 +2,7 @@
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -149,8 +150,12 @@ def _truncate(text, max_len=120):
 def format_retrieval_context(results):
     """Format search-result DTOs into a rich retrieval-context string AND a citations list.
 
-    Now includes price, rating, description, summary, tags, and review count
-    for each venue — giving the LLM much richer grounding than name/zone/type alone.
+    Now includes price, rating, description, summary, tags, review count,
+    **and live Google Places reviews** — giving the LLM much richer grounding
+    than name/zone/type alone.
+
+    Google enrichment runs concurrently with a short timeout per venue so
+    chat latency stays low even when the Places API is slow.
 
     Parameters
     ----------
@@ -166,6 +171,27 @@ def format_retrieval_context(results):
     if not results:
         return (NO_VENUES_MESSAGE, [])
 
+    # Fetch Google Places reviews concurrently for all result venues.
+    google_contexts: dict[int, str] = {}
+    try:
+        from google_places import enrich_venue_with_google_reviews
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {
+                pool.submit(enrich_venue_with_google_reviews, loc): idx
+                for idx, loc in enumerate(results)
+            }
+            for future in as_completed(futures, timeout=4.0):
+                idx = futures[future]
+                try:
+                    ctx = future.result()
+                    if ctx:
+                        google_contexts[idx] = ctx
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.debug("Google Places enrichment skipped: %s", exc)
+
     loc_info_parts = []
     citations = []
 
@@ -179,6 +205,7 @@ def format_retrieval_context(results):
         summary = loc.get("summary", "")
         tags = loc.get("tags", "")
         num_reviews = loc.get("num_reviews", 0)
+        reviews = loc.get("reviews", "")
 
         # Build a compact but rich venue summary for the LLM.
         detail_parts = [f"**{idx}. {name}**"]
@@ -196,6 +223,13 @@ def format_retrieval_context(results):
             detail_parts.append(f"  Vibe: {_truncate(summary)}")
         if tags:
             detail_parts.append(f"  Tags: {tags}")
+
+        # Prefer live Google reviews over static CSV reviews.
+        google_ctx = google_contexts.get(idx - 1, "")
+        if google_ctx:
+            detail_parts.append(f"  {google_ctx}")
+        elif reviews:
+            detail_parts.append(f"  What people say: {_truncate(reviews, 250)}")
 
         loc_info_parts.append("\n".join(detail_parts))
         citations.append(create_citation_dto(loc))
