@@ -5,7 +5,7 @@
   "venues_csv": {
     "path": "venues.csv",
     "sha256": "9ad28a62ce87924ca99ba77d84023b7d3728aa5f4a07552b183e1ead8c95cbcf",
-    "row_count": 2261,
+    "row_count": 2262,
     "columns": [
       "id",
       "lat",

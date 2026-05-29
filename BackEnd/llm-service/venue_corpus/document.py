@@ -16,10 +16,10 @@ except ImportError:  # pragma: no cover - tests may stub pandas
 
 EMBED_FIELDS: list[tuple[str, str]] = [
     ("name", "Name"),
-    ("zone", "Zone"),
-    ("loc_type", "Type"),
-    ("price", "Price"),
     ("description", "Description"),
+    ("zone", "Zone"),
+    ("price", "Price"),
+    ("loc_type", "Type"),
     ("tags", "Tags"),
     ("summary", "Summary"),
     ("Info", "Info"),

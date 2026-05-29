@@ -7,6 +7,8 @@ try:
 except ImportError:  # pragma: no cover
     pd = None  # type: ignore[assignment]
 
+from venue_corpus.manifest import load_manifest, verify_manifest_checksum
+
 REQUIRED_VENUE_COLUMNS = frozenset({
     "id", "lat", "long", "name", "addr", "uri", "reviews", "num_reviews",
     "loc_type", "description", "price", "zone", "Info", "summary", "tags",
@@ -37,9 +39,41 @@ def validate_venue_schema(df) -> list[str]:
 
 
 def validate_corpus_dir(corpus_root: Path) -> list[str]:
-    """Check required corpus artifacts exist under corpus_root."""
+    """Validate corpus layout, schema, and manifest checksum."""
     errors: list[str] = []
     for name in ("venues.csv", "manifest.json", "SCHEMA.md"):
         if not (corpus_root / name).is_file():
             errors.append(f"missing required file: {name}")
+    if errors:
+        return errors
+
+    manifest_path = corpus_root / "manifest.json"
+    csv_path = corpus_root / "venues.csv"
+
+    try:
+        manifest = load_manifest(manifest_path)
+    except (OSError, ValueError) as exc:
+        return [f"manifest load failed: {exc}"]
+
+    ok, checksum_errors = verify_manifest_checksum(manifest, csv_path)
+    if not ok:
+        errors.extend(checksum_errors)
+
+    if pd is None:
+        errors.append("pandas required for schema validation")
+        return errors
+
+    try:
+        df = pd.read_csv(csv_path)
+    except OSError as exc:
+        return errors + [f"venues.csv read failed: {exc}"]
+
+    errors.extend(validate_venue_schema(df))
+
+    expected_rows = manifest.get("venues_csv", {}).get("row_count")
+    if isinstance(expected_rows, int) and len(df) != expected_rows:
+        errors.append(
+            f"row_count mismatch: manifest {expected_rows}, csv {len(df)}"
+        )
+
     return errors
