@@ -14,6 +14,7 @@ import DialogActions from '@mui/material/DialogActions';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useAuth } from '../hooks/useAuth';
+import { resolveApiBaseUrl, joinApiPath } from '../../services/apiUrls';
 
 export default function CompactSavedPlans({ setViewMode }) {
   const { savedPlans, loadPlan } = usePlan();
@@ -42,7 +43,7 @@ export default function CompactSavedPlans({ setViewMode }) {
     setShareMessage('');
     // Fetch friends list
     try {
-      const res = await makeAuthenticatedRequest('/api/friends/list');
+      const res = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/friends/list'));
       const data = await res.json();
       setFriends(data.accepted || []);
       setSelectedFriends([]);
@@ -69,7 +70,7 @@ export default function CompactSavedPlans({ setViewMode }) {
   const handleShare = async () => {
     if (!selectedPlan || selectedFriends.length === 0) return;
     try {
-      const res = await makeAuthenticatedRequest('/api/plans/share', {
+      const res = await makeAuthenticatedRequest(joinApiPath(resolveApiBaseUrl(), '/plans/share'), {
         method: 'POST',
         body: JSON.stringify({ planId: selectedPlan.id, userIds: selectedFriends })
       });

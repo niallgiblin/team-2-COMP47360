@@ -1,5 +1,5 @@
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest'
-import { authAPI, apiService, planAPI, vibeAPI, chatAPI, joinApiPath, resolveApiBaseUrl } from '../apiService'
+import { authAPI, apiService, planAPI, vibeAPI, chatAPI, authFetch, joinApiPath, resolveApiBaseUrl } from '../apiService'
 
 global.fetch = vi.fn()
 
@@ -170,6 +170,35 @@ describe('apiService helpers', () => {
     localStorage.setItem('user', JSON.stringify({ name: 'User' }))
 
     apiService.clearAuth()
+
+    expect(localStorage.getItem('token')).toBe(null)
+    expect(localStorage.getItem('user')).toBe(null)
+  })
+})
+
+describe('authFetch', () => {
+  test('401 invokes registered auth logout when available', async () => {
+    const logoutSpy = vi.fn()
+    const { registerAuthLogout } = await import('../../src/cache/invalidateClientCaches')
+    registerAuthLogout(logoutSpy)
+
+    fetch.mockResolvedValueOnce({ status: 401, ok: false })
+
+    await authFetch('/api/vibe/map-data')
+
+    expect(logoutSpy).toHaveBeenCalledTimes(1)
+    registerAuthLogout(null)
+  })
+
+  test('401 clears localStorage when no auth logout registered', async () => {
+    const { registerAuthLogout } = await import('../../src/cache/invalidateClientCaches')
+    registerAuthLogout(null)
+    localStorage.setItem('token', 'abc123')
+    localStorage.setItem('user', JSON.stringify({ id: 1 }))
+
+    fetch.mockResolvedValueOnce({ status: 401, ok: false })
+
+    await authFetch('/api/vibe/map-data')
 
     expect(localStorage.getItem('token')).toBe(null)
     expect(localStorage.getItem('user')).toBe(null)

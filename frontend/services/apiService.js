@@ -28,10 +28,12 @@ export const authFetch = async (url, options = {}) => {
 
   const response = await fetch(url, { ...options, headers });
   if (response.status === 401) {
-    const { invalidateClientCaches } = await import('../src/cache/invalidateClientCaches');
-    invalidateClientCaches();
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    const { invokeAuthLogout, invalidateClientCaches } = await import('../src/cache/invalidateClientCaches');
+    if (!invokeAuthLogout()) {
+      invalidateClientCaches();
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
   }
   return response;
 };
