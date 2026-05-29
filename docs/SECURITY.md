@@ -251,7 +251,7 @@ The application uses JSON Web Tokens (JWT) for stateless authentication:
 - **Token Generation**: Secure JWT tokens are generated upon successful login
 - **Token Validation**: All protected endpoints validate JWT tokens
 - **Token Expiration**: Tokens have configurable expiration times
-- **Secret Rotation**: JWT secrets can be rotated without affecting existing sessions
+- **Secret Rotation**: JWT secrets can be rotated with a documented runbook — note that rotation invalidates all active tokens and requires every user to log in again (see [JWT signing key](#jwt-signing-key-app_jwt_secret) for the full procedure)
 
 ### Security Configuration
 

@@ -27,13 +27,20 @@ Users can reliably discover, compare, route to, and plan venue visits using trus
 
 **Archive:** `.planning/milestones/v0.1-ROADMAP.md`, `.planning/milestones/v0.1-REQUIREMENTS.md`
 
-## Next Milestone Goals
+## Current Milestone: v0.2 Evaluated RAG for Location Discovery
 
-Run `/gsd-new-milestone` to define v0.2. Candidate themes from v0.1 deferrals:
-- Production observability (OBS-01)
-- Map vector tiling at 10k+ locations
-- CI Docker smoke on every PR
-- Model retraining pipeline (MODEL-01)
+**Goal:** Upgrade the existing LLM search and chat stack into an explicit, evaluated Retrieval-Augmented Generation system with versioned corpus, reproducible indexing, unified retrieval, grounded citations, and an automated benchmark harness.
+
+**Target features:**
+- Versioned venue corpus with documented schema and checksum (RAG-01)
+- Reproducible embedding and FAISS index build pipeline (RAG-02, RAG-03)
+- Unified retrieval layer shared by vibe search and chat (RAG-04)
+- Grounded LLM answers with structured venue citations (RAG-05)
+- Versioned prompt template registry (RAG-06)
+- 30–50 question benchmark with automated eval for recall, citation faithfulness, and abstention (RAG-07–RAG-09)
+- Portfolio-ready architecture docs and eval summary (RAG-10)
+
+**Context:** `.planning/milestones/v0.2-evaluated-rag-for-location-discovery/v0.2-CONTEXT.md`
 
 ## Requirements
 
@@ -41,17 +48,20 @@ Run `/gsd-new-milestone` to define v0.2. Candidate themes from v0.1 deferrals:
 
 All 54 v0.1 requirements validated — see `.planning/milestones/v0.1-REQUIREMENTS.md` for full traceability.
 
-### Active
+### Active (v0.2)
 
-(None — define via `/gsd-new-milestone`)
+RAG-01 through RAG-10 — see `.planning/REQUIREMENTS.md`
 
 ### Out of Scope
 
-- Net-new product features unrelated to audited concerns (v0.1 scope)
-- Wholesale framework rewrites
-- Full cloud production migration
-- Model accuracy improvement / retraining (separate milestone)
-- UI redesign beyond correctness fixes
+- PostgreSQL/pgvector migration, Chroma/Qdrant, or external vector DB deployment
+- LLM provider swap (OpenAI, Anthropic, local Ollama)
+- Model retraining or embedding fine-tuning (MODEL-01)
+- Real-time corpus ingest or venue admin UI
+- MLflow, LangSmith, or full experiment tracking platform
+- Production observability dashboards (OBS-01)
+- UI redesign beyond minimal citation display
+- Multimodal RAG (images, maps)
 
 ## Key Decisions
 
@@ -63,14 +73,36 @@ All 54 v0.1 requirements validated — see `.planning/milestones/v0.1-REQUIREMEN
 | Continue with existing stack | Rewrites add risk | ✓ Good — all phases shipped in-stack |
 | Git LFS for ML artifacts | Pragmatic runtime delivery | ✓ Good — checksum verification added |
 | FAISS for LLM search | Reduce full-corpus scan | ✓ Good — 16-example parity verified |
-| Viewport bbox for map-data (Phase 10) | Staged scaling path | ✓ Good — deferred full tiling to v0.2 |
+| Viewport bbox for map-data (Phase 10) | Staged scaling path | ✓ Good — full tiling deferred |
+| FAISS-first in-process vector store for v0.2 | Small corpus, no new infra | Pending — v0.2 planning |
+| One document per venue for RAG corpus | Human-readable citations | Pending — v0.2 planning |
+| Unified retrieval for search + chat | Consistent results, single eval surface | Pending — v0.2 planning |
+| Hugging Face generation unchanged for v0.2 | Focus on retrieval, grounding, eval | Pending — v0.2 planning |
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
 
 ## Constraints
 
 - **Stack compatibility:** React/Vite, Spring Boot, Flask, MySQL, Docker Compose
 - **Source-control hygiene:** No blind artifact deletion; documented paths and checksums
-- **Security:** Secrets via env vars; rotation runbook in docs/SECURITY.md
-- **Deployment:** Docker Compose primary orchestration path
+- **Security:** Secrets via env vars; RAG endpoints inherit v0.1 JWT, rate limits, CORS
+- **Deployment:** Docker Compose primary orchestration path; no new services for v0.2
+- **Compatibility:** Citation fields are additive; existing vibe search and chat clients must not break
 
 ---
-*Last updated: 2026-05-29 after v0.1 milestone*
+*Last updated: 2026-05-29 — Milestone v0.2 started*

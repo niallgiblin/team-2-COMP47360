@@ -1,42 +1,45 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.1
-milestone_name: Address Codebase Concerns
-status: Awaiting next milestone
-stopped_at: Completed 10-05-PLAN.md
-last_updated: "2026-05-29T12:33:23.904Z"
-last_activity: 2026-05-29 — Milestone v0.1 completed and archived
+milestone: v0.2
+milestone_name: Evaluated RAG for Location Discovery
+status: executing
+stopped_at: Phase 11 context gathered
+last_updated: "2026-05-29T13:01:44.596Z"
+last_activity: 2026-05-29 -- Phase 11 execution started
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 51
-  completed_plans: 51
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 0
+  percent: 0
 ---
 
 # GSD State
 
 ## Current Position
 
-Phase: Milestone v0.1 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-29 — Milestone v0.1 completed and archived
+Phase: 11 (RAG Architecture and Corpus Design) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 11
+Last activity: 2026-05-29 -- Phase 11 execution started
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-29)
 
 **Core value:** Users can reliably discover, compare, route to, and plan venue visits using trustworthy busyness and location intelligence.
-**Current focus:** Planning next milestone — run `/gsd-new-milestone`
+**Current focus:** Phase 11 — RAG Architecture and Corpus Design
 
 ## Milestone Summary
 
-Milestone v0.1 converts the 2026-05-25 concern audit into executable requirements and phases. Research was skipped because the milestone remediates existing audited risks rather than introducing new product features.
+Milestone v0.2 upgrades the existing LLM search and chat stack into an explicit, evaluated RAG system: versioned corpus, reproducible FAISS indexing, unified retrieval, grounded citations, prompt registry, and a 30–50 question benchmark harness. Research skipped — comprehensive context in `.planning/milestones/v0.2-evaluated-rag-for-location-discovery/v0.2-CONTEXT.md`.
 
 ## Pending Decisions
 
-(None — map scaling resolved to viewport bbox per Phase 10 CONTEXT D-01–D-05.)
+- Search response citations: ranked list only vs full citation objects on search (planner discretion; chat gets full citations)
+- Frontend citation UI: minimal list under chat bubble vs API-only in v0.2
+- Eval CI gating: report-only vs merge-blocking thresholds
+- Corpus version bump: explicit `corpus/vN/` directories vs auto-bump on CSV edit
 
 ## Decisions
 
@@ -109,15 +112,17 @@ Milestone v0.1 converts the 2026-05-25 concern audit into executable requirement
 
 ## Session Continuity
 
-Last session: 2026-05-28T16:00:00.000Z
-Stopped at: Completed 10-05-PLAN.md
-Resume file: None
+Last session: 2026-05-29T12:49:58.629Z
+Stopped at: Phase 11 context gathered
+Resume file: .planning/phases/11-rag-architecture-and-corpus-design/11-CONTEXT.md
 
 ## Notes
 
-- Phase 3 plans 01–05 cover DEP-04, DEP-05, SEC-01, SEC-02.
-- Uncommitted planning artifacts: 03-01–05 PLAN, 03-PATTERNS, 03-VALIDATION (plus unrelated `.vscode/settings.json`, `BackEnd/llm-service/requirements.in`).
+- v0.2 context: `.planning/milestones/v0.2-evaluated-rag-for-location-discovery/v0.2-CONTEXT.md`
+- v0.1 phase directories cleared; archive at `.planning/milestones/v0.1-phases/` if needed
+- Phase numbering continues from 11 (v0.1 ended at Phase 10)
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- `/gsd-discuss-phase 11` — gather context for first v0.2 phase
+- `/gsd-plan-phase 11` — skip discussion, plan directly
