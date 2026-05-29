@@ -67,6 +67,13 @@ def validate_corpus_at_startup() -> tuple[bool, list[str]]:
     except ValueError:
         return False, ["CORPUS_VERSION"]
 
+    expected_csv = corpus_root / "venues.csv"
+    expected_manifest = corpus_root / "manifest.json"
+    if Path(cfg.DATA_PATH).resolve() != expected_csv.resolve():
+        return False, [DATA_PATH]
+    if Path(cfg.MANIFEST_PATH).resolve() != expected_manifest.resolve():
+        return False, [MANIFEST_PATH]
+
     all_errors = validate_corpus_dir(corpus_root)
     checksum_errors = [error for error in all_errors if error.startswith("Checksum mismatch")]
     hard_errors = [error for error in all_errors if error not in checksum_errors]

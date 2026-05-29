@@ -124,11 +124,63 @@ def test_validate_corpus_at_startup_fails_missing_manifest(monkeypatch, tmp_path
 
     monkeypatch.setattr(loader, "__file__", str(service_dir / "loader.py"))
     monkeypatch.setenv("CORPUS_VERSION", "v1")
+    monkeypatch.setenv("DATA_PATH", str(corpus_root / "venues.csv"))
+    monkeypatch.setenv("MANIFEST_PATH", str(corpus_root / "manifest.json"))
 
     ok, messages = validate_corpus_at_startup()
 
     assert ok is False
     assert "MANIFEST_PATH" in messages
+
+
+def test_validate_corpus_at_startup_fails_mismatched_data_path(monkeypatch, tmp_path):
+    import loader
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "corpus_v1"
+    service_dir = tmp_path / "service"
+    service_dir.mkdir()
+    corpus_root = service_dir / "corpus" / "v1"
+    corpus_root.mkdir(parents=True)
+    for name in ("venues.csv", "manifest.json", "SCHEMA.md"):
+        (corpus_root / name).write_text((fixture / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    alternate_csv = tmp_path / "alternate.csv"
+    alternate_csv.write_text("id\n1\n", encoding="utf-8")
+
+    monkeypatch.setattr(loader, "__file__", str(service_dir / "loader.py"))
+    monkeypatch.setenv("CORPUS_VERSION", "v1")
+    monkeypatch.setenv("DATA_PATH", str(alternate_csv))
+    monkeypatch.setenv("MANIFEST_PATH", str(corpus_root / "manifest.json"))
+
+    ok, messages = validate_corpus_at_startup()
+
+    assert ok is False
+    assert messages == ["DATA_PATH"]
+
+
+def test_validate_corpus_at_startup_fails_mismatched_manifest_path(monkeypatch, tmp_path):
+    import loader
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "corpus_v1"
+    service_dir = tmp_path / "service"
+    service_dir.mkdir()
+    corpus_root = service_dir / "corpus" / "v1"
+    corpus_root.mkdir(parents=True)
+    for name in ("venues.csv", "manifest.json", "SCHEMA.md"):
+        (corpus_root / name).write_text((fixture / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    alternate_manifest = tmp_path / "alternate-manifest.json"
+    alternate_manifest.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(loader, "__file__", str(service_dir / "loader.py"))
+    monkeypatch.setenv("CORPUS_VERSION", "v1")
+    monkeypatch.setenv("DATA_PATH", str(corpus_root / "venues.csv"))
+    monkeypatch.setenv("MANIFEST_PATH", str(alternate_manifest))
+
+    ok, messages = validate_corpus_at_startup()
+
+    assert ok is False
+    assert messages == ["MANIFEST_PATH"]
 
 
 def test_validate_corpus_at_startup_warns_checksum_mismatch(monkeypatch, tmp_path):
@@ -147,6 +199,8 @@ def test_validate_corpus_at_startup_warns_checksum_mismatch(monkeypatch, tmp_pat
 
     monkeypatch.setattr(loader, "__file__", str(service_dir / "loader.py"))
     monkeypatch.setenv("CORPUS_VERSION", "v1")
+    monkeypatch.setenv("DATA_PATH", str(corpus_root / "venues.csv"))
+    monkeypatch.setenv("MANIFEST_PATH", str(corpus_root / "manifest.json"))
 
     ok, messages = validate_corpus_at_startup()
 
