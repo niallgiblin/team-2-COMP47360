@@ -105,6 +105,9 @@ class _FakeEncoder:
             return self._query_vector.copy()
         return self._query_vector.copy()
 
+    def get_sentence_embedding_dimension(self):
+        return int(self._query_vector.shape[0])
+
 
 def test_build_vector_index_normalizes_and_maps_row_ids():
     raw = np.array([[3.0, 4.0], [0.0, 5.0]], dtype="float32")
@@ -234,3 +237,83 @@ def test_torch_fallback_allowed_only_when_flag_set(monkeypatch):
     results, confidence = service._torch_full_corpus_search("jazz")
     assert isinstance(results, list)
     assert confidence >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Persisted-index startup tests (M001/S03/T03)
+# ---------------------------------------------------------------------------
+
+def test_from_startup_with_persisted_index(monkeypatch):
+    """from_startup loads persisted index when valid faiss.index + metadata exist."""
+    import tempfile
+    from pathlib import Path
+
+    from test_index_loader import _build_fixture_index
+
+    with tempfile.TemporaryDirectory() as tmp:
+        index_dir = Path(tmp) / "index"
+        _build_fixture_index(index_dir, n_vectors=5, dimensions=4)
+
+        import config
+
+        # Point MANIFEST_PATH to a non-existent file so manifest validation is skipped.
+        monkeypatch.setattr(config, "MANIFEST_PATH", str(Path(tmp) / "nonexistent_manifest.json"))
+
+        df = _FakeDf(_tiny_rows()[:5])
+        embeddings = _tiny_embeddings()
+
+        service = SearchService.from_startup(
+            df,
+            embeddings,
+            encoder=_FakeEncoder([1, 0, 0, 0]),
+            index_path=str(index_dir),
+        )
+
+        assert service._index_source == "persisted"
+        assert service.uses_faiss_index is True
+
+
+def test_from_startup_falls_back_when_index_missing():
+    """from_startup falls back to .npy-built when index_path does not exist."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService.from_startup(
+        df,
+        embeddings,
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        index_path="/nonexistent/path/for/test",
+    )
+
+    assert service._index_source == "npy-built"
+
+
+def test_from_startup_falls_back_on_checksum_mismatch(monkeypatch):
+    """from_startup falls back to .npy when persisted index checksum != manifest."""
+    import tempfile
+    from pathlib import Path
+
+    from test_index_loader import _build_fixture_index, _build_fixture_manifest
+
+    with tempfile.TemporaryDirectory() as tmp:
+        index_dir = Path(tmp) / "index"
+        manifest_path = Path(tmp) / "manifest.json"
+
+        _build_fixture_index(index_dir, n_vectors=3, dimensions=4, checksum="wrong_checksum")
+        _build_fixture_manifest(manifest_path, checksum="correct_checksum")
+
+        import config
+
+        monkeypatch.setattr(config, "MANIFEST_PATH", str(manifest_path))
+
+        df = _FakeDf(_tiny_rows()[:3])
+        embeddings = _tiny_embeddings()[:3]
+
+        service = SearchService.from_startup(
+            df,
+            embeddings,
+            encoder=_FakeEncoder([1, 0, 0, 0]),
+            index_path=str(index_dir),
+        )
+
+        assert service._index_source == "npy-built"

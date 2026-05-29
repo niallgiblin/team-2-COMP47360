@@ -75,3 +75,33 @@ def create_location_dto(row, similarity_score=None):
             else None
         ),
     }
+
+
+def create_citation_dto(result):
+    """Map a search-result DTO to a structured citation with venue ID,
+    display name, descriptive snippet, and similarity score.
+
+    Parameters
+    ----------
+    result : dict
+        A location DTO produced by ``create_location_dto`` (or equivalent).
+
+    Returns
+    -------
+    dict
+        ``{"venue_id": int, "name": str, "snippet": str, "score": float | None}``
+    """
+    snippet_parts = [str(result.get("type", "")).strip()]
+    zone = str(result.get("zone", "")).strip()
+    if zone:
+        snippet_parts.append(f"in {zone}")
+    address = str(result.get("address", "")).strip()
+    if address:
+        snippet_parts.append(f"— {address}")
+
+    return {
+        "venue_id": result.get("id"),
+        "name": str(result.get("name", "")),
+        "snippet": " ".join(snippet_parts) if snippet_parts[0] else "",
+        "score": result.get("similarity"),
+    }

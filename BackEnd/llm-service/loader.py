@@ -11,6 +11,7 @@ import config as _config_module
 MODEL_PATH = "MODEL_PATH"
 DATA_PATH = "DATA_PATH"
 EMBEDDINGS_PATH = "EMBEDDINGS_PATH"
+INDEX_PATH = "INDEX_PATH"
 MANIFEST_PATH = "MANIFEST_PATH"
 
 
@@ -25,17 +26,46 @@ def _reload_config():
 
 
 def verify_file_paths():
-    """Verify required artifacts exist; return missing env var names only."""
+    """Verify required artifacts exist; return missing env var names and optional warnings.
+
+    Returns:
+        (all_required_ok: bool, missing_required: list[str], optional_warnings: list[str])
+    """
     cfg = _reload_config()
-    checks = [
+    required_checks = [
         (MODEL_PATH, cfg.MODEL_PATH),
         (DATA_PATH, cfg.DATA_PATH),
         (EMBEDDINGS_PATH, cfg.EMBEDDINGS_PATH),
         (MANIFEST_PATH, cfg.MANIFEST_PATH),
     ]
 
-    missing = [env_name for env_name, path in checks if not os.path.exists(path)]
-    return len(missing) == 0, missing
+    missing = [env_name for env_name, path in required_checks if not os.path.exists(path)]
+
+    # INDEX_PATH is optional — missing index triggers .npy fallback at SearchService startup.
+    optional_warnings = []
+    index_path = cfg.INDEX_PATH
+    if not os.path.exists(index_path):
+        optional_warnings.append(
+            f"{INDEX_PATH} ({index_path}) not found; service will fall back to .npy-built index"
+        )
+    elif not os.path.isdir(index_path):
+        optional_warnings.append(
+            f"{INDEX_PATH} ({index_path}) is not a directory; service will fall back to .npy-built index"
+        )
+    else:
+        # Directory exists — check for expected files, warn if incomplete.
+        faiss_file = os.path.join(index_path, "faiss.index")
+        metadata_file = os.path.join(index_path, "metadata.json")
+        if not os.path.isfile(faiss_file):
+            optional_warnings.append(
+                f"{INDEX_PATH} directory exists but faiss.index missing; service will fall back to .npy-built index"
+            )
+        if not os.path.isfile(metadata_file):
+            optional_warnings.append(
+                f"{INDEX_PATH} directory exists but metadata.json missing; service will fall back to .npy-built index"
+            )
+
+    return len(missing) == 0, missing, optional_warnings
 
 
 def _corpus_error_env_names(errors: list[str]) -> list[str]:
@@ -104,3 +134,66 @@ def validate_startup_data(df, embeddings):
             f"Embedding row count ({matrix.shape[0]}) does not match location row count ({row_count})"
         )
     return matrix
+
+
+def validate_index_metadata():
+    """Check if a persisted index exists and has valid metadata.json fields.
+
+    Does NOT load the FAISS index into memory — only checks file presence and
+    metadata shape to inform the startup decision.
+
+    Returns:
+        (exists: bool, metadata_ok: bool, detail: str)
+        - exists: whether the index directory and faiss.index both exist
+        - metadata_ok: whether metadata.json is present and passes field validation
+        - detail: human-readable reason when metadata validation fails, or empty string
+    """
+    import json
+
+    cfg = _reload_config()
+    index_dir = Path(cfg.INDEX_PATH)
+
+    if not index_dir.is_dir():
+        return False, False, ""
+
+    faiss_file = index_dir / "faiss.index"
+    metadata_file = index_dir / "metadata.json"
+
+    if not faiss_file.is_file():
+        return False, False, ""
+
+    exists = True
+    if not metadata_file.is_file():
+        return True, False, "metadata.json missing"
+
+    try:
+        with open(metadata_file, encoding="utf-8") as fh:
+            metadata = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        return True, False, f"metadata.json unreadable: {exc}"
+
+    if not isinstance(metadata, dict):
+        return True, False, "metadata.json is not a JSON object"
+
+    required = {"build_timestamp", "corpus_checksum", "row_count", "dimensions", "index_type"}
+    missing = required - set(metadata.keys())
+    if missing:
+        return True, False, f"metadata.json missing fields: {sorted(missing)}"
+
+    # Quick sanity checks on field types (not exhaustive — index_loader does full validation).
+    try:
+        dims = int(metadata.get("dimensions", 0))
+    except (TypeError, ValueError):
+        return True, False, "metadata.json dimensions is not an integer"
+
+    try:
+        rows = int(metadata.get("row_count", -1))
+    except (TypeError, ValueError):
+        return True, False, "metadata.json row_count is not an integer"
+
+    if dims <= 0:
+        return True, False, f"metadata.json dimensions must be positive, got {dims}"
+    if rows < 0:
+        return True, False, f"metadata.json row_count must be non-negative, got {rows}"
+
+    return True, True, ""
