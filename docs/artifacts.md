@@ -103,8 +103,8 @@ Services load artifacts from container paths. Repository paths above are bind-mo
 |----------|---------------------|-------------------|----------|
 | `MODEL_PATH` | `/app/models/sentence-transformers` | `BackEnd/llm-service/models/sentence-transformers/` | `load_model()`, `verify_file_paths()` |
 | `CORPUS_VERSION` | `v1` | `BackEnd/llm-service/corpus/v1/` directory name | Resolves `DATA_PATH` / `MANIFEST_PATH` defaults |
-| `DATA_PATH` | `/app/corpus/v1/venues.csv` | `BackEnd/llm-service/corpus/v1/venues.csv` | `load_data()`, `verify_file_paths()` |
-| `MANIFEST_PATH` | `/app/corpus/v1/manifest.json` | `BackEnd/llm-service/corpus/v1/manifest.json` | `verify_file_paths()`, `validate_corpus_at_startup()` |
+| `DATA_PATH` | `/app/corpus/v1/venues.csv` | `BackEnd/llm-service/corpus/v1/venues.csv` | `load_data()`, `verify_file_paths()`, `validate_corpus_at_startup()` (must resolve to `corpus/{CORPUS_VERSION}/venues.csv`) |
+| `MANIFEST_PATH` | `/app/corpus/v1/manifest.json` | `BackEnd/llm-service/corpus/v1/manifest.json` | `verify_file_paths()`, `validate_corpus_at_startup()` (must resolve to `corpus/{CORPUS_VERSION}/manifest.json`) |
 | `EMBEDDINGS_PATH` | `/app/data/location_embeddings.npy` | `BackEnd/llm-service/data/location_embeddings.npy` | `load_data()`, `verify_file_paths()` |
 
 Docker Compose (`llm-service` service) sets these environment variables, mounts `./BackEnd/llm-service/corpus` to `/app/corpus` (read-only), and mounts `./BackEnd/llm-service/data` to `/app/data` for the embedding matrix only. Model files are baked into the image from the build context.
@@ -169,7 +169,7 @@ Do not commit fresh build or report output unless deliberately curating a snapsh
 Required runtime artifacts must be present before ML services initialize successfully.
 
 1. **Clone setup:** Install Git LFS (`git lfs install`), clone the repository, and run `git lfs pull` if model files are pointer stubs or missing.
-2. **LLM service:** `verify_file_paths()` checks `MODEL_PATH`, `DATA_PATH`, `MANIFEST_PATH`, and `EMBEDDINGS_PATH`; `validate_corpus_at_startup()` validates manifest schema and row count (checksum mismatch logs a warning). Initialization fails with env var names only when required files are absent. The service does not auto-download artifacts.
+2. **LLM service:** `verify_file_paths()` checks `MODEL_PATH`, `DATA_PATH`, `MANIFEST_PATH`, and `EMBEDDINGS_PATH`; `validate_corpus_at_startup()` validates the corpus tree under `corpus/{CORPUS_VERSION}/`, requires `DATA_PATH` and `MANIFEST_PATH` to match that tree's `venues.csv` and `manifest.json`, and checks manifest schema and row count (checksum mismatch logs a warning). Initialization fails with env var names only when required files are absent or paths disagree. The service does not auto-download artifacts.
 3. **Busyness service:** `verify_file_paths()` checks DNN path, LSTM path, and `MODEL_CHECKSUMS_PATH`; missing or mismatched checksums keep `/health` unhealthy and `initialize_busyness_models()` returns `False` before loading models.
 4. **No automatic downloads:** Phase 1 does not add startup fetches from Hugging Face, GitHub Releases, or object storage for production model artifacts (note: the LLM service retains an existing Hugging Face fallback for the sentence-transformer model only when local load fails — that is legacy runtime behavior, not Phase 1 provisioning).
 

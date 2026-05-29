@@ -11,7 +11,7 @@ v0.2 upgrades the existing LLM search and chat stack into an explicit, evaluated
 
 | Phase | Name | Goal | Requirements |
 |-------|------|------|--------------|
-| 11 | 3/3 | Complete   | 2026-05-29 |
+| 11 | 3/3 | Complete    | 2026-05-29 |
 | 12 | Embedding and Index Pipeline | Reproducible build replacing static `.npy` workflow | RAG-02 |
 | 13 | Unified Retrieval Layer | FAISS-backed search shared by vibe and chat | RAG-03, RAG-04 |
 | 14 | Grounded Generation and Citations | RAG prompts, structured citation contract, prompt registry | RAG-05, RAG-06 |
