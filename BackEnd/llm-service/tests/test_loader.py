@@ -101,3 +101,37 @@ def test_missing_file_list_never_leaks_resolved_paths(monkeypatch, tmp_path):
     for name in missing:
         assert name in {"MODEL_PATH", "DATA_PATH", "EMBEDDINGS_PATH"}
         assert "secret" not in name
+
+
+@pytest.mark.xfail(reason="unblocks in 11-03 — loader.py must add MANIFEST_PATH check")
+def test_verify_file_paths_includes_manifest_path(monkeypatch, tmp_path):
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    data_file = tmp_path / "venues.csv"
+    emb_file = tmp_path / "embeddings.npy"
+    data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    np.save(emb_file, np.ones((1, 4), dtype="float32"))
+    missing_manifest = tmp_path / "missing-manifest.json"
+
+    monkeypatch.setenv("MODEL_PATH", str(model_dir))
+    monkeypatch.setenv("DATA_PATH", str(data_file))
+    monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(missing_manifest))
+
+    ok, missing = verify_file_paths()
+
+    assert ok is False
+    assert "MANIFEST_PATH" in missing
+    assert not any(str(tmp_path) in item for item in missing)
+    assert not any("\\" in item or "/" in item for item in missing)
+
+
+@pytest.mark.xfail(reason="unblocks in 11-03 — config.DATA_PATH default moves to corpus/v1/venues.csv")
+def test_default_data_path_relative_corpus():
+    import importlib
+
+    import config
+
+    importlib.reload(config)
+    assert config.DATA_PATH.endswith("corpus/v1/venues.csv")
