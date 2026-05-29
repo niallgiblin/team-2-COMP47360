@@ -58,13 +58,21 @@ def create_location_dto(row, similarity_score=None):
     """Create a location DTO dict preserving the current /search contract."""
     getter = row.get if hasattr(row, "get") else lambda key, default="": row[key] if key in row else default
 
+    # The venue CSV uses 'addr' / 'loc_type' / 'lat' / 'long' column names.
+    # Map them to the canonical DTO keys so both pandas Series and dict
+    # accessors produce the same output.
+    _address = str(getter("address", "") or getter("addr", ""))
+    _type = str(getter("type", "") or getter("loc_type", ""))
+    _latitude = _safe_to_float(getter("latitude", 0) or getter("lat", 0))
+    _longitude = _safe_to_float(getter("longitude", 0) or getter("long", 0))
+
     return {
         "id": _safe_to_int(getter("id", 0)),
         "name": str(getter("name", "")),
-        "address": str(getter("address", "")),
-        "latitude": _safe_to_float(getter("latitude", 0)),
-        "longitude": _safe_to_float(getter("longitude", 0)),
-        "type": str(getter("type", "")),
+        "address": _address,
+        "latitude": _latitude,
+        "longitude": _longitude,
+        "type": _type,
         "price": str(getter("price", "")),
         "rating": _safe_to_float(getter("rating", 0)),
         "zone": str(getter("zone", "")),
