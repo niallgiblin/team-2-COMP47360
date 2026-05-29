@@ -120,6 +120,21 @@ verify_file "e668b3c74ad55cac2a0991bf81b10d3023261b464080f4c42f4b5a9558ba06af" "
 verify_file "0b3c8c717335c801abb15983036a6f1df4b6943fd6b93717969efd96d22eeec6" "BackEnd/llm-service/models/sentence-transformers/model.safetensors"
 
 echo ""
+echo "Verifying corpus tier checksums..."
+echo "=================================="
+
+CORPUS_MANIFEST="BackEnd/llm-service/corpus/v1/manifest.json"
+CORPUS_CSV="BackEnd/llm-service/corpus/v1/venues.csv"
+
+if [ ! -f "$ROOT/$CORPUS_MANIFEST" ]; then
+  echo "FAIL  missing: $CORPUS_MANIFEST"
+  failures=$((failures + 1))
+else
+  expected_corpus_sha="$(python3 -c "import json,sys; m=json.load(open(sys.argv[1], encoding='utf-8')); print(m['venues_csv']['sha256'])" "$ROOT/$CORPUS_MANIFEST")"
+  verify_file "$expected_corpus_sha" "$CORPUS_CSV"
+fi
+
+echo ""
 echo "Checked $checked file(s); failures: $failures"
 
 if [ "$failures" -gt 0 ]; then

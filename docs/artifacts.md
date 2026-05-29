@@ -56,8 +56,22 @@ Small configuration and tokenizer files under the sentence-transformers model di
 
 | Repository path | Purpose | Runtime consumer | Delivery |
 |-----------------|---------|------------------|----------|
-| `BackEnd/llm-service/data/locations.csv` | Location catalog for semantic search | LLM service (`DATA_PATH`) | Git |
-| `BackEnd/src/main/resources/data/locations.csv` | Backend seed/reference data | Spring Boot backend | Git |
+| `BackEnd/src/main/resources/data/locations.csv` | Backend seed/reference data (must stay aligned with corpus) | Spring Boot backend | Git |
+
+### Corpus tier (versioned RAG catalog)
+
+Each corpus version lives under `BackEnd/llm-service/corpus/vN/` with machine-readable `manifest.json`, human `SCHEMA.md`, and the canonical `venues.csv`. Checksum scope is recorded in the manifest — not mixed into the [Runtime Binary Checksums](#runtime-binary-checksums) table unless explicitly listed there.
+
+| Repository path | Purpose | Runtime consumer | Delivery |
+|-----------------|---------|------------------|----------|
+| `BackEnd/llm-service/corpus/vN/venues.csv` | Versioned venue catalog for semantic search and RAG | LLM service (`DATA_PATH`) | Git |
+| `BackEnd/llm-service/corpus/vN/manifest.json` | SHA-256, schema version, row count, field mapping | LLM service startup validation (`MANIFEST_PATH`) | Git |
+| `BackEnd/llm-service/corpus/vN/SCHEMA.md` | Human-readable field and document model docs | Maintainers | Git |
+| `BackEnd/llm-service/corpus/vN/index/` | Generated FAISS/index artifacts (Phase 12+) | LLM service index build | **Not committed** (gitignored) |
+
+**Version bump policy (D-03):** When venue data changes materially, create a new directory (`corpus/v2/`, etc.), update `CORPUS_VERSION` / Compose env, regenerate manifest checksums, and sync Spring `locations.csv` in the same commit. Do not auto-bump on every CSV edit.
+
+Verify corpus CSV integrity with `scripts/verify-artifacts.sh` (reads `venues_csv.sha256` from `manifest.json`).
 
 ### Generated build outputs (not runtime inputs)
 
@@ -88,21 +102,25 @@ Services load artifacts from container paths. Repository paths above are bind-mo
 | Variable | Default runtime path | Repository source | Consumer |
 |----------|---------------------|-------------------|----------|
 | `MODEL_PATH` | `/app/models/sentence-transformers` | `BackEnd/llm-service/models/sentence-transformers/` | `load_model()`, `verify_file_paths()` |
-| `DATA_PATH` | `/app/data/locations.csv` | `BackEnd/llm-service/data/locations.csv` | `load_data()`, `verify_file_paths()` |
+| `CORPUS_VERSION` | `v1` | `BackEnd/llm-service/corpus/v1/` directory name | Resolves `DATA_PATH` / `MANIFEST_PATH` defaults |
+| `DATA_PATH` | `/app/corpus/v1/venues.csv` | `BackEnd/llm-service/corpus/v1/venues.csv` | `load_data()`, `verify_file_paths()` |
+| `MANIFEST_PATH` | `/app/corpus/v1/manifest.json` | `BackEnd/llm-service/corpus/v1/manifest.json` | `verify_file_paths()`, `validate_corpus_at_startup()` |
 | `EMBEDDINGS_PATH` | `/app/data/location_embeddings.npy` | `BackEnd/llm-service/data/location_embeddings.npy` | `load_data()`, `verify_file_paths()` |
 
-Docker Compose (`llm-service` service) sets these environment variables and mounts `./BackEnd/llm-service/data` to `/app/data`. Model files are baked into the image from the build context.
+Docker Compose (`llm-service` service) sets these environment variables, mounts `./BackEnd/llm-service/corpus` to `/app/corpus` (read-only), and mounts `./BackEnd/llm-service/data` to `/app/data` for the embedding matrix only. Model files are baked into the image from the build context.
 
 For Gunicorn worker count, preload behavior, memory measurement commands, and Python 3.11 runtime notes, see [llm-runtime.md](llm-runtime.md).
 
 ### LLM service runtime and FAISS index
 
-The LLM service builds a **FAISS vector index in memory at startup** from the committed `location_embeddings.npy` artifact and location catalog. This index enables cosine-similarity search without recomputing embeddings per request.
+The LLM service builds a **FAISS vector index in memory at startup** from the committed `location_embeddings.npy` artifact and the versioned venue catalog under `corpus/vN/`. This index enables cosine-similarity search without recomputing embeddings per request.
 
 | Artifact | Committed? | Notes |
 |----------|------------|-------|
 | `BackEnd/llm-service/data/location_embeddings.npy` | Yes (Git LFS) | Precomputed embedding matrix consumed at startup |
-| `BackEnd/llm-service/data/locations.csv` | Yes (Git) | Location catalog |
+| `BackEnd/llm-service/corpus/vN/venues.csv` | Yes (Git) | Versioned location catalog (`DATA_PATH`) |
+| `BackEnd/llm-service/corpus/vN/manifest.json` | Yes (Git) | Corpus checksum and schema metadata |
+| `BackEnd/llm-service/corpus/vN/index/` | **No** | Generated index artifacts (Phase 12+); gitignored |
 | FAISS index files (`.faiss`, `.index`, generated `.npy`) | **No** | Built in-process; do not commit generated vector-index artifacts |
 
 Operators and CI should verify `git status` stays clean after LLM service startup — no new `.faiss`, `.index`, or generated `.npy` files should appear for commit.
@@ -151,7 +169,7 @@ Do not commit fresh build or report output unless deliberately curating a snapsh
 Required runtime artifacts must be present before ML services initialize successfully.
 
 1. **Clone setup:** Install Git LFS (`git lfs install`), clone the repository, and run `git lfs pull` if model files are pointer stubs or missing.
-2. **LLM service:** `verify_file_paths()` checks `MODEL_PATH`, `DATA_PATH`, and `EMBEDDINGS_PATH` and fails initialization with logged errors when files are absent. The service does not auto-download artifacts.
+2. **LLM service:** `verify_file_paths()` checks `MODEL_PATH`, `DATA_PATH`, `MANIFEST_PATH`, and `EMBEDDINGS_PATH`; `validate_corpus_at_startup()` validates manifest schema and row count (checksum mismatch logs a warning). Initialization fails with env var names only when required files are absent. The service does not auto-download artifacts.
 3. **Busyness service:** `verify_file_paths()` checks DNN path, LSTM path, and `MODEL_CHECKSUMS_PATH`; missing or mismatched checksums keep `/health` unhealthy and `initialize_busyness_models()` returns `False` before loading models.
 4. **No automatic downloads:** Phase 1 does not add startup fetches from Hugging Face, GitHub Releases, or object storage for production model artifacts (note: the LLM service retains an existing Hugging Face fallback for the sentence-transformer model only when local load fails — that is legacy runtime behavior, not Phase 1 provisioning).
 
@@ -171,7 +189,7 @@ A future migration should:
 
 1. Publish immutable release bundles with SHA-256 digests matching the checksum table format below.
 2. Introduce explicit provisioning (download script or init container) — not silent startup downloads.
-3. Update `MODEL_PATH`, `DATA_PATH`, `EMBEDDINGS_PATH`, and busyness model paths together with deployment docs.
+3. Update `MODEL_PATH`, `DATA_PATH`, `MANIFEST_PATH`, `CORPUS_VERSION`, `EMBEDDINGS_PATH`, and busyness model paths together with deployment docs.
 
 Phase 1 intentionally preserves Git LFS availability so remediation phases do not break local runtime setup.
 
