@@ -675,6 +675,68 @@ class TestGetAiResponse:
         assert "trouble" in reply.lower()
         assert citations == []
 
+    def test_inline_citation_parsing_integration(self, monkeypatch):
+        """End-to-end: HF returns marker-annotated text → response includes
+        footnote block with venue name and snippet."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        def fake_search(query, limit=5, location_filter=None):
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "Blue Note", "zone": "Greenwich Village",
+                     "type": "Jazz Club", "address": "131 W 3rd St",
+                     "latitude": 40.73, "longitude": -74.0,
+                     "price": "moderate", "rating": 4.5, "zoneId": 1,
+                     "description": "Legendary jazz club",
+                     "summary": "Great jazz vibes",
+                     "tags": "jazz, music", "num_reviews": 500},
+                    similarity_score=0.95,
+                ),
+                create_location_dto(
+                    {"id": 2, "name": "Smalls", "zone": "West Village",
+                     "type": "Jazz Club", "address": "183 W 10th St",
+                     "latitude": 0, "longitude": 0,
+                     "price": "moderate", "rating": 4.8, "zoneId": 3},
+                    similarity_score=0.87,
+                ),
+            ]
+
+        def fake_hf(messages, model=None, requests_module=None):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": (
+                            "Blue Note [1] is a legendary jazz club in "
+                            "Greenwich Village. For a more intimate vibe "
+                            "try Smalls [2]."
+                        )
+                    }
+                }]
+            }
+
+        reply, citations = get_ai_response(
+            query="jazz clubs",
+            previous_questions=[],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        # Original text preserved.
+        assert "Blue Note [1] is a legendary jazz club" in reply
+        assert "try Smalls [2]" in reply
+
+        # Footnote block appended.
+        assert "---" in reply
+        assert "**Sources:**" in reply
+        assert "[1] Blue Note — Jazz Club in Greenwich Village — 131 W 3rd St" in reply
+        assert "[2] Smalls — Jazz Club in West Village — 183 W 10th St" in reply
+
+        # Citations list still returned structurally.
+        assert len(citations) == 2
+        assert citations[0]["venue_id"] == 1
+        assert citations[0]["name"] == "Blue Note"
+
     def test_does_not_perform_jwt_validation(self):
         from pathlib import Path
 
