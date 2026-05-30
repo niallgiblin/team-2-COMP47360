@@ -31,6 +31,7 @@ from config import (
     parse_allowed_origins,
 )
 from loader import validate_corpus_at_startup, verify_file_paths
+from query_expander import expand_query
 from search_service import VALID_PRICE_RANGES, SearchService, SearchStartupError
 
 logging.basicConfig(
@@ -201,14 +202,22 @@ def _chat_search_helper(query, limit=5, location_filter=None):
         return []
 
     try:
-        results = search_service.search(query, limit=limit, location_filter=location_filter)
+        search_query = query
+        if QUERY_EXPANSION_ENABLED:
+            try:
+                search_query = expand_query(query) or query
+            except Exception as exc:
+                logger.warning("Query expansion failed; falling back to original: %s", exc)
+                search_query = query
+
+        results = search_service.search(search_query, limit=limit, location_filter=location_filter)
         return results  # list of location DTOs or empty list
     except Exception as exc:
         logger.error("Error in chat search helper: %s", exc)
         return []
 
 
-def get_ai_response(query, previous_questions, location_filter=None):
+def get_ai_response(query, previous_questions, previous_responses=None, location_filter=None):
     """Route-owned wrapper delegating prompt assembly and HF call to chat_service.
 
     Returns
@@ -219,6 +228,7 @@ def get_ai_response(query, previous_questions, location_filter=None):
     return _chat_get_ai_response(
         query,
         previous_questions,
+        previous_responses=previous_responses,
         search_helper=_chat_search_helper,
         location_filter=location_filter,
     )
@@ -431,6 +441,11 @@ def chat_endpoint():
             previous_questions = []
         previous_questions = [str(question) for question in previous_questions if question][-3:]
 
+        previous_responses = data.get("previous_responses", [])
+        if not isinstance(previous_responses, list):
+            previous_responses = []
+        previous_responses = [str(response) for response in previous_responses if response][-3:]
+
         if not query:
             return jsonify({"error": "Message is required"}), 400
 
@@ -441,7 +456,7 @@ def chat_endpoint():
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
-        response, citations = get_ai_response(query, previous_questions, location_filter=location_filter)
+        response, citations = get_ai_response(query, previous_questions, previous_responses=previous_responses, location_filter=location_filter)
         logger.info(
             "Chat response: %d citations returned (location_filter=%s)",
             len(citations),

@@ -76,7 +76,7 @@ def test_chat_valid_jwt_stubbed_response(monkeypatch):
     app_module = _ready_chat_app(monkeypatch)
     monkeypatch.setattr(
         app_module, "get_ai_response",
-        lambda query, previous_questions, location_filter=None: ("stubbed reply", []),
+        lambda query, previous_questions, previous_responses=None, location_filter=None: ("stubbed reply", []),
     )
     client = app_module.app.test_client()
     token = make_bearer_token()
@@ -94,7 +94,7 @@ def test_chat_valid_jwt_stubbed_response(monkeypatch):
 def test_chat_accepts_previous_questions_and_truncates(monkeypatch):
     captured = {"previous_questions": None}
 
-    def capture_previous_questions(query, previous_questions, location_filter=None):
+    def capture_previous_questions(query, previous_questions, previous_responses=None, location_filter=None):
         captured["previous_questions"] = previous_questions
         captured["location_filter"] = location_filter
         return "ok", []
@@ -121,7 +121,7 @@ def test_chat_accepts_previous_questions_and_truncates(monkeypatch):
 def test_chat_explicit_location_field(monkeypatch):
     captured = {}
 
-    def capture_location(query, previous_questions, location_filter=None):
+    def capture_location(query, previous_questions, previous_responses=None, location_filter=None):
         captured["location_filter"] = location_filter
         return "ok", []
 
@@ -143,7 +143,7 @@ def test_chat_explicit_location_field(monkeypatch):
 def test_chat_auto_extracts_location_from_query(monkeypatch):
     captured = {}
 
-    def capture_location(query, previous_questions, location_filter=None):
+    def capture_location(query, previous_questions, previous_responses=None, location_filter=None):
         captured["location_filter"] = location_filter
         return "ok", []
 
@@ -170,7 +170,7 @@ def test_chat_auto_extracts_location_from_query(monkeypatch):
 def test_chat_location_field_takes_precedence_over_auto_extraction(monkeypatch):
     captured = {}
 
-    def capture_location(query, previous_questions, location_filter=None):
+    def capture_location(query, previous_questions, previous_responses=None, location_filter=None):
         captured["location_filter"] = location_filter
         return "ok", []
 
@@ -192,3 +192,137 @@ def test_chat_location_field_takes_precedence_over_auto_extraction(monkeypatch):
 
     assert response.status_code == 200
     assert captured["location_filter"] == "upper west side"
+
+
+# ---------------------------------------------------------------------------
+# T03: previous_responses route tests
+# ---------------------------------------------------------------------------
+
+
+def test_chat_accepts_previous_responses_and_passes_them(monkeypatch):
+    captured = {}
+
+    def capture(query, previous_questions, previous_responses=None, location_filter=None):
+        captured["previous_responses"] = previous_responses
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture)
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={
+            "message": "test query",
+            "previous_questions": ["q1"],
+            "previous_responses": ["r1", "r2"],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["previous_responses"] == ["r1", "r2"]
+
+
+def test_chat_truncates_previous_responses_to_three(monkeypatch):
+    captured = {}
+
+    def capture(query, previous_questions, previous_responses=None, location_filter=None):
+        captured["previous_responses"] = previous_responses
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture)
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={
+            "message": "test",
+            "previous_questions": ["q1"],
+            "previous_responses": ["r1", "r2", "r3", "r4", "r5", "r6"],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["previous_responses"] is not None
+    assert len(captured["previous_responses"]) == 3
+    assert captured["previous_responses"] == ["r4", "r5", "r6"]
+
+
+def test_chat_omitting_previous_responses_defaults_to_empty_list(monkeypatch):
+    captured = {}
+
+    def capture(query, previous_questions, previous_responses=None, location_filter=None):
+        captured["previous_responses"] = previous_responses
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture)
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "test", "previous_questions": ["q1"]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["previous_responses"] == []
+
+
+def test_chat_previous_responses_non_list_defaults_to_empty(monkeypatch):
+    captured = {}
+
+    def capture(query, previous_questions, previous_responses=None, location_filter=None):
+        captured["previous_responses"] = previous_responses
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture)
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={
+            "message": "test",
+            "previous_questions": ["q1"],
+            "previous_responses": "not a list",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["previous_responses"] == []
+
+
+def test_chat_previous_responses_backward_compat(monkeypatch):
+    captured = {}
+
+    def capture(query, previous_questions, previous_responses=None, location_filter=None):
+        captured["previous_questions"] = previous_questions
+        captured["previous_responses"] = previous_responses
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture)
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={
+            "message": "test",
+            "previous_questions": ["q1", "q2"],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["previous_questions"] == ["q1", "q2"]
+    assert captured["previous_responses"] == []
