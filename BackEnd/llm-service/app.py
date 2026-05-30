@@ -23,6 +23,7 @@ from config import (
     EMBEDDINGS_PATH,
     HYBRID_SEARCH_ENABLED,
     MODEL_PATH,
+    QUERY_EXPANSION_ENABLED,
     RRF_K,
     SEARCH_CACHE_MAX_ENTRIES,
     SEARCH_CACHE_TTL_SECONDS,
@@ -165,6 +166,7 @@ def health():
             "hybrid_search_enabled": getattr(search_service, "_bm25_index", None) is not None,
             "re_rank_enabled": re_rank_enabled,
             "re_rank_model": CROSS_ENCODER_MODEL_NAME if re_rank_enabled else None,
+            "query_expansion_enabled": QUERY_EXPANSION_ENABLED,
         }
     )
 
