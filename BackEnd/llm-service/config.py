@@ -65,3 +65,12 @@ HYBRID_SEARCH_ENABLED = os.getenv(
 ).lower() in {"1", "true", "yes"}
 RRF_K = _env_int("RRF_K", 60)
 BM25_INDEX_PATH = os.getenv("BM25_INDEX_PATH", str(_CORPUS_ROOT / "index" / "bm25"))
+
+# --- Cross-encoder re-ranking ---
+CROSS_ENCODER_ENABLED = os.getenv(
+    "CROSS_ENCODER_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
+CROSS_ENCODER_MODEL_NAME = os.getenv(
+    "CROSS_ENCODER_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L6-v2"
+)
+CROSS_ENCODER_OVERFETCH_MULTIPLIER = _env_int("CROSS_ENCODER_OVERFETCH_MULTIPLIER", 3)

@@ -16,9 +16,14 @@ from sentence_transformers import SentenceTransformer
 from cache_policy import BoundedTTLCache, generate_cache_key
 from chat_service import get_ai_response as _chat_get_ai_response
 from config import (
+    BM25_INDEX_PATH,
+    CROSS_ENCODER_ENABLED,
+    CROSS_ENCODER_MODEL_NAME,
     DATA_PATH,
     EMBEDDINGS_PATH,
+    HYBRID_SEARCH_ENABLED,
     MODEL_PATH,
+    RRF_K,
     SEARCH_CACHE_MAX_ENTRIES,
     SEARCH_CACHE_TTL_SECONDS,
     SEARCH_OVERFETCH_MULTIPLIER,
@@ -119,6 +124,10 @@ def initialize_service():
                 embeddings=embeddings,
                 encoder=model,
                 over_fetch_multiplier=SEARCH_OVERFETCH_MULTIPLIER,
+                bm25_index_path=BM25_INDEX_PATH,
+                hybrid_search_enabled=HYBRID_SEARCH_ENABLED,
+                rrf_k=RRF_K,
+                cross_encoder_enabled=CROSS_ENCODER_ENABLED,
             )
         except SearchStartupError as exc:
             initialization_error = str(exc)
@@ -143,6 +152,7 @@ def health():
         ), 503
 
     total_locations = len(search_service._df)
+    re_rank_enabled = getattr(search_service, "_cross_encoder", None) is not None
     return jsonify(
         {
             "status": "healthy",
@@ -153,6 +163,8 @@ def health():
             "total_locations": total_locations,
             "index_source": getattr(search_service, "_index_source", "unknown"),
             "hybrid_search_enabled": getattr(search_service, "_bm25_index", None) is not None,
+            "re_rank_enabled": re_rank_enabled,
+            "re_rank_model": CROSS_ENCODER_MODEL_NAME if re_rank_enabled else None,
         }
     )
 

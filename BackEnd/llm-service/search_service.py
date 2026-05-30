@@ -172,6 +172,8 @@ class SearchService:
         index_source="npy-built",
         bm25_index=None,
         rrf_k=60,
+        cross_encoder=None,
+        cross_encoder_overfetch=3,
     ):
         self._df = df
         self._embeddings = np.asarray(embeddings, dtype="float32")
@@ -183,6 +185,8 @@ class SearchService:
         self._index_source = index_source
         self._bm25_index = bm25_index
         self._rrf_k = int(rrf_k)
+        self._cross_encoder = cross_encoder
+        self._cross_encoder_overfetch = max(1, int(cross_encoder_overfetch))
 
     @classmethod
     def from_startup(
@@ -196,6 +200,7 @@ class SearchService:
         bm25_index_path=None,
         hybrid_search_enabled=None,
         rrf_k=None,
+        cross_encoder_enabled=None,
     ):
         import logging
         import os
@@ -329,13 +334,17 @@ class SearchService:
                     bm25_index.b,
                 )
             except Bm25LoadError as exc:
-                raise SearchStartupError(
-                    f"Failed to load BM25 index from {bm25_index_path}: {exc}"
-                ) from exc
+                logger.warning(
+                    "BM25 index load failed from %s (%s); falling back to dense-only",
+                    bm25_index_path,
+                    exc,
+                )
             except Exception as exc:
-                raise SearchStartupError(
-                    f"Failed to load BM25 index from {bm25_index_path}: {exc}"
-                ) from exc
+                logger.warning(
+                    "BM25 index load failed from %s (%s); falling back to dense-only",
+                    bm25_index_path,
+                    exc,
+                )
         else:
             logger.info("HYBRID_SEARCH_ENABLED=false — BM25 index not loaded")
 
@@ -345,6 +354,44 @@ class SearchService:
             _hybrid_available,
             rrf_k,
         )
+
+        # --- Cross-encoder loading ---
+        if cross_encoder_enabled is None:
+            from config import CROSS_ENCODER_ENABLED as _cfg_ce_enabled
+
+            cross_encoder_enabled = _cfg_ce_enabled
+
+        from config import (
+            CROSS_ENCODER_MODEL_NAME as _cfg_ce_model,
+            CROSS_ENCODER_OVERFETCH_MULTIPLIER as _cfg_ce_overfetch,
+        )
+
+        _cross_encoder = None
+        _ce_overfetch = _cfg_ce_overfetch
+
+        if cross_encoder_enabled:
+            logger.info(
+                "CROSS_ENCODER_ENABLED=true — attempting cross-encoder load: %s",
+                _cfg_ce_model,
+            )
+            try:
+                from sentence_transformers import CrossEncoder
+
+                _cross_encoder = CrossEncoder(_cfg_ce_model)
+                logger.info(
+                    "Cross-encoder loaded: model=%s device=%s",
+                    _cfg_ce_model,
+                    getattr(_cross_encoder, "_target_device", "cpu"),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Cross-encoder load failed from %s (%s); continuing without re-ranking",
+                    _cfg_ce_model,
+                    exc,
+                )
+                _cross_encoder = None
+        else:
+            logger.info("CROSS_ENCODER_ENABLED=false — cross-encoder not loaded")
 
         resolved_torch_fallback = (
             allow_torch_fallback
@@ -362,6 +409,8 @@ class SearchService:
             index_source=index_source,
             bm25_index=bm25_index,
             rrf_k=rrf_k,
+            cross_encoder=_cross_encoder,
+            cross_encoder_overfetch=_ce_overfetch,
         )
 
     def _encode_query(self, query_text):

@@ -547,8 +547,8 @@ def test_hybrid_search_preserves_filters():
         assert "Greenwich" in r["zone"]
 
 
-def test_bm25_startup_load_failure_raises_error(monkeypatch):
-    """When HYBRID_SEARCH_ENABLED=true and BM25 path is invalid, raise error."""
+def test_bm25_startup_load_failure_falls_back_to_dense_only(monkeypatch):
+    """When HYBRID_SEARCH_ENABLED=true and BM25 path is invalid, service starts with dense-only fallback."""
     import config
 
     monkeypatch.setattr(config, "HYBRID_SEARCH_ENABLED", True)
@@ -557,9 +557,168 @@ def test_bm25_startup_load_failure_raises_error(monkeypatch):
     df = _FakeDf(_tiny_rows())
     embeddings = _tiny_embeddings()
 
-    with pytest.raises(SearchStartupError, match="BM25 index"):
-        SearchService.from_startup(
-            df,
-            embeddings,
-            encoder=_FakeEncoder([1, 0, 0, 0]),
-        )
+    # Service starts successfully despite BM25 load failure.
+    service = SearchService.from_startup(
+        df,
+        embeddings,
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+    )
+    assert service._bm25_index is None
+    # Verify search still works (dense-only fallback).
+    results = service.search("test query", limit=2)
+    assert isinstance(results, list)
+
+
+# ---------------------------------------------------------------------------
+# Cross-encoder loading tests (M002/S02/T01)
+# ---------------------------------------------------------------------------
+
+class _FakeCrossEncoder:
+    """Minimal fake CrossEncoder for testing load paths."""
+
+    def __init__(self, model_name, **kwargs):
+        self.model_name = model_name
+        self._target_device = "cpu"
+        self._kwargs = kwargs
+
+    def predict(self, pairs):
+        return [0.5] * len(pairs)
+
+
+def test_cross_encoder_loaded_when_enabled_and_reachable(monkeypatch):
+    """Cross-encoder is loaded when CROSS_ENCODER_ENABLED=true and model reachable."""
+    import sentence_transformers as st_mod
+
+    monkeypatch.setattr(
+        st_mod,
+        "CrossEncoder",
+        lambda model_name, **kw: _FakeCrossEncoder(model_name, **kw),
+    )
+
+    import config
+    monkeypatch.setattr(config, "CROSS_ENCODER_ENABLED", True)
+    monkeypatch.setattr(
+        config,
+        "CROSS_ENCODER_MODEL_NAME",
+        "cross-encoder/ms-marco-MiniLM-L6-v2",
+    )
+    monkeypatch.setattr(config, "CROSS_ENCODER_OVERFETCH_MULTIPLIER", 3)
+
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService.from_startup(
+        df,
+        embeddings,
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        hybrid_search_enabled=False,
+        cross_encoder_enabled=True,
+    )
+
+    assert service._cross_encoder is not None
+    assert service._cross_encoder.model_name == "cross-encoder/ms-marco-MiniLM-L6-v2"
+    assert service._cross_encoder_overfetch == 3
+
+
+def test_cross_encoder_none_on_load_failure(monkeypatch):
+    """Cross-encoder is None when loading raises an exception (graceful fallback)."""
+    import sentence_transformers as st_mod
+
+    def _failing_ce(*args, **kwargs):
+        raise RuntimeError("network unreachable")
+
+    monkeypatch.setattr(st_mod, "CrossEncoder", _failing_ce)
+
+    import config
+    monkeypatch.setattr(config, "CROSS_ENCODER_ENABLED", True)
+    monkeypatch.setattr(config, "CROSS_ENCODER_MODEL_NAME", "cross-encoder/broken-model")
+    monkeypatch.setattr(config, "CROSS_ENCODER_OVERFETCH_MULTIPLIER", 3)
+
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService.from_startup(
+        df,
+        embeddings,
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        hybrid_search_enabled=False,
+        cross_encoder_enabled=True,
+    )
+
+    # Service starts successfully despite load failure.
+    assert service._cross_encoder is None
+    assert service._cross_encoder_overfetch == 3
+    # Search still works (dense-only).
+    results = service.search("test query", limit=2)
+    assert isinstance(results, list)
+
+
+def test_cross_encoder_disabled(monkeypatch):
+    """Cross-encoder is None when CROSS_ENCODER_ENABLED=false."""
+    import config
+
+    monkeypatch.setattr(config, "CROSS_ENCODER_ENABLED", False)
+    monkeypatch.setattr(config, "CROSS_ENCODER_OVERFETCH_MULTIPLIER", 4)
+
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService.from_startup(
+        df,
+        embeddings,
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        hybrid_search_enabled=False,
+        cross_encoder_enabled=False,
+    )
+
+    assert service._cross_encoder is None
+    assert service._cross_encoder_overfetch == 4
+
+
+def test_cross_encoder_stored_in_service_constructor():
+    """SearchService constructor stores cross_encoder and overfetch fields."""
+    fake_ce = _FakeCrossEncoder("test-model")
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=fake_ce,
+        cross_encoder_overfetch=5,
+    )
+
+    assert service._cross_encoder is fake_ce
+    assert service._cross_encoder_overfetch == 5
+
+
+def test_cross_encoder_enabled_defaults_to_config_when_omitted(monkeypatch):
+    """from_startup resolves cross_encoder_enabled from config when not provided."""
+    import sentence_transformers as st_mod
+
+    monkeypatch.setattr(
+        st_mod,
+        "CrossEncoder",
+        lambda model_name, **kw: _FakeCrossEncoder(model_name, **kw),
+    )
+
+    import config
+    monkeypatch.setattr(config, "CROSS_ENCODER_ENABLED", True)
+    monkeypatch.setattr(config, "CROSS_ENCODER_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L6-v2")
+    monkeypatch.setattr(config, "CROSS_ENCODER_OVERFETCH_MULTIPLIER", 3)
+
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService.from_startup(
+        df,
+        embeddings,
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        hybrid_search_enabled=False,
+        # cross_encoder_enabled not provided — falls back to config
+    )
+
+    assert service._cross_encoder is not None
+    assert service._cross_encoder.model_name == "cross-encoder/ms-marco-MiniLM-L6-v2"
