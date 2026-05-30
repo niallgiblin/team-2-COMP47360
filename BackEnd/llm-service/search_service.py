@@ -7,6 +7,7 @@ import numpy as np
 
 from dto import REQUIRED_DTO_FIELDS, create_location_dto
 from loader import StartupLoadError, validate_startup_data
+from venue_corpus.document import compose_document_text
 
 ALLOW_TORCH_FULL_SCAN_FALLBACK = os.getenv(
     "ALLOW_TORCH_FULL_SCAN_FALLBACK", ""
@@ -466,6 +467,7 @@ class SearchService:
             )
         else:
             return self._dense_collect(
+                query_text,
                 query_vector,
                 limit,
                 location_filter=location_filter,
@@ -475,6 +477,7 @@ class SearchService:
 
     def _dense_collect(
         self,
+        query_text,
         query_vector,
         limit,
         location_filter=None,
@@ -483,9 +486,16 @@ class SearchService:
     ):
         """Dense-only retrieval using FAISS index (original behaviour)."""
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
+
+        # Use cross-encoder overfetch multiplier when re-ranking is available.
+        overfetch = (
+            self._cross_encoder_overfetch
+            if self._cross_encoder is not None
+            else self._over_fetch_multiplier
+        )
         batch = min(
             len(self._df),
-            max(limit * self._over_fetch_multiplier, limit + len(exclude_lower)),
+            max(limit * overfetch, limit + len(exclude_lower)),
         )
         seen = set()
         results = []
@@ -503,7 +513,19 @@ class SearchService:
                 seen.add(row_idx)
                 candidates.append((row_idx, float(score)))
 
-            # Stable tie-breaking matches current_cosine_top_k enumeration order.
+            if not candidates:
+                if batch >= len(self._df):
+                    break
+                batch = min(len(self._df), batch * 2)
+                continue
+
+            # Re-rank candidates with cross-encoder when available.
+            candidates = self._re_rank(
+                query_text=query_text,
+                candidates=candidates,
+            )
+
+            # Stable tie-breaking uses the (now possibly cross-encoder) score.
             candidates.sort(key=lambda item: (-item[1], item[0]))
 
             for row_idx, score in candidates:
@@ -536,7 +558,14 @@ class SearchService:
     ):
         """Hybrid retrieval: BM25 + FAISS fused via RRF, then filtered."""
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
-        fetch_k = min(len(self._df), limit * self._over_fetch_multiplier)
+
+        # Use cross-encoder overfetch multiplier when re-ranking is available.
+        overfetch = (
+            self._cross_encoder_overfetch
+            if self._cross_encoder is not None
+            else self._over_fetch_multiplier
+        )
+        fetch_k = min(len(self._df), limit * overfetch)
 
         # 1. BM25 lexical search.
         bm25_results = self._bm25_index.search(query_text, top_k=fetch_k)
@@ -557,9 +586,12 @@ class SearchService:
         # 3. RRF fuse.
         fused = _rrf_fuse(bm25_results, dense_results, k=self._rrf_k)
 
-        # 4. Filter and build DTOs.
+        # 4. Cross-encoder re-rank.
+        ranked = self._re_rank(query_text, fused)
+
+        # 5. Filter and build DTOs.
         results = []
-        for doc_idx, rrf_score in fused:
+        for doc_idx, score in ranked:
             if len(results) >= limit:
                 break
             row = self._df.iloc[doc_idx]
@@ -570,9 +602,59 @@ class SearchService:
                 continue
             if not _matches_price_range(row, price_range):
                 continue
-            results.append(create_location_dto(row, rrf_score))
+            results.append(create_location_dto(row, score))
 
         return results
+
+    def _re_rank(self, query_text, candidates):
+        """Cross-encoder re-rank of candidate documents.
+
+        Takes a query string and list of (row_idx, score) tuples. If no
+        cross-encoder is loaded or candidates is empty, returns unchanged.
+        Otherwise scores each document pair with the cross-encoder, returns
+        results sorted by cross-encoder logit score descending.
+
+        Args:
+            query_text: The raw user query string.
+            candidates: [(row_idx, upstream_score), ...]
+
+        Returns:
+            [(row_idx, ce_score), ...] sorted by ce_score descending.
+        """
+        import logging
+        import time
+
+        logger = logging.getLogger(__name__)
+
+        if self._cross_encoder is None:
+            return candidates
+
+        if not candidates:
+            return candidates
+
+        t0 = time.perf_counter()
+
+        pairs = []
+        for row_idx, _score in candidates:
+            row = self._df.iloc[row_idx]
+            doc_text = compose_document_text(row)
+            pairs.append((query_text, doc_text))
+
+        ce_scores = self._cross_encoder.predict(pairs)
+        ranked = [
+            (candidates[i][0], float(ce_scores[i]))
+            for i in range(len(candidates))
+        ]
+        ranked.sort(key=lambda item: item[1], reverse=True)
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.debug(
+            "Cross-encoder re-ranked %d candidates in %.1f ms",
+            len(candidates),
+            elapsed_ms,
+        )
+
+        return ranked
 
     def search(self, query_text, limit=10, location_filter=None, price_range=None, mode="auto"):
         if not str(query_text).strip():

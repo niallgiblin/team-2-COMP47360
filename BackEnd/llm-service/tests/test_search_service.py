@@ -722,3 +722,214 @@ def test_cross_encoder_enabled_defaults_to_config_when_omitted(monkeypatch):
 
     assert service._cross_encoder is not None
     assert service._cross_encoder.model_name == "cross-encoder/ms-marco-MiniLM-L6-v2"
+
+
+# ---------------------------------------------------------------------------
+# Cross-encoder re-rank tests (M002/S02/T02)
+# ---------------------------------------------------------------------------
+
+class _ScoringCrossEncoder:
+    """Fake CrossEncoder that returns distinguishable scores for re-rank tests."""
+
+    def __init__(self, model_name="test-model", scores=None):
+        self.model_name = model_name
+        self._target_device = "cpu"
+        self._calls = []
+        self._scores = scores
+
+    def predict(self, pairs):
+        self._calls.append(pairs)
+        if self._scores is not None:
+            # Pad with 0.0 if fewer scores pre-set than pairs.
+            result = list(self._scores[: len(pairs)])
+            if len(result) < len(pairs):
+                result.extend([0.0] * (len(pairs) - len(result)))
+            return result
+        return list(range(len(pairs), 0, -1))
+
+
+def test_rerank_passthrough_when_cross_encoder_none():
+    """_re_rank returns candidates unchanged when cross_encoder is None."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=None,
+    )
+
+    candidates = [(0, 0.95), (2, 0.80), (1, 0.60)]
+    result = service._re_rank("jazz club", candidates)
+    assert result == candidates
+
+
+def test_rerank_passthrough_when_candidates_empty():
+    """_re_rank returns empty list when candidates is empty."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    fake_ce = _ScoringCrossEncoder()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=fake_ce,
+    )
+
+    result = service._re_rank("jazz club", [])
+    assert result == []
+
+
+def test_rerank_applies_cross_encoder_scores():
+    """_re_rank re-ranks candidates using cross-encoder scores, sorted descending."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    fake_ce = _ScoringCrossEncoder(scores=[0.2, 0.9, 0.5])
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=fake_ce,
+    )
+
+    candidates = [(0, 0.95), (2, 0.80), (1, 0.60)]
+    result = service._re_rank("jazz club", candidates)
+
+    # Sorted by cross-encoder score desc: 2 (0.9), 1 (0.5), 0 (0.2)
+    assert len(result) == 3
+    assert result[0] == (2, 0.9)
+    assert result[1] == (1, 0.5)
+    assert result[2] == (0, 0.2)
+
+    # Verify pairs: (query_text, compose_document_text(row))
+    assert len(fake_ce._calls) == 1
+    pairs = fake_ce._calls[0]
+    assert len(pairs) == 3
+    assert pairs[0][0] == "jazz club"
+    assert pairs[1][0] == "jazz club"
+    assert pairs[2][0] == "jazz club"
+
+
+def test_rerank_dense_collect_applies_rerank():
+    """Dense mode applies cross-encoder re-ranking when cross_encoder is available."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    fake_ce = _ScoringCrossEncoder(scores=[0.1, 0.5, 0.9])
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=fake_ce,
+    )
+
+    results = service.search("sky lounge views", limit=3, mode="dense")
+    assert len(results) >= 1
+    assert len(fake_ce._calls) >= 1
+    assert results[0]["similarity"] is not None
+
+
+def test_rerank_hybrid_collect_applies_rerank():
+    """Hybrid mode applies cross-encoder re-ranking after RRF fusion."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    fake_ce = _ScoringCrossEncoder(scores=[0.1, 0.3, 0.7, 0.2, 0.5])
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+        cross_encoder=fake_ce,
+    )
+
+    results = service.search("jazz club", limit=3, mode="hybrid")
+    assert len(results) >= 1
+    assert len(fake_ce._calls) >= 1
+    for r in results:
+        assert r["similarity"] is not None
+
+
+def test_rerank_hybrid_overfetch_when_ce_available():
+    """Hybrid mode uses cross_encoder_overfetch for candidate pool size."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    fake_ce = _ScoringCrossEncoder()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+        cross_encoder=fake_ce,
+        cross_encoder_overfetch=7,
+        over_fetch_multiplier=3,
+    )
+
+    results = service.search("jazz club", limit=3, mode="hybrid")
+    assert len(results) >= 1
+    assert len(fake_ce._calls) >= 1
+    pairs = fake_ce._calls[0]
+    assert 1 <= len(pairs) <= 5
+
+
+def test_rerank_dense_overfetch_when_ce_available():
+    """Dense mode uses cross_encoder_overfetch when cross-encoder is available."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    fake_ce = _ScoringCrossEncoder()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        cross_encoder=fake_ce,
+        cross_encoder_overfetch=5,
+        over_fetch_multiplier=3,
+    )
+
+    results = service.search("jazz club", limit=2, mode="dense")
+    assert len(results) >= 1
+    assert len(fake_ce._calls) >= 1
+
+
+def test_rerank_disabled_preserves_original_behavior():
+    """With cross_encoder=None, search behavior matches pre-re-rank (no regression)."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+        cross_encoder=None,
+    )
+
+    dense_results = service.search("jazz club", limit=3, mode="dense")
+    assert len(dense_results) >= 1
+
+    hybrid_results = service.search("jazz club", limit=3, mode="hybrid")
+    assert len(hybrid_results) >= 1
+
+    similar = service.find_similar("Blue Note Jazz Club", limit=3)
+    assert len(similar) >= 1
