@@ -535,6 +535,63 @@ def huggingface_chat_api_call(messages, model=None, requests_module=None):
         raise
 
 
+# ---------------------------------------------------------------------------
+# Inline citation parsing (S05)
+# ---------------------------------------------------------------------------
+
+_INLINE_CITATION_RE = __import__("re").compile(r"\[(\d+)\]")
+
+
+def parse_inline_citations(response_text, citations):
+    """Extract [N] markers from LLM response text and append a footnote block.
+
+    Parameters
+    ----------
+    response_text : str
+        The raw text returned by the LLM.
+    citations : list[dict]
+        Citations list produced by ``format_retrieval_context``.  Each
+        dict has ``name`` and ``snippet`` keys (and optionally
+        ``venue_id`` / ``score``).
+
+    Returns
+    -------
+    str
+        *response_text* unchanged when *citations* is empty or contains no
+        valid markers.  Otherwise *response_text* with a trailing footnote
+        block appended::
+
+            ---
+            **Sources:**
+            [1] Name — snippet
+            [2] Name — snippet
+    """
+    # Fast path: empty citations or empty text → passthrough
+    if not citations or not response_text:
+        return response_text
+
+    cite_count = len(citations)
+
+    # Find all [N] markers and deduplicate.
+    raw_matches = [int(n) for n in _INLINE_CITATION_RE.findall(response_text)]
+    valid_indices = sorted(set(n for n in raw_matches if 1 <= n <= cite_count))
+
+    if not valid_indices:
+        # No valid markers → pass through (out-of-range markers survive
+        # in the text — they are just not turned into footnotes).
+        return response_text
+
+    # Build the footnote block.
+    lines = ["\n---\n**Sources:**"]
+    for n in valid_indices:
+        cit = citations[n - 1]
+        name = cit.get("name", "Unknown")
+        snippet = cit.get("snippet", "")
+        lines.append(f"[{n}] {name} — {snippet}")
+
+    return response_text + "\n" + "\n".join(lines)
+
+
 def get_ai_response(
     query,
     previous_questions,

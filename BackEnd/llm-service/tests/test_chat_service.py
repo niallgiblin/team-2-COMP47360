@@ -21,6 +21,7 @@ from chat_service import (
     format_retrieval_context,
     get_ai_response,
     huggingface_chat_api_call,
+    parse_inline_citations,
 )
 from dto import create_citation_dto, create_location_dto
 
@@ -260,6 +261,99 @@ class TestCreateCitationDto:
         assert cit["score"] == 0.5
         # snippet may be just "" when type/zone/address are all empty
         assert isinstance(cit["snippet"], str)
+
+
+# ---------------------------------------------------------------------------
+# parse_inline_citations (S05)
+# ---------------------------------------------------------------------------
+
+_STUB_CITATIONS = [
+    {"venue_id": 1, "name": "Blue Note", "snippet": "Jazz Club in Greenwich Village — 131 W 3rd St", "score": 0.95},
+    {"venue_id": 2, "name": "Smalls", "snippet": "Jazz Club in West Village — 183 W 10th St", "score": 0.87},
+    {"venue_id": 3, "name": "Village Vanguard", "snippet": "Jazz Club in Greenwich Village — 178 7th Ave S", "score": 0.82},
+]
+
+
+class TestParseInlineCitations:
+    def test_empty_citations_returns_unchanged(self):
+        result = parse_inline_citations("Hello [1] world", [])
+        assert result == "Hello [1] world"
+
+    def test_empty_text_returns_empty_string(self):
+        result = parse_inline_citations("", _STUB_CITATIONS)
+        assert result == ""
+
+    def test_none_text_detected(self):
+        """None text is falsy so the fast path returns it unchanged."""
+        result = parse_inline_citations(None, _STUB_CITATIONS)
+        assert result is None
+
+    def test_valid_markers_appends_footnote_block(self):
+        text = "Blue Note [1] is a legendary jazz club. Also check out Smalls [2]."
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+
+        assert text in result  # original text preserved
+        assert "\n---\n**Sources:**" in result
+        assert "[1] Blue Note — Jazz Club in Greenwich Village — 131 W 3rd St" in result
+        assert "[2] Smalls — Jazz Club in West Village — 183 W 10th St" in result
+
+    def test_no_brackets_returns_unchanged(self):
+        text = "No citations here at all."
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+        assert result == text
+
+    def test_out_of_range_markers_produce_no_footnotes(self):
+        text = "Venue [99] is great and [0] too but [5] is out."
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+        # Original text unchanged, no footnote block appended.
+        assert result == text
+        assert "---" not in result
+
+    def test_mixed_valid_and_invalid_only_valid_survive(self):
+        text = "Try [1] and [99] and [2] and [0]!"
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+
+        assert "[1] Blue Note" in result
+        assert "[2] Smalls" in result
+        footnote_section = result.split("---")[-1] if "---" in result else ""
+        assert "[99]" not in footnote_section
+        assert "[0]" not in footnote_section
+
+    def test_deduplicates_repeated_markers(self):
+        text = "Blue Note [1] rocks, Blue Note [1] is the best, trust [1]."
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+
+        footnote_section = result.split("---")[-1] if "---" in result else ""
+        # [1] should appear exactly once in the footnote block.
+        assert footnote_section.count("[1] Blue Note") == 1
+
+    def test_all_valid_markers_present_in_order(self):
+        text = "Village Vanguard [3], Blue Note [1], and Smalls [2] are all great."
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+
+        # Footnotes must be sorted by citation number.
+        pos_1 = result.index("[1] Blue Note")
+        pos_2 = result.index("[2] Smalls")
+        pos_3 = result.index("[3] Village Vanguard")
+        assert pos_1 < pos_2 < pos_3
+
+    def test_partial_marker_text_only_not_broken(self):
+        """Bare brackets like '[]' or '[abc]' are not captured by r'\\[(\\d+)\\]'."""
+        text = "Empty bracket [] and non-numeric [abc] should pass through."
+        result = parse_inline_citations(text, _STUB_CITATIONS)
+        assert result == text
+
+    def test_single_citation_single_marker(self):
+        single = [_STUB_CITATIONS[0]]
+        text = "Only Blue Note [1] tonight."
+        result = parse_inline_citations(text, single)
+        assert "\n---\n**Sources:**\n[1] Blue Note" in result
+        assert "[2]" not in result
+
+    def test_empty_citations_list_none_text(self):
+        """Both fast-path conditions triggered: falsy text and empty citations."""
+        result = parse_inline_citations("", [])
+        assert result == ""
 
 
 # ---------------------------------------------------------------------------
