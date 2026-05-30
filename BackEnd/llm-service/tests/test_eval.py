@@ -924,8 +924,10 @@ class TestReportGeneration:
 
         required_keys = {
             "benchmark_path", "total_questions", "threshold_recall",
-            "threshold_abstention", "aggregate_recall", "categories",
-            "failures", "verdict",
+            "threshold_abstention", "aggregate_recall",
+            "aggregate_ndcg", "aggregate_mrr", "aggregate_precision",
+            "aggregate_hit_rate",
+            "categories", "failures", "verdict",
         }
         missing = required_keys - set(report.keys())
         assert not missing, f"JSON report missing keys: {missing}"
@@ -966,10 +968,47 @@ class TestReportGeneration:
             report = json.load(fh)
 
         cat = report["categories"]["retrieval"]
-        for key in ("recall_at_5", "pass_rate", "pass_count", "fail_count", "total"):
+        for key in ("recall_at_5", "ndcg_at_5", "mrr", "precision_at_5",
+                     "hit_rate", "pass_rate", "pass_count", "fail_count", "total"):
             assert key in cat, f"Category missing key: {key}"
         assert cat["total"] == 1
         assert cat["pass_count"] + cat["fail_count"] == cat["total"]
+
+    def test_json_report_aggregate_metrics(self, tmp_path):
+        """Top-level aggregate metric keys must be present and numeric."""
+        main = self._import_main()
+
+        mock_svc = _MockSearchService(results=[
+            _make_mock_result(1, "Venue A", similarity=0.95),
+        ])
+
+        entries = [
+            {"id": "Q001", "category": "retrieval", "query": "q1",
+             "expected_venue_ids": [1], "filters": None, "description": "test"},
+        ]
+
+        report_path = tmp_path / "eval_report3.json"
+
+        with mock.patch(
+            "run_eval._init_search_service", return_value=mock_svc
+        ), mock.patch(
+            "run_eval._load_benchmark", return_value=entries
+        ), mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            with pytest.raises(SystemExit):
+                main([
+                    "--threshold-recall", "0.50",
+                    "--report", str(report_path),
+                ])
+
+        with open(report_path, "r") as fh:
+            report = json.load(fh)
+
+        for key in ("aggregate_ndcg", "aggregate_mrr",
+                     "aggregate_precision", "aggregate_hit_rate"):
+            assert key in report, f"Aggregate metric key missing: {key}"
+            assert isinstance(report[key], (int, float)), (
+                f"{key} must be numeric, got {type(report[key])}"
+            )
 
 
 # ── Integration smoke test ─────────────────────────────────────────────────

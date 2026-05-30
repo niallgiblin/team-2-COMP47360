@@ -307,6 +307,10 @@ def _run_question(
 
     retrieved_ids = [int(r["id"]) for r in results]
     recall = compute_recall_at_k(expected_ids, retrieved_ids, k=5)
+    ndcg = compute_ndcg_at_k(expected_ids, retrieved_ids, k=5)
+    mrr = compute_mrr(expected_ids, retrieved_ids)
+    precision = compute_precision_at_k(expected_ids, retrieved_ids, k=5)
+    hit_rate = compute_hit_rate(expected_ids, retrieved_ids, k=5)
 
     citation_ok, citation_detail = check_citation_accuracy(results)
 
@@ -331,6 +335,10 @@ def _run_question(
         "expected_ids": expected_ids,
         "retrieved_ids": retrieved_ids,
         "recall": round(recall, 4),
+        "ndcg": round(ndcg, 4),
+        "mrr": round(mrr, 4),
+        "precision": round(precision, 4),
+        "hit_rate": round(hit_rate, 4),
         "passed": passed,
         "citation_ok": citation_ok,
         "citation_detail": citation_detail,
@@ -348,6 +356,10 @@ def _category_report(
     """Return a verdict string for a single category."""
     total = stats["total"]
     avg_recall = stats["recall_sum"] / total if total else 0.0
+    avg_ndcg = stats["ndcg_sum"] / total if total else 0.0
+    avg_mrr = stats["mrr_sum"] / total if total else 0.0
+    avg_precision = stats["precision_sum"] / total if total else 0.0
+    avg_hit_rate = stats["hit_rate_sum"] / total if total else 0.0
     pass_rate = stats["pass_count"] / total if total else 0.0
 
     if cat == "abstention":
@@ -357,7 +369,13 @@ def _category_report(
     else:
         metric = avg_recall
         threshold = threshold_recall
-        prefix = f"  recall@5: {avg_recall:.4f} (threshold: {threshold})"
+        prefix = (
+            f"  recall@5: {avg_recall:.4f} (threshold: {threshold})\n"
+            f"  NDCG@5: {avg_ndcg:.4f}\n"
+            f"  MRR: {avg_mrr:.4f}\n"
+            f"  Precision@5: {avg_precision:.4f}\n"
+            f"  Hit Rate: {avg_hit_rate:.4f}"
+        )
 
     verdict = "PASS" if metric >= threshold else "FAIL"
 
@@ -407,11 +425,19 @@ def main(argv: list[str] | None = None) -> None:
         if cat not in categories:
             categories[cat] = {
                 "recall_sum": 0.0,
+                "ndcg_sum": 0.0,
+                "mrr_sum": 0.0,
+                "precision_sum": 0.0,
+                "hit_rate_sum": 0.0,
                 "pass_count": 0,
                 "fail_count": 0,
                 "total": 0,
             }
         categories[cat]["recall_sum"] += qr["recall"]
+        categories[cat]["ndcg_sum"] += qr["ndcg"]
+        categories[cat]["mrr_sum"] += qr["mrr"]
+        categories[cat]["precision_sum"] += qr["precision"]
+        categories[cat]["hit_rate_sum"] += qr["hit_rate"]
         categories[cat]["pass_count"] += int(qr["passed"])
         categories[cat]["fail_count"] += int(not qr["passed"])
         categories[cat]["total"] += 1
@@ -440,7 +466,16 @@ def main(argv: list[str] | None = None) -> None:
     non_abst = [qr for qr in question_results if qr["category"] != "abstention"]
     agg_recall = sum(qr["recall"] for qr in non_abst) / len(non_abst) if non_abst else 0.0
 
+    agg_ndcg = sum(qr["ndcg"] for qr in non_abst) / len(non_abst) if non_abst else 0.0
+    agg_mrr = sum(qr["mrr"] for qr in non_abst) / len(non_abst) if non_abst else 0.0
+    agg_precision = sum(qr["precision"] for qr in non_abst) / len(non_abst) if non_abst else 0.0
+    agg_hit_rate = sum(qr["hit_rate"] for qr in non_abst) / len(non_abst) if non_abst else 0.0
+
     print(f"\nAggregate recall@5 (non-abstention): {agg_recall:.4f}")
+    print(f"Aggregate NDCG@5 (non-abstention): {agg_ndcg:.4f}")
+    print(f"Aggregate MRR (non-abstention): {agg_mrr:.4f}")
+    print(f"Aggregate Precision@5 (non-abstention): {agg_precision:.4f}")
+    print(f"Aggregate Hit Rate (non-abstention): {agg_hit_rate:.4f}")
     print(f"Total questions evaluated: {len(entries)}")
 
     failures = [qr for qr in question_results if not qr["passed"]]
@@ -467,6 +502,10 @@ def main(argv: list[str] | None = None) -> None:
             "threshold_recall": args.threshold_recall,
             "threshold_abstention": args.threshold_abstention,
             "aggregate_recall": round(agg_recall, 4),
+            "aggregate_ndcg": round(agg_ndcg, 4),
+            "aggregate_mrr": round(agg_mrr, 4),
+            "aggregate_precision": round(agg_precision, 4),
+            "aggregate_hit_rate": round(agg_hit_rate, 4),
             "categories": {},
             "failures": failures,
             "verdict": overall_verdict,
@@ -476,6 +515,10 @@ def main(argv: list[str] | None = None) -> None:
             total = stats["total"]
             payload["categories"][category_name] = {
                 "recall_at_5": round(stats["recall_sum"] / total, 4) if total else 0.0,
+                "ndcg_at_5": round(stats["ndcg_sum"] / total, 4) if total else 0.0,
+                "mrr": round(stats["mrr_sum"] / total, 4) if total else 0.0,
+                "precision_at_5": round(stats["precision_sum"] / total, 4) if total else 0.0,
+                "hit_rate": round(stats["hit_rate_sum"] / total, 4) if total else 0.0,
                 "pass_rate": round(stats["pass_count"] / total, 4) if total else 0.0,
                 "pass_count": stats["pass_count"],
                 "fail_count": stats["fail_count"],
