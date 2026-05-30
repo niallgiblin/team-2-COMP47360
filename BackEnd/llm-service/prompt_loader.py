@@ -54,7 +54,7 @@ class PromptLoadError(Exception):
 # ---------------------------------------------------------------------------
 
 _PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
-DEFAULT_TEMPLATE_PATH = _PROMPTS_DIR / "rag-v1.yaml"
+DEFAULT_TEMPLATE_PATH = _PROMPTS_DIR / "rag-v1.5.yaml"
 
 # ---------------------------------------------------------------------------
 # Required top-level keys and metadata sub-keys

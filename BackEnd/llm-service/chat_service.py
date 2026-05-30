@@ -619,7 +619,9 @@ def get_ai_response(
         )
         call = hf_call or huggingface_chat_api_call
         response = call(messages)
-        return response["choices"][0]["message"]["content"], citations
+        response_text = response["choices"][0]["message"]["content"]
+        response_text = parse_inline_citations(response_text, citations)
+        return response_text, citations
     except Exception as exc:
         logger.error("Error getting AI response: %s", exc)
         return CHAT_RESPONSE_ERROR_MESSAGE, []
