@@ -74,7 +74,10 @@ def test_similar_stubbed_success_returns_results(monkeypatch):
 
 def test_chat_valid_jwt_stubbed_response(monkeypatch):
     app_module = _ready_chat_app(monkeypatch)
-    monkeypatch.setattr(app_module, "get_ai_response", lambda query, previous_questions: "stubbed reply")
+    monkeypatch.setattr(
+        app_module, "get_ai_response",
+        lambda query, previous_questions, location_filter=None: ("stubbed reply", []),
+    )
     client = app_module.app.test_client()
     token = make_bearer_token()
 
@@ -85,15 +88,16 @@ def test_chat_valid_jwt_stubbed_response(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.get_json() == {"response": "stubbed reply"}
+    assert response.get_json() == {"response": "stubbed reply", "citations": []}
 
 
 def test_chat_accepts_previous_questions_and_truncates(monkeypatch):
     captured = {"previous_questions": None}
 
-    def capture_previous_questions(query, previous_questions):
+    def capture_previous_questions(query, previous_questions, location_filter=None):
         captured["previous_questions"] = previous_questions
-        return "ok"
+        captured["location_filter"] = location_filter
+        return "ok", []
 
     app_module = _ready_chat_app(monkeypatch)
     monkeypatch.setattr(app_module, "get_ai_response", capture_previous_questions)
@@ -112,3 +116,79 @@ def test_chat_accepts_previous_questions_and_truncates(monkeypatch):
     assert response.status_code == 200
     assert captured["previous_questions"] is not None
     assert len(captured["previous_questions"]) <= 3
+
+
+def test_chat_explicit_location_field(monkeypatch):
+    captured = {}
+
+    def capture_location(query, previous_questions, location_filter=None):
+        captured["location_filter"] = location_filter
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture_location)
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "find a bar", "location": "Midtown"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["location_filter"] == "Midtown"
+
+
+def test_chat_auto_extracts_location_from_query(monkeypatch):
+    captured = {}
+
+    def capture_location(query, previous_questions, location_filter=None):
+        captured["location_filter"] = location_filter
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture_location)
+    # Seed known zones so extraction works
+    monkeypatch.setattr(
+        "chat_service._KNOWN_ZONES",
+        {"east village", "west village", "midtown center", "midtown east"},
+    )
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "bars in the East Village"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["location_filter"] == "east village"
+
+
+def test_chat_location_field_takes_precedence_over_auto_extraction(monkeypatch):
+    captured = {}
+
+    def capture_location(query, previous_questions, location_filter=None):
+        captured["location_filter"] = location_filter
+        return "ok", []
+
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "get_ai_response", capture_location)
+    monkeypatch.setattr(
+        "chat_service._KNOWN_ZONES",
+        {"east village", "upper west side north"},
+    )
+    client = app_module.app.test_client()
+    token = make_bearer_token()
+
+    # Explicit location should win even though query mentions East Village
+    response = client.post(
+        "/api/chat",
+        json={"message": "bars in the East Village", "location": "upper west side"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["location_filter"] == "upper west side"

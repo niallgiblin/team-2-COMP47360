@@ -10,9 +10,12 @@ from chat_service import (
     NO_BUSYNESS_MESSAGE,
     NO_VENUES_MESSAGE,
     _busyness_label,
+    _KNOWN_ZONES,
+    _ZONE_ALIASES,
     build_busyness_context,
     build_chat_messages,
     build_retrieval_context,
+    extract_location_from_query,
     fetch_busyness_predictions,
     format_busyness_context,
     format_retrieval_context,
@@ -52,6 +55,65 @@ class TestBusynessLabel:
 
     def test_none_unknown(self):
         assert _busyness_label(None) == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# extract_location_from_query
+# ---------------------------------------------------------------------------
+
+class TestExtractLocationFromQuery:
+    def test_alias_midtown(self, monkeypatch):
+        monkeypatch.setattr(
+            "chat_service._KNOWN_ZONES",
+            {"midtown center", "midtown east", "midtown north", "midtown south", "east village"},
+        )
+        assert extract_location_from_query("find a bar in Midtown") == "midtown"
+        assert extract_location_from_query("what's good in midtown tonight?") == "midtown"
+
+    def test_alias_upper_west_side(self, monkeypatch):
+        monkeypatch.setattr(
+            "chat_service._KNOWN_ZONES",
+            {"upper west side north", "upper west side south"},
+        )
+        assert extract_location_from_query("Upper West Side restaurants") == "upper west side"
+
+    def test_alias_east_village(self, monkeypatch):
+        monkeypatch.setattr(
+            "chat_service._KNOWN_ZONES",
+            {"east village", "west village"},
+        )
+        assert extract_location_from_query("bars in the East Village") == "east village"
+
+    def test_alias_hells_kitchen_maps_to_clinton(self, monkeypatch):
+        monkeypatch.setattr("chat_service._KNOWN_ZONES", set())
+        assert extract_location_from_query("hell's kitchen spots") == "clinton"
+        assert extract_location_from_query("hells kitchen clubs") == "clinton"
+
+    def test_direct_zone_name_match(self, monkeypatch):
+        monkeypatch.setattr(
+            "chat_service._KNOWN_ZONES",
+            {"chinatown", "soho", "tribeca/civic center", "lower east side"},
+        )
+        assert extract_location_from_query("where to eat in Chinatown") == "chinatown"
+        assert extract_location_from_query("soho lounge recommendations") == "soho"
+        assert extract_location_from_query("things to do in the lower east side") == "lower east side"
+
+    def test_no_location_detected(self, monkeypatch):
+        monkeypatch.setattr(
+            "chat_service._KNOWN_ZONES",
+            {"midtown center", "east village"},
+        )
+        assert extract_location_from_query("find me a jazz bar") is None
+        assert extract_location_from_query("") is None
+        assert extract_location_from_query(None) is None
+
+    def test_alias_takes_precedence_over_zone_match(self, monkeypatch):
+        # "midtown" alias should match even if full zone names are in the set
+        monkeypatch.setattr(
+            "chat_service._KNOWN_ZONES",
+            {"midtown center", "midtown east", "midtown north", "midtown south"},
+        )
+        assert extract_location_from_query("Midtown jazz clubs") == "midtown"
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +273,7 @@ class TestBuildRetrievalContext:
         assert citations == []
 
     def test_search_helper_returns_dtos_builds_context_and_citations(self):
-        def fake_search(query, limit=5):
+        def fake_search(query, limit=5, location_filter=None):
             return [
                 create_location_dto(
                     {"id": 10, "name": "Place", "zone": "Midtown", "type": "Bar",
@@ -226,8 +288,28 @@ class TestBuildRetrievalContext:
         assert len(citations) == 1
         assert citations[0]["venue_id"] == 10
 
+    def test_forwards_location_filter_to_search_helper(self):
+        captured = {}
+
+        def fake_search(query, limit=5, location_filter=None):
+            captured["location_filter"] = location_filter
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "V", "zone": "Midtown East", "type": "Bar",
+                     "address": "", "latitude": 0, "longitude": 0,
+                     "price": "", "rating": 0, "zoneId": 0},
+                    similarity_score=0.8,
+                )
+            ]
+
+        ctx, citations = build_retrieval_context(
+            "q", search_helper=fake_search, location_filter="midtown",
+        )
+        assert captured["location_filter"] == "midtown"
+        assert len(citations) == 1
+
     def test_search_helper_returns_empty_list_no_venues(self):
-        def fake_search(query, limit=5):
+        def fake_search(query, limit=5, location_filter=None):
             return []
 
         ctx, citations = build_retrieval_context("q", search_helper=fake_search)
@@ -235,7 +317,7 @@ class TestBuildRetrievalContext:
         assert citations == []
 
     def test_search_helper_raises_returns_error_and_empty_citations(self):
-        def fake_search(query, limit=5):
+        def fake_search(query, limit=5, location_filter=None):
             raise RuntimeError("boom")
 
         ctx, citations = build_retrieval_context("q", search_helper=fake_search)
@@ -267,8 +349,9 @@ class TestBuildChatMessages:
     def test_wires_search_helper_into_template_and_returns_citations(self, monkeypatch):
         captured = {}
 
-        def fake_search(_query, limit=5):
+        def fake_search(_query, limit=5, location_filter=None):
             captured["limit"] = limit
+            captured["location_filter"] = location_filter
             return [
                 create_location_dto(
                     {"id": 99, "name": "Smalls Jazz Club", "zone": "Greenwich Village",
@@ -284,9 +367,11 @@ class TestBuildChatMessages:
             previous_questions=[],
             search_helper=fake_search,
             busyness_context=_STUB_BUSYNESS,
+            location_filter="greenwich village",
         )
 
         assert captured["limit"] == 5
+        assert captured["location_filter"] == "greenwich village"
         assert "Smalls Jazz Club" in messages[0]["content"]
         assert len(citations) == 1
         assert citations[0]["venue_id"] == 99
@@ -410,8 +495,8 @@ class TestGetAiResponse:
 
         search_calls = []
 
-        def fake_search(query, limit=5):
-            search_calls.append((query, limit))
+        def fake_search(query, limit=5, location_filter=None):
+            search_calls.append((query, limit, location_filter))
             return [
                 create_location_dto(
                     {"id": 55, "name": "Venue", "zone": "Zone", "type": "Bar",
@@ -433,10 +518,11 @@ class TestGetAiResponse:
             search_helper=fake_search,
             hf_call=fake_hf,
             busyness_context=_STUB_BUSYNESS,
+            location_filter="midtown",
         )
 
         assert reply == "stubbed reply"
-        assert search_calls == [("where should I go?", 5)]
+        assert search_calls == [("where should I go?", 5, "midtown")]
         assert hf_calls
         assert HF_CHAT_MODEL
         assert len(citations) == 1
@@ -446,7 +532,7 @@ class TestGetAiResponse:
     def test_empty_retrieval_returns_no_venues_and_empty_citations(self, monkeypatch):
         monkeypatch.setenv("HF_TOKEN", "test-token")
 
-        def fake_search(query, limit=5):
+        def fake_search(query, limit=5, location_filter=None):
             return []
 
         def fake_hf(messages, model=None, requests_module=None):
@@ -471,7 +557,7 @@ class TestGetAiResponse:
         and empty citations."""
         monkeypatch.setenv("HF_TOKEN", "test-token")
 
-        def fake_search(query, limit=5):
+        def fake_search(query, limit=5, location_filter=None):
             return [
                 create_location_dto(
                     {"id": 1, "name": "V", "zone": "Z", "type": "T",

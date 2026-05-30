@@ -23,7 +23,24 @@ EMBED_FIELDS: list[tuple[str, str]] = [
     ("tags", "Tags"),
     ("summary", "Summary"),
     ("Info", "Info"),
+    ("reviews", "Reviews"),
 ]
+
+# Max characters for review text in embed context to stay within model token limits
+MAX_REVIEW_CHARS = 200
+
+
+def _truncate_reviews(text: str, max_chars: int = MAX_REVIEW_CHARS) -> str:
+    """Truncate review text to a safe length for the embedding model."""
+    if not text or len(text) <= max_chars:
+        return text
+    # Try to break at a sentence boundary within the limit
+    cut = text.rfind(". ", 0, max_chars)
+    if cut == -1:
+        cut = text.rfind(" | ", 0, max_chars)
+    if cut == -1:
+        cut = max_chars
+    return text[:cut] + "…"
 
 
 def compose_document_text(row) -> str:
@@ -37,5 +54,8 @@ def compose_document_text(row) -> str:
         text = str(raw).strip()
         if not text:
             continue
+        # Truncate reviews to stay within model max_position_embeddings
+        if column == "reviews":
+            text = _truncate_reviews(text)
         lines.append(f"{label}: {text}")
     return "\n".join(lines)

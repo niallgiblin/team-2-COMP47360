@@ -175,7 +175,7 @@ def _service_components_unavailable_response():
     ), 503
 
 
-def _chat_search_helper(query, limit=5):
+def _chat_search_helper(query, limit=5, location_filter=None):
     """Return top similar locations as raw location DTOs (list of dicts).
 
     The caller (chat_service) is responsible for formatting and citation
@@ -186,14 +186,14 @@ def _chat_search_helper(query, limit=5):
         return []
 
     try:
-        results = search_service.search(query, limit=limit)
+        results = search_service.search(query, limit=limit, location_filter=location_filter)
         return results  # list of location DTOs or empty list
     except Exception as exc:
         logger.error("Error in chat search helper: %s", exc)
         return []
 
 
-def get_ai_response(query, previous_questions):
+def get_ai_response(query, previous_questions, location_filter=None):
     """Route-owned wrapper delegating prompt assembly and HF call to chat_service.
 
     Returns
@@ -205,6 +205,7 @@ def get_ai_response(query, previous_questions):
         query,
         previous_questions,
         search_helper=_chat_search_helper,
+        location_filter=location_filter,
     )
 
 
@@ -393,7 +394,13 @@ if not initialization_success:
 
 @app.route("/api/chat", methods=["POST"])
 def chat_endpoint():
-    """Chat endpoint for AI interactions."""
+    """Chat endpoint for AI interactions.
+
+    Accepts an optional ``location`` field to scope venue recommendations
+    to a Manhattan zone (e.g. 'midtown', 'upper west side').  When omitted,
+    the endpoint auto-extracts a location from the user's message when
+    detectable (e.g. 'find a bar in the East Village').
+    """
     auth_error = validate_chat_jwt()
     if auth_error is not None:
         return auth_error
@@ -412,8 +419,19 @@ def chat_endpoint():
         if not query:
             return jsonify({"error": "Message is required"}), 400
 
-        response, citations = get_ai_response(query, previous_questions)
-        logger.info("Chat response: %d citations returned", len(citations))
+        # Resolve location filter: explicit field takes precedence, then auto-extract.
+        from chat_service import extract_location_from_query
+
+        location_filter = (data.get("location") or "").strip() or None
+        if not location_filter:
+            location_filter = extract_location_from_query(query)
+
+        response, citations = get_ai_response(query, previous_questions, location_filter=location_filter)
+        logger.info(
+            "Chat response: %d citations returned (location_filter=%s)",
+            len(citations),
+            location_filter,
+        )
         return jsonify({"response": response, "citations": citations})
     except Exception as exc:
         logger.error("Error in chat endpoint: %s", exc)

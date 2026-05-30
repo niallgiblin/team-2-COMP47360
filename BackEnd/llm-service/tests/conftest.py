@@ -27,6 +27,9 @@ def load_app(monkeypatch, extra_env=None):
         SentenceTransformer=object,
         util=types.SimpleNamespace(cos_sim=_stub_cos_sim),
     ))
+    monkeypatch.setitem(sys.modules, "faiss", types.SimpleNamespace(
+        IndexFlatIP=lambda dim: types.SimpleNamespace(add=lambda vectors: None),
+    ))
     monkeypatch.setitem(sys.modules, "requests", types.SimpleNamespace(
         post=lambda *args, **kwargs: None,
         exceptions=types.SimpleNamespace(Timeout=Exception, RequestException=Exception),

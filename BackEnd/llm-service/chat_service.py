@@ -10,6 +10,7 @@ from config import (
     BUSYNESS_FETCH_TIMEOUT_SECONDS,
     BUSYNESS_SERVICE_URL,
     CHAT_API_URL,
+    DATA_PATH,
     DEFAULT_HF_CHAT_MODEL,
     HF_CHAT_MODEL,
 )
@@ -17,6 +18,121 @@ from dto import create_citation_dto
 from prompt_loader import PromptLoadError, load_prompt_template
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Zone extraction for location-aware chat
+# ---------------------------------------------------------------------------
+
+_KNOWN_ZONES: set[str] | None = None
+_ZONE_ALIASES: dict[str, str] = {
+    "midtown": "midtown",
+    "upper west side": "upper west side",
+    "upper east side": "upper east side",
+    "east village": "east village",
+    "west village": "west village",
+    "greenwich village": "greenwich village",
+    "lower east side": "lower east side",
+    "chelsea": "chelsea",
+    "soho": "soho",
+    "tribeca": "tribeca",
+    "chinatown": "chinatown",
+    "harlem": "harlem",
+    "financial district": "financial district",
+    "gramercy": "gramercy",
+    "hell's kitchen": "clinton",
+    "hells kitchen": "clinton",
+    "kips bay": "kips bay",
+    "murray hill": "murray hill",
+    "flatiron": "flatiron",
+    "union square": "union sq",
+    "times square": "times sq",
+    "battery park": "battery park",
+    "washingon heights": "washington heights",
+    "washington heights": "washington heights",
+    "morningside heights": "morningside heights",
+    "hamilton heights": "hamilton heights",
+    "yorkville": "yorkville",
+    "lenox hill": "lenox hill",
+    "lincoln square": "lincoln square",
+    "stuy town": "stuy town",
+    "stuyvesant town": "stuy town",
+    "alphabet city": "alphabet city",
+    "two bridges": "two bridges",
+    "seaport": "seaport",
+    "roosevelt island": "roosevelt island",
+    "williamsburg": "williamsburg",
+    "long island city": "long island city",
+    "hunters point": "hunters point",
+    "meatpacking": "meatpacking",
+    "hudson yards": "hudson yards",
+    "hudson sq": "hudson sq",
+    "garment district": "garment district",
+    "penn station": "penn station",
+}
+
+
+def _load_known_zones():
+    """Load unique zone names from the venues CSV into a cached module-level set."""
+    global _KNOWN_ZONES
+    if _KNOWN_ZONES is not None:
+        return _KNOWN_ZONES
+
+    try:
+        import pandas as pd
+
+        csv_path = os.getenv("DATA_PATH", DATA_PATH)
+        if not os.path.isfile(csv_path):
+            logger.warning("Cannot load zones: venues CSV not found at %s", csv_path)
+            _KNOWN_ZONES = set()
+            return _KNOWN_ZONES
+
+        df = pd.read_csv(csv_path)
+        zones = {str(z).strip().lower() for z in df["zone"].dropna().unique() if str(z).strip()}
+        _KNOWN_ZONES = zones
+        logger.info("Loaded %d unique zones for location extraction", len(zones))
+        return _KNOWN_ZONES
+    except Exception as exc:
+        logger.warning("Failed to load zones from CSV: %s", exc)
+        _KNOWN_ZONES = set()
+        return _KNOWN_ZONES
+
+
+def extract_location_from_query(query):
+    """Scan a natural-language query for Manhattan zone names or common aliases.
+
+    Returns a location filter string suitable for ``SearchService.search()``,
+    or ``None`` when no location is detected.
+
+    Examples
+    --------
+    >>> extract_location_from_query("find me a jazz bar in Midtown")
+    'midtown'
+    >>> extract_location_from_query("what's good in the Upper West Side tonight?")
+    'upper west side'
+    >>> extract_location_from_query("any quiet cafes?")
+    None
+    """
+    if not query or not str(query).strip():
+        return None
+
+    text = str(query).lower().strip()
+
+    # 1. Check aliases first (common names that map to zone substrings).
+    for alias, filter_term in _ZONE_ALIASES.items():
+        if alias in text:
+            logger.debug("Location extracted via alias %r -> %r", alias, filter_term)
+            return filter_term
+
+    # 2. Check against known zone names from the corpus (substring match
+    #    on the query side — if the query contains a zone name substring,
+    #    it passes as a filter to _matches_location_filter).
+    known = _load_known_zones()
+    for zone in sorted(known, key=len, reverse=True):
+        if zone in text:
+            logger.debug("Location extracted via zone name %r", zone)
+            return zone
+
+    return None
 
 CHAT_UNAVAILABLE_MESSAGE = "Location search is not available at the moment."
 CHAT_SEARCH_ERROR_MESSAGE = "I'm having trouble finding similar locations right now."
@@ -242,8 +358,8 @@ def format_retrieval_context(results):
     return (context, citations)
 
 
-def build_retrieval_context(query, limit=5, search_helper=None):
-    """Resolve top-k venue DTOs for chat context.
+def build_retrieval_context(query, limit=5, search_helper=None, location_filter=None):
+    """Resolve top-k venue DTOs for chat context, optionally scoped to a location zone.
 
     Returns
     -------
@@ -255,7 +371,7 @@ def build_retrieval_context(query, limit=5, search_helper=None):
         return (CHAT_UNAVAILABLE_MESSAGE, [])
 
     try:
-        raw = search_helper(query, limit=limit)
+        raw = search_helper(query, limit=limit, location_filter=location_filter)
         if isinstance(raw, str):
             # Backward-compat: caller returned a pre-formatted string.
             return (raw, [])
@@ -284,6 +400,7 @@ def build_chat_messages(
     search_helper=None,
     template=None,
     busyness_context=None,
+    location_filter=None,
 ):
     """Build Hugging Face chat messages using the versioned prompt template.
 
@@ -297,13 +414,17 @@ def build_chat_messages(
         Pre-built retrieval context string.  When ``None`` the function
         calls ``build_retrieval_context`` via *search_helper*.
     search_helper : callable | None
-        ``(query, limit) -> list[dict]`` producing location DTOs.
+        ``(query, limit, location_filter=None) -> list[dict]`` producing location DTOs.
     template : PromptTemplate | None
         Pre-loaded prompt template.  When ``None`` the function loads the
         default template via ``prompt_loader``.
     busyness_context : str | None
         Pre-built busyness context string.  When ``None`` the function
         fetches and formats busyness data via ``build_busyness_context``.
+    location_filter : str | None
+        Optional zone substring filter (e.g. 'midtown', 'upper west side').
+        When provided and *retrieval_context* is ``None``, it is forwarded
+        to the search helper to scope retrieval to a geographic area.
 
     Returns
     -------
@@ -317,7 +438,7 @@ def build_chat_messages(
 
     if retrieval_context is None:
         retrieval_context, citations = build_retrieval_context(
-            query, search_helper=search_helper
+            query, search_helper=search_helper, location_filter=location_filter,
         )
 
     # ---- Resolve busyness context ------------------------------------------
@@ -420,6 +541,7 @@ def get_ai_response(
     search_helper=None,
     hf_call=None,
     busyness_context=None,
+    location_filter=None,
 ):
     """Get AI response using Hugging Face API and optional retrieval context.
 
@@ -436,6 +558,7 @@ def get_ai_response(
             previous_questions=previous_questions,
             search_helper=search_helper,
             busyness_context=busyness_context,
+            location_filter=location_filter,
         )
         call = hf_call or huggingface_chat_api_call
         response = call(messages)

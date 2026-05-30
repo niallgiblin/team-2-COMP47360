@@ -4,7 +4,7 @@
   "created_at": "2026-05-29T00:00:00Z",
   "venues_csv": {
     "path": "venues.csv",
-    "sha256": "9ad28a62ce87924ca99ba77d84023b7d3728aa5f4a07552b183e1ead8c95cbcf",
+    "sha256": "7c3043f694367ad796a6c0211f0ce11c1c1e84fc9f68d87b807e7f245d59d032",
     "row_count": 2262,
     "columns": [
       "id",
@@ -35,7 +35,8 @@
       "loc_type",
       "tags",
       "summary",
-      "Info"
+      "Info",
+      "reviews"
     ],
     "metadata_fields": [
       "id",
@@ -43,7 +44,6 @@
       "long",
       "addr",
       "uri",
-      "reviews",
       "num_reviews"
     ]
   },

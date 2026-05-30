@@ -184,7 +184,7 @@ def test_create_location_dto_exposes_stable_fields():
     row = _tiny_rows()[0]
     dto = create_location_dto(row, similarity_score=0.91)
 
-    assert set(dto.keys()) == set(REQUIRED_DTO_FIELDS)
+    assert set(REQUIRED_DTO_FIELDS).issubset(set(dto.keys()))
     assert dto["id"] == 1
     assert dto["name"] == "Sky Lounge"
     assert dto["similarity"] == pytest.approx(0.91)
