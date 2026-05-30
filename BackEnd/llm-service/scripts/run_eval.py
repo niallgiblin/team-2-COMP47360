@@ -314,6 +314,16 @@ def main(argv: list[str] | None = None) -> None:
 
     search_service = _init_search_service()
 
+    # Report cross-encoder re-ranking status for before/after comparison
+    re_rank_enabled = (
+        getattr(search_service, "_cross_encoder", None) is not None
+    )
+    logger.info(
+        "Re-rank status: re_rank_enabled=%s",
+        re_rank_enabled,
+    )
+    print(f"Re-rank enabled: {re_rank_enabled}")
+
     # ---- per-category accumulators ----------------------------------------
     categories: dict[str, dict] = {}
     question_results: list[dict] = []

@@ -113,6 +113,8 @@ services:
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformers
+      - CROSS_ENCODER_ENABLED=true
+      - CROSS_ENCODER_MODEL_NAME=/app/models/cross-encoder
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - HF_TOKEN=${HF_TOKEN}
       - APP_JWT_SECRET=${APP_JWT_SECRET}

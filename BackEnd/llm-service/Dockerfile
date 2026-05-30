@@ -40,6 +40,8 @@ COPY prompts/ ./prompts/
 
 # Copy the sentence transformer model into the image
 COPY models/ ./models/
+# Copy pre-baked cross-encoder model (run scripts/download_cross_encoder.py first)
+COPY models/cross-encoder/ ./models/cross-encoder/
 
 # Command to run the application using Gunicorn
 # Use --preload to load the app once before forking workers, which is essential for ML models.
