@@ -835,6 +835,16 @@ class TestEvalRunnerIntegration:
 
         Only requires the real corpus and index — uses a temporary JSONL.
         """
+        # Python 3.14+ has binary incompatibilities with PyTorch 2.12's
+        # bundled libomp.dylib.  The integration test requires
+        # sentence-transformers → torch → libomp; skip on 3.14+ until
+        # PyTorch ships compatible wheels.
+        if sys.version_info >= (3, 14):
+            pytest.skip(
+                "PyTorch 2.12 C extension (libomp.dylib) is incompatible "
+                "with Python 3.14+"
+            )
+
         # Check that heavy dependencies are importable.
         try:
             import sentence_transformers  # noqa: F401
