@@ -381,21 +381,35 @@ def build_retrieval_context(query, limit=5, search_helper=None, location_filter=
         return (CHAT_SEARCH_ERROR_MESSAGE, [])
 
 
-def _build_chat_history(previous_questions):
+def _build_chat_history(previous_questions, previous_responses=None):
     """Format truncated chat history for the user-template ``{chat_history}``
     placeholder.  Returns an empty string when there are no previous questions.
+
+    When *previous_responses* is provided, formats alternating Q&A pairs
+    (zipped and truncated to the shorter list, keeping the last 3 turns).
+    Falls back to question-only format when responses are absent or empty.
     """
     if not previous_questions:
         return ""
     lines = ["Previous conversation:"]
-    for question in previous_questions[-3:]:
-        lines.append(f"- User: {question}")
+
+    if previous_responses:
+        # Alternating Q&A pairs: zip to shorter list, keep last 3 turns
+        pairs = list(zip(previous_questions, previous_responses))[-3:]
+        for q, r in pairs:
+            lines.append(f"- User: {q}")
+            lines.append(f"- AI: {r}")
+    else:
+        for question in previous_questions[-3:]:
+            lines.append(f"- User: {question}")
+
     return "\n".join(lines)
 
 
 def build_chat_messages(
     query,
     previous_questions,
+    previous_responses=None,
     retrieval_context=None,
     search_helper=None,
     template=None,
@@ -410,6 +424,9 @@ def build_chat_messages(
         The user's natural-language question.
     previous_questions : list[str]
         Truncated conversation history (last 3).
+    previous_responses : list[str] | None
+        Previous AI responses matching *previous_questions* 1:1.
+        When provided, history is formatted as alternating Q&A pairs.
     retrieval_context : str | None
         Pre-built retrieval context string.  When ``None`` the function
         calls ``build_retrieval_context`` via *search_helper*.
@@ -455,7 +472,7 @@ def build_chat_messages(
             template = None
 
     # ---- Build history & user content ----------------------------------------
-    chat_history = _build_chat_history(previous_questions)
+    chat_history = _build_chat_history(previous_questions, previous_responses)
 
     if template and template.get("system_template"):
         system_content = template["system_template"].format(
@@ -622,7 +639,7 @@ REFORMULATION_SYSTEM_PROMPT = (
 )
 
 
-def reformulate_query(current_query, previous_questions, previous_responses):
+def reformulate_query(current_query, previous_questions, previous_responses, hf_call=None):
     """Rewrite a context-dependent follow-up into a self-contained retrieval query.
 
     Uses conversation history (alternating Q&A pairs) so that follow-ups like
@@ -637,6 +654,9 @@ def reformulate_query(current_query, previous_questions, previous_responses):
         Previous user questions in chronological order.
     previous_responses : list[str]
         Previous AI responses in chronological order (1:1 with previous_questions).
+    hf_call : callable | None
+        Optional injection point for tests.  When ``None``, defaults to
+        ``huggingface_chat_api_call``.
 
     Returns
     -------
@@ -665,7 +685,8 @@ def reformulate_query(current_query, previous_questions, previous_responses):
     })
 
     try:
-        response = huggingface_chat_api_call(
+        call = hf_call or huggingface_chat_api_call
+        response = call(
             messages, max_tokens=100, timeout=10,
         )
         reformulated = response["choices"][0]["message"]["content"].strip()
@@ -706,12 +727,18 @@ def reformulate_query(current_query, previous_questions, previous_responses):
 def get_ai_response(
     query,
     previous_questions,
+    previous_responses=None,
     search_helper=None,
     hf_call=None,
     busyness_context=None,
     location_filter=None,
 ):
     """Get AI response using Hugging Face API and optional retrieval context.
+
+    Follow-up questions are automatically reformulated using conversation
+    history so that context-dependent queries (e.g. "what about cheaper
+    options?") become self-contained retrieval queries.  The original user
+    query is preserved in the chat prompt — reformulation only affects search.
 
     Returns
     -------
@@ -721,12 +748,29 @@ def get_ai_response(
         results).
     """
     try:
-        messages, citations = build_chat_messages(
+        # ---- Reformulate for retrieval when history exists --------------
+        search_query = reformulate_query(
+            query, previous_questions, previous_responses, hf_call=hf_call,
+        )
+        if search_query != query:
+            logger.info(
+                "Query reformulated for retrieval: %d→%d chars (original→reformulated)",
+                len(query), len(search_query),
+            )
+
+        # ---- Build retrieval context with reformulated query ------------
+        retrieval_context, citations = build_retrieval_context(
+            search_query, search_helper=search_helper, location_filter=location_filter,
+        )
+
+        # ---- Build chat messages with ORIGINAL query in user prompt -----
+        messages, _ = build_chat_messages(
             query=query,
             previous_questions=previous_questions,
-            search_helper=search_helper,
+            previous_responses=previous_responses,
+            retrieval_context=retrieval_context,
+            search_helper=None,       # already resolved above
             busyness_context=busyness_context,
-            location_filter=location_filter,
         )
         call = hf_call or huggingface_chat_api_call
         response = call(messages)

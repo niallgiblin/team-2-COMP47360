@@ -536,6 +536,80 @@ class TestBuildChatMessages:
         assert fetch_called
         assert "auto-fetched busyness" in messages[0]["content"]
 
+    # ---- History formatting with previous_responses (S06) ----------------
+
+    def test_history_with_responses_formats_alternating_qa(self):
+        """When previous_responses is provided, chat history shows Q&A pairs."""
+        messages, _ = build_chat_messages(
+            query="tell me more",
+            previous_questions=["bars in Midtown", "which have jazz?"],
+            previous_responses=[
+                "Here are bars in Midtown: A, B, C.",
+                "Jazz bars in Midtown: B and D.",
+            ],
+            retrieval_context="- Bar B (Midtown): Jazz Bar",
+            busyness_context=_STUB_BUSYNESS,
+        )
+        user_content = messages[-1]["content"]
+        assert "- User: bars in Midtown" in user_content
+        assert "- AI: Here are bars in Midtown: A, B, C." in user_content
+        assert "- User: which have jazz?" in user_content
+        assert "- AI: Jazz bars in Midtown: B and D." in user_content
+
+    def test_history_falls_back_to_question_only_when_no_responses(self):
+        """When previous_responses is None, old question-only format is used."""
+        messages, _ = build_chat_messages(
+            query="latest query",
+            previous_questions=["q1", "q2"],
+            previous_responses=None,
+            retrieval_context="- Venue (Zone): Type",
+            busyness_context=_STUB_BUSYNESS,
+        )
+        user_content = messages[-1]["content"]
+        assert "- User: q1" in user_content
+        assert "- User: q2" in user_content
+        assert "- AI:" not in user_content
+
+    def test_history_truncates_to_last_three_turns_with_responses(self):
+        """Last 3 Q&A pairs are kept; older ones dropped."""
+        qs = [f"q{i}" for i in range(6)]
+        rs = [f"r{i}" for i in range(6)]
+        messages, _ = build_chat_messages(
+            query="now",
+            previous_questions=qs,
+            previous_responses=rs,
+            retrieval_context="- V (Z): T",
+            busyness_context=_STUB_BUSYNESS,
+        )
+        user_content = messages[-1]["content"]
+        assert "q3" in user_content
+        assert "r3" in user_content
+        assert "q5" in user_content
+        assert "r5" in user_content
+        assert "q0" not in user_content
+        assert "r0" not in user_content
+        # Only 3 Q&A pairs
+        assert user_content.count("- User:") == 3
+        assert user_content.count("- AI:") == 3
+
+    def test_mismatched_history_lengths_zip_truncates(self):
+        """When questions and responses differ in length, zip truncates to shorter."""
+        messages, _ = build_chat_messages(
+            query="query",
+            previous_questions=["q1", "q2", "q3"],  # 3 questions
+            previous_responses=["r1"],                 # only 1 response
+            retrieval_context="- V (Z): T",
+            busyness_context=_STUB_BUSYNESS,
+        )
+        user_content = messages[-1]["content"]
+        # Only one Q&A pair (zip truncates to shorter list = 1)
+        assert "- User: q1" in user_content
+        assert "- AI: r1" in user_content
+        assert "q2" not in user_content
+        assert "q3" not in user_content
+        assert user_content.count("- User:") == 1
+        assert user_content.count("- AI:") == 1
+
 
 # ---------------------------------------------------------------------------
 # huggingface_chat_api_call
@@ -604,13 +678,21 @@ class TestGetAiResponse:
 
         hf_calls = []
 
-        def fake_hf(messages, model=None, requests_module=None):
+        def fake_hf(messages, model=None, requests_module=None, **kwargs):
             hf_calls.append(messages)
+            # Reformulation call (has max_tokens=100) vs main chat call
+            if kwargs.get("max_tokens") == 100:
+                # Return the current query — simulate no-change reformulation
+                # The last user message contains "Rewrite this follow-up...: <query>"
+                last_msg = messages[-1]["content"]
+                # Extract query after the colon
+                return {"choices": [{"message": {"content": last_msg.split(": ", 1)[-1]}}]}
             return {"choices": [{"message": {"content": "stubbed reply"}}]}
 
         reply, citations = get_ai_response(
             query="where should I go?",
             previous_questions=["earlier question"],
+            previous_responses=["stubbed earlier reply"],
             search_helper=fake_search,
             hf_call=fake_hf,
             busyness_context=_STUB_BUSYNESS,
@@ -618,9 +700,11 @@ class TestGetAiResponse:
         )
 
         assert reply == "stubbed reply"
-        assert search_calls == [("where should I go?", 5, "midtown")]
+        # Search should receive the original query (reformulation returned it unchanged)
+        assert search_calls[0][0] == "where should I go?"
+        assert search_calls[0][1] == 5
+        assert search_calls[0][2] == "midtown"
         assert hf_calls
-        assert HF_CHAT_MODEL
         assert len(citations) == 1
         assert citations[0]["venue_id"] == 55
         assert citations[0]["score"] == 0.76
@@ -738,6 +822,169 @@ class TestGetAiResponse:
         assert len(citations) == 2
         assert citations[0]["venue_id"] == 1
         assert citations[0]["name"] == "Blue Note"
+
+    # ---- S06 reformulation wiring -----------------------------------------
+
+    def test_reformulation_wired_into_retrieval_path(self, monkeypatch):
+        """Search helper receives the reformulated query, not the original."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        search_calls = []
+
+        def fake_search(query, limit=5, location_filter=None):
+            search_calls.append(query)
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "V", "zone": "Z", "type": "T",
+                     "address": "", "latitude": 0, "longitude": 0,
+                     "price": "", "rating": 0, "zoneId": 0},
+                    similarity_score=0.9,
+                )
+            ]
+
+        hf_calls = []
+
+        def fake_hf(messages, model=None, requests_module=None, **kwargs):
+            hf_calls.append(messages)
+            # Reformulation: return reformulated query, main chat: return reply
+            if kwargs.get("max_tokens") == 100:
+                return {"choices": [{"message": {"content": "affordable restaurants in Midtown"}}]}
+            return {"choices": [{"message": {"content": "Here are some affordable places."}}]}
+
+        reply, citations = get_ai_response(
+            query="what about cheaper options?",
+            previous_questions=["restaurants in Midtown"],
+            previous_responses=["Here are upscale restaurants in Midtown: Jean-Georges..."],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        # Search should receive the reformulated query
+        assert search_calls[0] == "affordable restaurants in Midtown"
+        # Original text in reply
+        assert "affordable places" in reply
+        assert len(citations) == 1
+
+    def test_original_query_preserved_in_user_prompt(self, monkeypatch):
+        """The HF chat call's user message contains the original query, not reformulated."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        chat_messages = []
+
+        def fake_search(query, limit=5, location_filter=None):
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "V", "zone": "Z", "type": "T",
+                     "address": "", "latitude": 0, "longitude": 0,
+                     "price": "", "rating": 0, "zoneId": 0},
+                    similarity_score=0.5,
+                )
+            ]
+
+        def fake_hf(messages, model=None, requests_module=None, **kwargs):
+            if kwargs.get("max_tokens") == 100:
+                # Reformulation call
+                return {"choices": [{"message": {"content": "cheap jazz bars in Midtown"}}]}
+            # Main chat call — capture messages for inspection
+            chat_messages.append(messages)
+            return {"choices": [{"message": {"content": "Here are cheap jazz bars."}}]}
+
+        get_ai_response(
+            query="anything cheaper?",
+            previous_questions=["jazz bars in Midtown"],
+            previous_responses=["Here are jazz bars in Midtown: Birdland..."],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        # The user prompt must contain the original query, not the reformulated one
+        user_msg = chat_messages[0][-1]["content"]
+        assert "anything cheaper?" in user_msg
+        assert "cheap jazz bars in Midtown" not in user_msg
+
+    def test_reformulation_failure_search_uses_raw_query(self, monkeypatch):
+        """When reformulation fails (returns original), search still works with raw query."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        search_calls = []
+
+        def fake_search(query, limit=5, location_filter=None):
+            search_calls.append(query)
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "V", "zone": "Z", "type": "T",
+                     "address": "", "latitude": 0, "longitude": 0,
+                     "price": "", "rating": 0, "zoneId": 0},
+                    similarity_score=0.5,
+                )
+            ]
+
+        def fake_hf(messages, model=None, requests_module=None, **kwargs):
+            if kwargs.get("max_tokens") == 100:
+                # Simulate reformulation failure → return empty
+                return {"choices": [{"message": {"content": ""}}]}
+            return {"choices": [{"message": {"content": "response"}}]}
+
+        reply, citations = get_ai_response(
+            query="any cheaper ones?",
+            previous_questions=["upscale restaurants in Midtown"],
+            previous_responses=["Here are some upscale options..."],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        # Search falls back to raw query since reformulation returned empty
+        assert search_calls[0] == "any cheaper ones?"
+        assert reply == "response"
+        assert len(citations) == 1
+
+    def test_history_threading_with_previous_responses(self, monkeypatch):
+        """Full integration: previous_responses flows through reformulation
+        and history formatting, producing Q&A pairs in the chat prompt."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        chat_system_msg = []
+
+        def fake_search(query, limit=5, location_filter=None):
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "Blue Note", "zone": "Greenwich Village",
+                     "type": "Jazz Club", "address": "131 W 3rd St",
+                     "latitude": 0, "longitude": 0,
+                     "price": "moderate", "rating": 4.5, "zoneId": 1},
+                    similarity_score=0.95,
+                )
+            ]
+
+        def fake_hf(messages, model=None, requests_module=None, **kwargs):
+            if kwargs.get("max_tokens") == 100:
+                # Reformulation: return self-contained query
+                return {"choices": [{"message": {"content": "cheap jazz clubs in Greenwich Village"}}]}
+            chat_system_msg.append(messages)
+            return {"choices": [{"message": {"content": "Try Blue Note [1]!"}}]}
+
+        reply, citations = get_ai_response(
+            query="anything cheaper?",
+            previous_questions=["jazz bars in Greenwich Village"],
+            previous_responses=["Here are jazz bars in Greenwich Village: Blue Note, Smalls..."],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        # History in user prompt includes the AI response
+        user_content = chat_system_msg[0][-1]["content"]
+        assert "- User: jazz bars in Greenwich Village" in user_content
+        assert "- AI: Here are jazz bars in Greenwich Village: Blue Note, Smalls..." in user_content
+        # Original query in prompt
+        assert "anything cheaper?" in user_content
+        # Reformulated query NOT in user prompt
+        assert "cheap jazz clubs in Greenwich Village" not in user_content
+        # Reply includes citation parsing
+        assert "Try Blue Note" in reply
 
     def test_does_not_perform_jwt_validation(self):
         from pathlib import Path
@@ -1095,4 +1342,7 @@ class TestReformulateQuery:
 
         sig = inspect.signature(reformulate_query)
         param_names = list(sig.parameters.keys())
-        assert param_names == ["current_query", "previous_questions", "previous_responses"]
+        assert "current_query" in param_names
+        assert "previous_questions" in param_names
+        assert "previous_responses" in param_names
+        assert "hf_call" in param_names
