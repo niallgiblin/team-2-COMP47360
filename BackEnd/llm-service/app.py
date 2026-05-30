@@ -152,6 +152,7 @@ def health():
             "embeddings_loaded": search_service is not None,
             "total_locations": total_locations,
             "index_source": getattr(search_service, "_index_source", "unknown"),
+            "hybrid_search_enabled": getattr(search_service, "_bm25_index", None) is not None,
         }
     )
 

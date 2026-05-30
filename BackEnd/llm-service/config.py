@@ -58,3 +58,10 @@ SEARCH_OVERFETCH_MULTIPLIER = _env_int("SEARCH_OVERFETCH_MULTIPLIER", 3)
 
 BUSYNESS_SERVICE_URL = os.getenv("BUSYNESS_SERVICE_URL", "http://busyness-service:5000")
 BUSYNESS_FETCH_TIMEOUT_SECONDS = _env_int("BUSYNESS_FETCH_TIMEOUT_SECONDS", 5)
+
+# --- Hybrid search (BM25 + Dense) ---
+HYBRID_SEARCH_ENABLED = os.getenv(
+    "HYBRID_SEARCH_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
+RRF_K = _env_int("RRF_K", 60)
+BM25_INDEX_PATH = os.getenv("BM25_INDEX_PATH", str(_CORPUS_ROOT / "index" / "bm25"))

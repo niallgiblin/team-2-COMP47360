@@ -83,6 +83,34 @@ def _normalize_query_vector(vector):
     return query / norm
 
 
+def _rrf_fuse(bm25_results, dense_results, k=60):
+    """Fuse BM25 and dense rankings via Reciprocal Rank Fusion.
+
+    RRF_score(d) = Σ_{r in rankers} 1/(k + rank_r(d))
+
+    Ranks start at 1 (not 0). Documents appearing in only one ranker
+    get contribution only from that ranker.
+
+    Args:
+        bm25_results: [(doc_idx, bm25_score), ...] sorted by score desc.
+        dense_results: [(doc_idx, dense_score), ...] sorted by score desc.
+        k: RRF constant (default 60).
+
+    Returns:
+        [(doc_idx, rrf_score), ...] sorted by RRF score descending.
+    """
+    rrf_scores: dict[int, float] = {}
+
+    for rank, (doc_idx, _score) in enumerate(bm25_results, start=1):
+        rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0.0) + 1.0 / (k + rank)
+
+    for rank, (doc_idx, _score) in enumerate(dense_results, start=1):
+        rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0.0) + 1.0 / (k + rank)
+
+    merged = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True)
+    return merged
+
+
 def _cosine_scores(query_vector, embeddings):
     query = np.asarray(query_vector, dtype="float32")
     matrix = np.asarray(embeddings, dtype="float32")
@@ -142,6 +170,8 @@ class SearchService:
         over_fetch_multiplier=3,
         allow_torch_fallback=False,
         index_source="npy-built",
+        bm25_index=None,
+        rrf_k=60,
     ):
         self._df = df
         self._embeddings = np.asarray(embeddings, dtype="float32")
@@ -151,6 +181,8 @@ class SearchService:
         self._allow_torch_fallback = allow_torch_fallback
         self.uses_faiss_index = True
         self._index_source = index_source
+        self._bm25_index = bm25_index
+        self._rrf_k = int(rrf_k)
 
     @classmethod
     def from_startup(
@@ -161,6 +193,9 @@ class SearchService:
         over_fetch_multiplier=3,
         allow_torch_fallback=None,
         index_path=None,
+        bm25_index_path=None,
+        hybrid_search_enabled=None,
+        rrf_k=None,
     ):
         import logging
         import os
@@ -172,6 +207,11 @@ class SearchService:
             from config import INDEX_PATH as _cfg_index_path
 
             index_path = _cfg_index_path
+
+        # Resolve manifest path once (used by both FAISS and BM25 loading).
+        from config import MANIFEST_PATH as _cfg_manifest_path
+
+        _manifest_path = _cfg_manifest_path if os.path.isfile(_cfg_manifest_path) else None
 
         try:
             matrix = validate_startup_data(df, embeddings)
@@ -186,7 +226,7 @@ class SearchService:
         if matrix.shape[1] == 0:
             raise SearchStartupError("Embedding dimension must be greater than zero")
 
-        # --- Persisted index path ---
+        # --- Persisted FAISS index path ---
         index_source = "npy-built"
         vector_index = None
         persisted_attempted = False
@@ -203,14 +243,9 @@ class SearchService:
             try:
                 from retrieval.index_loader import load_persisted_index
 
-                # Resolve manifest path for checksum validation.
-                from config import MANIFEST_PATH as _cfg_manifest_path
-
-                manifest_path = _cfg_manifest_path if os.path.isfile(_cfg_manifest_path) else None
-
                 vector_index = load_persisted_index(
                     index_dir=index_path,
-                    manifest_path=manifest_path,
+                    manifest_path=_manifest_path,
                     encoder_dimensions=encoder.get_sentence_embedding_dimension(),
                 )
                 index_source = "persisted"
@@ -257,6 +292,60 @@ class SearchService:
         if len(df) != vector_index.row_ids.shape[0]:
             raise SearchStartupError("Embedding row-count mismatch with location data")
 
+        # --- BM25 sparse index loading ---
+        if hybrid_search_enabled is None:
+            from config import HYBRID_SEARCH_ENABLED as _cfg_hybrid
+
+            hybrid_search_enabled = _cfg_hybrid
+        if bm25_index_path is None:
+            from config import BM25_INDEX_PATH as _cfg_bm25_path
+
+            bm25_index_path = _cfg_bm25_path
+        if rrf_k is None:
+            from config import RRF_K as _cfg_rrf_k
+
+            rrf_k = _cfg_rrf_k
+
+        bm25_index = None
+        _hybrid_available = False
+
+        if hybrid_search_enabled:
+            logger.info(
+                "HYBRID_SEARCH_ENABLED=true — attempting BM25 index load from %s",
+                bm25_index_path,
+            )
+            try:
+                from retrieval import Bm25LoadError, load_bm25_index
+
+                bm25_index = load_bm25_index(
+                    index_dir=bm25_index_path,
+                    manifest_path=_manifest_path,
+                )
+                _hybrid_available = True
+                logger.info(
+                    "BM25 index loaded: %d documents, k1=%.2f, b=%.2f",
+                    bm25_index.doc_count,
+                    bm25_index.k1,
+                    bm25_index.b,
+                )
+            except Bm25LoadError as exc:
+                raise SearchStartupError(
+                    f"Failed to load BM25 index from {bm25_index_path}: {exc}"
+                ) from exc
+            except Exception as exc:
+                raise SearchStartupError(
+                    f"Failed to load BM25 index from {bm25_index_path}: {exc}"
+                ) from exc
+        else:
+            logger.info("HYBRID_SEARCH_ENABLED=false — BM25 index not loaded")
+
+        # Log hybrid status for observability.
+        logger.info(
+            "SearchService hybrid_search_available=%s rrf_k=%d",
+            _hybrid_available,
+            rrf_k,
+        )
+
         resolved_torch_fallback = (
             allow_torch_fallback
             if allow_torch_fallback is not None
@@ -271,6 +360,8 @@ class SearchService:
             over_fetch_multiplier=over_fetch_multiplier,
             allow_torch_fallback=resolved_torch_fallback,
             index_source=index_source,
+            bm25_index=bm25_index,
+            rrf_k=rrf_k,
         )
 
     def _encode_query(self, query_text):
@@ -291,6 +382,7 @@ class SearchService:
         location_filter=None,
         price_range=None,
         exclude_names=None,
+        mode="auto",
     ):
         if limit <= 0:
             return []
@@ -299,6 +391,48 @@ class SearchService:
         if np.linalg.norm(query_vector) == 0:
             return []
 
+        # Determine effective mode.
+        effective_mode = mode
+        if mode == "auto":
+            effective_mode = "hybrid" if self._bm25_index is not None else "dense"
+
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug(
+            "Search mode: %s (requested: %s, bm25_available=%s)",
+            effective_mode,
+            mode,
+            self._bm25_index is not None,
+        )
+
+        if effective_mode == "hybrid" and self._bm25_index is not None:
+            return self._hybrid_collect(
+                query_text,
+                query_vector,
+                limit,
+                location_filter=location_filter,
+                price_range=price_range,
+                exclude_names=exclude_names,
+            )
+        else:
+            return self._dense_collect(
+                query_vector,
+                limit,
+                location_filter=location_filter,
+                price_range=price_range,
+                exclude_names=exclude_names,
+            )
+
+    def _dense_collect(
+        self,
+        query_vector,
+        limit,
+        location_filter=None,
+        price_range=None,
+        exclude_names=None,
+    ):
+        """Dense-only retrieval using FAISS index (original behaviour)."""
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
         batch = min(
             len(self._df),
@@ -342,7 +476,56 @@ class SearchService:
 
         return results
 
-    def search(self, query_text, limit=10, location_filter=None, price_range=None):
+    def _hybrid_collect(
+        self,
+        query_text,
+        query_vector,
+        limit,
+        location_filter=None,
+        price_range=None,
+        exclude_names=None,
+    ):
+        """Hybrid retrieval: BM25 + FAISS fused via RRF, then filtered."""
+        exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
+        fetch_k = min(len(self._df), limit * self._over_fetch_multiplier)
+
+        # 1. BM25 lexical search.
+        bm25_results = self._bm25_index.search(query_text, top_k=fetch_k)
+
+        # 2. FAISS dense search.
+        scores, positions = self._index.index.search(query_vector, fetch_k)
+        dense_results = []
+        seen_dense = set()
+        for position, score in zip(positions[0], scores[0]):
+            if position < 0:
+                continue
+            row_idx = int(self._index.row_ids[position])
+            if row_idx in seen_dense:
+                continue
+            seen_dense.add(row_idx)
+            dense_results.append((row_idx, float(score)))
+
+        # 3. RRF fuse.
+        fused = _rrf_fuse(bm25_results, dense_results, k=self._rrf_k)
+
+        # 4. Filter and build DTOs.
+        results = []
+        for doc_idx, rrf_score in fused:
+            if len(results) >= limit:
+                break
+            row = self._df.iloc[doc_idx]
+            name = str(row.get("name", ""))
+            if name.lower() in exclude_lower:
+                continue
+            if not _matches_location_filter(row, location_filter):
+                continue
+            if not _matches_price_range(row, price_range):
+                continue
+            results.append(create_location_dto(row, rrf_score))
+
+        return results
+
+    def search(self, query_text, limit=10, location_filter=None, price_range=None, mode="auto"):
         if not str(query_text).strip():
             return []
         return self._collect_results(
@@ -350,13 +533,15 @@ class SearchService:
             limit=limit,
             location_filter=location_filter,
             price_range=price_range,
+            mode=mode,
         )
 
-    def find_similar(self, query_text, exclude_names=None, limit=5):
+    def find_similar(self, query_text, exclude_names=None, limit=5, mode="auto"):
         return self._collect_results(
             query_text,
             limit=limit,
             exclude_names=exclude_names or [],
+            mode=mode,
         )
 
     def _torch_full_corpus_search(self, query_text):

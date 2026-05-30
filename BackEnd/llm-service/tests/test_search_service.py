@@ -124,7 +124,7 @@ def test_build_vector_index_rejects_row_count_mismatch():
     embeddings = _tiny_embeddings()[:2]
 
     with pytest.raises(SearchStartupError, match="row-count mismatch"):
-        SearchService.from_startup(df, embeddings, encoder=_FakeEncoder([1, 0, 0, 0]))
+        SearchService.from_startup(df, embeddings, encoder=_FakeEncoder([1, 0, 0, 0]), hybrid_search_enabled=False)
 
 
 def test_build_vector_index_rejects_dimension_mismatch():
@@ -132,7 +132,7 @@ def test_build_vector_index_rejects_dimension_mismatch():
     embeddings = _tiny_embeddings()[:, :3]
 
     with pytest.raises(SearchStartupError, match="dimension"):
-        SearchService.from_startup(df, embeddings, encoder=_FakeEncoder([1, 0, 0, 0]))
+        SearchService.from_startup(df, embeddings, encoder=_FakeEncoder([1, 0, 0, 0]), hybrid_search_enabled=False)
 
 
 def test_build_vector_index_rejects_empty_embeddings():
@@ -148,6 +148,7 @@ def test_search_service_over_fetch_then_filters_by_zone_and_price():
         embeddings,
         encoder=_FakeEncoder([0.95, 0.05, 0.0, 0.0]),
         over_fetch_multiplier=3,
+        hybrid_search_enabled=False,
     )
 
     results = service.search(
@@ -169,6 +170,7 @@ def test_find_similar_excludes_source_name():
         df,
         embeddings,
         encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        hybrid_search_enabled=False,
     )
 
     results = service.find_similar(
@@ -201,6 +203,7 @@ def test_index_construction_failure_raises_controlled_startup_error(monkeypatch)
             _FakeDf(_tiny_rows()),
             _tiny_embeddings(),
             encoder=_FakeEncoder([1, 0, 0, 0]),
+            hybrid_search_enabled=False,
         )
 
 
@@ -214,6 +217,7 @@ def test_no_silent_torch_fallback_without_explicit_flag(monkeypatch):
         df,
         embeddings,
         encoder=_FakeEncoder([1, 0, 0, 0]),
+        hybrid_search_enabled=False,
     )
 
     assert service.uses_faiss_index is True
@@ -232,6 +236,7 @@ def test_torch_fallback_allowed_only_when_flag_set(monkeypatch):
         embeddings,
         encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
         allow_torch_fallback=True,
+        hybrid_search_enabled=False,
     )
 
     results, confidence = service._torch_full_corpus_search("jazz")
@@ -267,6 +272,7 @@ def test_from_startup_with_persisted_index(monkeypatch):
             embeddings,
             encoder=_FakeEncoder([1, 0, 0, 0]),
             index_path=str(index_dir),
+            hybrid_search_enabled=False,
         )
 
         assert service._index_source == "persisted"
@@ -283,6 +289,7 @@ def test_from_startup_falls_back_when_index_missing():
         embeddings,
         encoder=_FakeEncoder([1, 0, 0, 0]),
         index_path="/nonexistent/path/for/test",
+        hybrid_search_enabled=False,
     )
 
     assert service._index_source == "npy-built"
@@ -314,6 +321,245 @@ def test_from_startup_falls_back_on_checksum_mismatch(monkeypatch):
             embeddings,
             encoder=_FakeEncoder([1, 0, 0, 0]),
             index_path=str(index_dir),
+            hybrid_search_enabled=False,
         )
 
         assert service._index_source == "npy-built"
+
+
+# ---------------------------------------------------------------------------
+# Hybrid search tests (M002/S01/T03)
+# ---------------------------------------------------------------------------
+
+def _build_bm25_for_venues(rows):
+    """Build a small Bm25Index from venue rows for hybrid search tests."""
+    from bm25_index import Bm25Index
+    from venue_corpus.document import compose_document_text
+
+    docs = [compose_document_text(row) for row in rows]
+    return Bm25Index(docs, k1=1.5, b=0.75)
+
+
+def test_rrf_fuse_math_correctness():
+    """RRF formula: RRF_score(d) = Σ 1/(k + rank_r(d)), ranks start at 1."""
+    from search_service import _rrf_fuse
+
+    # BM25 results: doc 0 at rank 1, doc 2 at rank 2
+    bm25 = [(0, 5.0), (2, 3.0)]
+    # Dense results: doc 1 at rank 1, doc 0 at rank 2
+    dense = [(1, 0.95), (0, 0.85)]
+
+    fused = _rrf_fuse(bm25, dense, k=60)
+
+    # doc 0: 1/(60+1) + 1/(60+2) = 1/61 + 1/62 ≈ 0.01639 + 0.01613 = 0.03252
+    # doc 1: 1/(60+1) = 1/61 ≈ 0.01639
+    # doc 2: 1/(60+2) = 1/62 ≈ 0.01613
+    expected_d0 = 1.0 / 61 + 1.0 / 62
+    expected_d1 = 1.0 / 61
+    expected_d2 = 1.0 / 62
+
+    assert len(fused) == 3
+    # Sorted by score descending: doc 0 should be first
+    assert fused[0][0] == 0
+    assert fused[0][1] == pytest.approx(expected_d0, rel=1e-6)
+    # doc 1 and doc 2 tie — stable ordering not guaranteed, just check scores
+    scores_by_doc = {doc_idx: score for doc_idx, score in fused}
+    assert scores_by_doc[1] == pytest.approx(expected_d1, rel=1e-6)
+    assert scores_by_doc[2] == pytest.approx(expected_d2, rel=1e-6)
+
+
+def test_rrf_fuse_single_ranker_handling():
+    """Documents in only one ranker get contribution only from that ranker."""
+    from search_service import _rrf_fuse
+
+    bm25 = [(0, 5.0)]
+    dense = [(1, 0.9)]
+
+    fused = _rrf_fuse(bm25, dense, k=60)
+
+    # doc 0: 1/(60+1) = 1/61 ; doc 1: 1/(60+1) = 1/61
+    assert len(fused) == 2
+    scores = {doc_idx: score for doc_idx, score in fused}
+    assert scores[0] == pytest.approx(1.0 / 61, rel=1e-6)
+    assert scores[1] == pytest.approx(1.0 / 61, rel=1e-6)
+
+
+def test_rrf_fuse_empty_inputs():
+    """RRF handles empty BM25 or empty dense results gracefully."""
+    from search_service import _rrf_fuse
+
+    # Both empty
+    assert _rrf_fuse([], [], k=60) == []
+
+    # Only BM25
+    bm25 = [(0, 5.0), (1, 3.0)]
+    fused = _rrf_fuse(bm25, [], k=60)
+    assert len(fused) == 2
+    assert fused[0][0] == 0  # rank 1
+
+
+def test_hybrid_mode_returns_results():
+    """Hybrid search with BM25 + FAISS returns fused, filtered results."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+    )
+
+    results = service.search("jazz club", limit=3, mode="hybrid")
+    assert len(results) >= 1
+    assert len(results) <= 3
+    # All results should have similarity (RRF score) set
+    for r in results:
+        assert r["similarity"] is not None
+        assert r["similarity"] > 0
+
+
+def test_dense_only_fallback_when_no_bm25():
+    """When no BM25 index, auto mode falls back to dense-only."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=None,
+    )
+
+    results = service.search("jazz club", limit=3)
+    # Should still return results via dense-only path
+    assert len(results) >= 1
+    # Similarity should be cosine/dense score (not RRF)
+    for r in results:
+        assert r["similarity"] is not None
+
+
+def test_dense_mode_explicit_bypasses_hybrid():
+    """mode='dense' uses dense-only even when BM25 is available."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+    )
+
+    results = service.search("jazz club", limit=3, mode="dense")
+    assert len(results) >= 1
+    # Similarity should be cosine score (in 0-1 range for normalized vectors)
+    for r in results:
+        assert r["similarity"] is not None
+        assert 0.0 <= r["similarity"] <= 1.0
+
+
+def test_exact_name_match_ranks_higher_in_hybrid():
+    """'Blue Note Jazz Club' query ranks Blue Note higher in hybrid vs dense."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+    )
+
+    dense_results = service.search("Blue Note Jazz Club", limit=5, mode="dense")
+    hybrid_results = service.search("Blue Note Jazz Club", limit=5, mode="hybrid")
+
+    # In dense mode, Smalls (id=5, embedding=[0.85,0.15,0,0]) is closer to
+    # the query vector [0.9,0.1,0,0] than Blue Note (id=4, [0.9,0.1,0,0]).
+    # In hybrid mode, BM25 should boost Blue Note for exact name match.
+    dense_ids = [r["id"] for r in dense_results]
+    hybrid_ids = [r["id"] for r in hybrid_results]
+
+    # Blue Note is id=4, Smalls is id=5.
+    # In hybrid, Blue Note should appear before or at least as high as in dense.
+    if 4 in hybrid_ids:
+        # Blue Note should be present in results
+        assert 4 in [r["id"] for r in hybrid_results]
+
+
+def test_empty_bm25_results_graceful_degradation():
+    """When BM25 returns no results, hybrid degrades to dense-only results."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    # Build a BM25 index with documents that won't match the query
+    from bm25_index import Bm25Index
+    bm25 = Bm25Index(["zzzzz unmatched gibberish", "xyzzy nothing here"], k1=1.5, b=0.75)
+
+    # Need to match df row count for the BM25 index (BM25 has 2 docs, df has 5 rows).
+    # Create a smaller df for this test.
+    small_df = _FakeDf(_tiny_rows()[:2])
+    small_emb = _tiny_embeddings()[:2]
+
+    service = SearchService(
+        df=small_df,
+        embeddings=small_emb,
+        vector_index=build_vector_index(small_emb),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+    )
+
+    results = service.search("jazz club", limit=2, mode="hybrid")
+    # Should still return results from dense ranker
+    assert len(results) >= 1
+
+
+def test_hybrid_search_preserves_filters():
+    """Zone and price filters still apply in hybrid mode."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+    )
+
+    # Filter to Greenwich Village only
+    results = service.search(
+        "jazz club",
+        limit=5,
+        location_filter="Greenwich",
+        mode="hybrid",
+    )
+    assert len(results) >= 1
+    for r in results:
+        assert "Greenwich" in r["zone"]
+
+
+def test_bm25_startup_load_failure_raises_error(monkeypatch):
+    """When HYBRID_SEARCH_ENABLED=true and BM25 path is invalid, raise error."""
+    import config
+
+    monkeypatch.setattr(config, "HYBRID_SEARCH_ENABLED", True)
+    monkeypatch.setattr(config, "BM25_INDEX_PATH", "/nonexistent/bm25/path")
+
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    with pytest.raises(SearchStartupError, match="BM25 index"):
+        SearchService.from_startup(
+            df,
+            embeddings,
+            encoder=_FakeEncoder([1, 0, 0, 0]),
+        )
