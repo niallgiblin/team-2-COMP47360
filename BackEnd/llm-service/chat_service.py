@@ -493,8 +493,16 @@ def build_chat_messages(
     return messages, citations
 
 
-def huggingface_chat_api_call(messages, model=None, requests_module=None):
-    """Make a call to the Hugging Face chat completions API."""
+def huggingface_chat_api_call(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+    """Make a call to the Hugging Face chat completions API.
+
+    Parameters
+    ----------
+    max_tokens : int
+        Maximum tokens in the response (default 400).
+    timeout : int
+        Request timeout in seconds (default 30).
+    """
     token = os.environ.get("HF_TOKEN")
     if not token or token == "your-hugging-face-api-token":
         logger.error(
@@ -510,14 +518,14 @@ def huggingface_chat_api_call(messages, model=None, requests_module=None):
     payload = {
         "messages": messages,
         "model": model,
-        "max_tokens": 400,
+        "max_tokens": max_tokens,
         "temperature": 0.4,
         "top_p": 0.9,
     }
 
     logger.info("Making request to Hugging Face API...")
     try:
-        response = http.post(CHAT_API_URL, headers=headers, json=payload, timeout=30)
+        response = http.post(CHAT_API_URL, headers=headers, json=payload, timeout=timeout)
         response.raise_for_status()
         logger.info("Successfully received response from Hugging Face API.")
         return response.json()
@@ -590,6 +598,109 @@ def parse_inline_citations(response_text, citations):
         lines.append(f"[{n}] {name} — {snippet}")
 
     return response_text + "\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Query reformulation for multi-turn conversational retrieval (S06)
+# ---------------------------------------------------------------------------
+
+REFORMULATION_SYSTEM_PROMPT = (
+    "You are a query reformulator for a Manhattan nightlife venue search system. "
+    "Your task is to rewrite the user's follow-up question into a self-contained "
+    "retrieval query using the previous conversation context.\n\n"
+    "Rules:\n"
+    "- NEVER invent venue names, zones, or attributes that were not mentioned "
+    "by the user or in previous responses.\n"
+    "- Preserve any location/zone context from previous turns. "
+    "For example, if the user previously asked about Midtown, keep 'Midtown' "
+    "in the reformulated query even if the follow-up doesn't re-state it.\n"
+    "- If no conversation history is provided, return the query unchanged.\n"
+    "- Output ONLY the reformulated query text — no prefixes, no explanations, "
+    "no commentary, no quotation marks.\n"
+    "- Make the reformulated query specific enough to be used directly in a "
+    "venue search without additional context."
+)
+
+
+def reformulate_query(current_query, previous_questions, previous_responses):
+    """Rewrite a context-dependent follow-up into a self-contained retrieval query.
+
+    Uses conversation history (alternating Q&A pairs) so that follow-ups like
+    "what about cheaper options?" inherit venue/zone context from earlier turns
+    without the user re-stating it.
+
+    Parameters
+    ----------
+    current_query : str
+        The user's latest question (may be context-dependent).
+    previous_questions : list[str]
+        Previous user questions in chronological order.
+    previous_responses : list[str]
+        Previous AI responses in chronological order (1:1 with previous_questions).
+
+    Returns
+    -------
+    str
+        Self-contained retrieval query, or *current_query* unchanged when
+        history is empty or reformulation fails.
+    """
+    # Fallback (a): empty history → return as-is, no API call
+    if not previous_questions:
+        logger.debug("No conversation history; returning query unchanged")
+        return current_query
+
+    # Build messages: system prompt + alternating Q&A pairs + instruction
+    messages = [{"role": "system", "content": REFORMULATION_SYSTEM_PROMPT}]
+
+    for q, r in zip(previous_questions, previous_responses):
+        messages.append({"role": "user", "content": q})
+        messages.append({"role": "assistant", "content": r})
+
+    messages.append({
+        "role": "user",
+        "content": (
+            f"Rewrite this follow-up question into a self-contained retrieval query: "
+            f"{current_query}"
+        ),
+    })
+
+    try:
+        response = huggingface_chat_api_call(
+            messages, max_tokens=100, timeout=10,
+        )
+        reformulated = response["choices"][0]["message"]["content"].strip()
+
+        # Fallback (c): empty/whitespace-only output
+        if not reformulated:
+            logger.warning(
+                "Reformulation returned empty output for query=%r; "
+                "using original query",
+                current_query,
+            )
+            return current_query
+
+        logger.debug(
+            "Reformulated query from %d-char original to %d-char reformulated: %r",
+            len(current_query), len(reformulated), reformulated,
+        )
+        return reformulated
+
+    except requests.exceptions.Timeout:
+        # Fallback (b): timeout
+        logger.warning(
+            "Reformulation timed out for query=%r; using original query",
+            current_query,
+        )
+        return current_query
+
+    except Exception as exc:
+        # Fallback (b): any other API error
+        logger.warning(
+            "Reformulation failed for query=%r: %s; using original query",
+            current_query,
+            exc,
+        )
+        return current_query
 
 
 def get_ai_response(

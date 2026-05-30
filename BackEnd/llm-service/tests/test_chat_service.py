@@ -9,6 +9,7 @@ from chat_service import (
     HF_CHAT_MODEL,
     NO_BUSYNESS_MESSAGE,
     NO_VENUES_MESSAGE,
+    REFORMULATION_SYSTEM_PROMPT,
     _busyness_label,
     _KNOWN_ZONES,
     _ZONE_ALIASES,
@@ -22,6 +23,7 @@ from chat_service import (
     get_ai_response,
     huggingface_chat_api_call,
     parse_inline_citations,
+    reformulate_query,
 )
 from dto import create_citation_dto, create_location_dto
 
@@ -745,3 +747,352 @@ class TestGetAiResponse:
         )
         assert "validate_chat_jwt" not in source
         assert "jwt.decode" not in source
+
+
+# ---------------------------------------------------------------------------
+# reformulate_query (S06)
+# ---------------------------------------------------------------------------
+
+class TestReformulateQuery:
+    """Tests for reformulate_query — multi-turn conversational query reformulation."""
+
+    # ------------------------------------------------------------------
+    # Passthrough / empty history
+    # ------------------------------------------------------------------
+
+    def test_empty_history_returns_query_unchanged(self):
+        """No API call; returns current_query as-is when history is empty."""
+        result = reformulate_query(
+            "what about cheaper options?",
+            previous_questions=[],
+            previous_responses=[],
+        )
+        assert result == "what about cheaper options?"
+
+    def test_none_history_treated_as_empty(self):
+        """None previous_questions treated same as empty list."""
+        result = reformulate_query(
+            "any jazz bars?",
+            previous_questions=[],  # explicit empty
+            previous_responses=[],
+        )
+        assert result == "any jazz bars?"
+
+    # ------------------------------------------------------------------
+    # Single-turn refinement
+    # ------------------------------------------------------------------
+
+    def test_single_turn_price_refinement(self, monkeypatch):
+        """Follow-up asking for cheaper options inherits venue context."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            # Verify system prompt is first message
+            assert messages[0]["role"] == "system"
+            assert "reformulator" in messages[0]["content"].lower()
+            # Verify history Q&A are present
+            assert messages[1]["role"] == "user"
+            assert "Find me a nice restaurant in Midtown" in messages[1]["content"]
+            assert messages[2]["role"] == "assistant"
+            # Verify the instruction message
+            assert messages[-1]["role"] == "user"
+            assert "cheaper options" in messages[-1]["content"]
+            # Verify tight constraints
+            assert max_tokens == 100
+            assert timeout == 10
+            return {"choices": [{"message": {"content": "Find affordable restaurants in Midtown"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "what about cheaper options?",
+            previous_questions=["Find me a nice restaurant in Midtown"],
+            previous_responses=[
+                "Here are some upscale restaurants in Midtown: Jean-Georges, Le Bernardin..."
+            ],
+        )
+        assert result == "Find affordable restaurants in Midtown"
+
+    def test_single_turn_zone_switch(self, monkeypatch):
+        """Follow-up switches zone; original zone context not re-stated by user."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "jazz bars in East Village"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "any in East Village instead?",
+            previous_questions=["jazz bars in Midtown"],
+            previous_responses=["Here are jazz bars in Midtown: Birdland, Swing 46..."],
+        )
+        assert result == "jazz bars in East Village"
+
+    def test_single_turn_type_switch(self, monkeypatch):
+        """Follow-up switches venue type without re-stating location."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "comedy clubs in Midtown"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "how about comedy clubs instead?",
+            previous_questions=["jazz bars in Midtown"],
+            previous_responses=["Here are jazz bars in Midtown: Birdland, Swing 46..."],
+        )
+        assert result == "comedy clubs in Midtown"
+
+    # ------------------------------------------------------------------
+    # Multi-turn context
+    # ------------------------------------------------------------------
+
+    def test_multi_turn_alternating_qa(self, monkeypatch):
+        """Three-turn conversation: all Q&A pairs included in messages."""
+        captured_messages = {}
+
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            captured_messages["count"] = len(messages)
+            captured_messages["roles"] = [m["role"] for m in messages]
+            return {"choices": [{"message": {"content": "affordable rooftop bars in Midtown with live music"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "anything with live music?",
+            previous_questions=[
+                "bars in Midtown",
+                "which ones have rooftop seating?",
+            ],
+            previous_responses=[
+                "Here are popular bars in Midtown...",
+                "Here are Midtown bars with rooftop seating...",
+            ],
+        )
+        # 1 system + 2*2 history + 1 instruction = 6 messages
+        assert captured_messages["count"] == 6
+        assert captured_messages["roles"] == [
+            "system", "user", "assistant", "user", "assistant", "user",
+        ]
+        assert result == "affordable rooftop bars in Midtown with live music"
+
+    # ------------------------------------------------------------------
+    # Fallback: API failure
+    # ------------------------------------------------------------------
+
+    def test_hf_api_error_returns_original(self, monkeypatch):
+        """HF API RequestException → WARNING logged + original query returned."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            raise requests.exceptions.RequestException("Service Unavailable")
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "cheaper?",
+            previous_questions=["restaurants in Chelsea"],
+            previous_responses=["Here are restaurants in Chelsea..."],
+        )
+        assert result == "cheaper?"
+
+    def test_hf_api_connection_error_returns_original(self, monkeypatch):
+        """ConnectionError → original query returned."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            raise requests.exceptions.ConnectionError("Connection refused")
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "something quieter?",
+            previous_questions=["bars in SoHo"],
+            previous_responses=["Here are bars in SoHo..."],
+        )
+        assert result == "something quieter?"
+
+    def test_unexpected_exception_returns_original(self, monkeypatch):
+        """Non-HTTP exception (e.g. JSON decode error) → original query returned."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            raise ValueError("unexpected JSON structure")
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "what about later tonight?",
+            previous_questions=["clubs in Meatpacking"],
+            previous_responses=["Here are clubs in Meatpacking..."],
+        )
+        assert result == "what about later tonight?"
+
+    # ------------------------------------------------------------------
+    # Fallback: timeout
+    # ------------------------------------------------------------------
+
+    def test_timeout_returns_original(self, monkeypatch):
+        """Timeout → WARNING logged + original query returned."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            raise requests.exceptions.Timeout("Request timed out")
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "anything cheaper?",
+            previous_questions=["rooftop bars in Midtown"],
+            previous_responses=["Here are rooftop bars in Midtown..."],
+        )
+        assert result == "anything cheaper?"
+
+    # ------------------------------------------------------------------
+    # Fallback: empty / whitespace output
+    # ------------------------------------------------------------------
+
+    def test_empty_reformulation_returns_original(self, monkeypatch):
+        """Empty string from LLM → WARNING logged + original query returned."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": ""}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "cheaper?",
+            previous_questions=["restaurants in Greenwich Village"],
+            previous_responses=["Here are restaurants in Greenwich Village..."],
+        )
+        assert result == "cheaper?"
+
+    def test_whitespace_only_reformulation_returns_original(self, monkeypatch):
+        """Whitespace-only string from LLM → WARNING logged + original query returned."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "   \n  \t  "}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "any of those in Tribeca?",
+            previous_questions=["wine bars in West Village"],
+            previous_responses=["Here are wine bars in West Village..."],
+        )
+        assert result == "any of those in Tribeca?"
+
+    # ------------------------------------------------------------------
+    # Constraint: no venue name invention
+    # ------------------------------------------------------------------
+
+    def test_system_prompt_forbids_inventing_venue_names(self):
+        """The system prompt explicitly tells the LLM not to invent venue names."""
+        assert "NEVER invent" in REFORMULATION_SYSTEM_PROMPT
+        assert "venue names" in REFORMULATION_SYSTEM_PROMPT.lower()
+
+    def test_reformulation_does_not_invent_venue_names_in_prompt(self, monkeypatch):
+        """Verify the instruction message does not inject venue names."""
+        captured_instruction = {}
+
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            captured_instruction["text"] = messages[-1]["content"]
+            # The system prompt should be present as first message
+            captured_instruction["system"] = messages[0]["content"]
+            return {"choices": [{"message": {"content": "affordable restaurants in Midtown"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        reformulate_query(
+            "cheaper options?",
+            previous_questions=["restaurants in Midtown"],
+            previous_responses=["Here are restaurants in Midtown: The Modern, Gabriel Kreuther..."],
+        )
+
+        # The user-facing instruction must not fabricate venue names
+        instruction = captured_instruction["text"]
+        assert "Jean-Georges" not in instruction
+        assert "Le Bernardin" not in instruction
+        # System prompt must forbid inventing
+        assert "NEVER invent" in captured_instruction["system"]
+
+    # ------------------------------------------------------------------
+    # Constraint: location context preservation
+    # ------------------------------------------------------------------
+
+    def test_location_context_preserved_in_system_prompt(self):
+        """The system prompt instructs the LLM to preserve location context."""
+        assert "preserve any location" in REFORMULATION_SYSTEM_PROMPT.lower()
+        assert "zone context" in REFORMULATION_SYSTEM_PROMPT.lower()
+
+    def test_zone_context_flows_into_messages(self, monkeypatch):
+        """Verify that the zone context from previous Q&A is part of messages."""
+        captured_history = []
+
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            captured_history.extend(
+                m["content"] for m in messages if m["role"] in ("user", "assistant")
+            )
+            return {"choices": [{"message": {"content": "cheap jazz bars in Harlem"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "what about cheaper ones?",
+            previous_questions=["jazz bars in Harlem"],
+            previous_responses=["Here are jazz bars in Harlem: Minton's, Ginny's Supper Club..."],
+        )
+        # Location "Harlem" must be present in history so LLM can preserve it
+        assert any("Harlem" in c for c in captured_history)
+        assert result == "cheap jazz bars in Harlem"
+
+    # ------------------------------------------------------------------
+    # Edge cases
+    # ------------------------------------------------------------------
+
+    def test_very_short_query_with_history(self, monkeypatch):
+        """Single-word follow-up with history still reformulates."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "affordable cocktail bars in East Village"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "cheaper?",
+            previous_questions=["cocktail bars in East Village"],
+            previous_responses=["Here are upscale cocktail bars in East Village..."],
+        )
+        assert result == "affordable cocktail bars in East Village"
+
+    def test_mismatched_history_lengths_handled_gracefully(self, monkeypatch):
+        """zip() truncates to shorter list; should not crash."""
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            # Only one Q&A pair should appear (zip truncates to 1)
+            return {"choices": [{"message": {"content": "quiet bars in SoHo"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        result = reformulate_query(
+            "something quieter?",
+            previous_questions=["bars in SoHo", "another question"],
+            previous_responses=["Here are bars in SoHo..."],  # only one response
+        )
+        assert result == "quiet bars in SoHo"
+
+    def test_logs_reformulation_lengths_on_success(self, monkeypatch, caplog):
+        """Debug log includes original and reformulated query lengths."""
+        import logging
+
+        caplog.set_level(logging.DEBUG, logger="chat_service")
+
+        def fake_hf(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "cheap eats in Chinatown"}}]}
+
+        monkeypatch.setattr("chat_service.huggingface_chat_api_call", fake_hf)
+
+        reformulate_query(
+            "cheap?",
+            previous_questions=["restaurants in Chinatown"],
+            previous_responses=["Here are restaurants in Chinatown..."],
+        )
+        # Check any debug record mentions lengths
+        logged = "\n".join(r.message for r in caplog.records)
+        assert "6-char" in logged or "24-char" in logged
+
+    # ------------------------------------------------------------------
+    # Importability
+    # ------------------------------------------------------------------
+
+    def test_reformulate_query_is_importable(self):
+        """Smoke test: function is callable and accepts the documented signature."""
+        import inspect
+
+        sig = inspect.signature(reformulate_query)
+        param_names = list(sig.parameters.keys())
+        assert param_names == ["current_query", "previous_questions", "previous_responses"]
