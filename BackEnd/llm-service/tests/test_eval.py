@@ -1011,7 +1011,295 @@ class TestReportGeneration:
             )
 
 
-# ── Integration smoke test ─────────────────────────────────────────────────
+# ── Baseline comparison tests ────────────────────────────────────────────
+
+class _MockSearchServiceWithMode(_MockSearchService):
+    """Extends _MockSearchService with mode tracking and _cross_encoder support."""
+
+    def __init__(self, results=None, cross_encoder=None):
+        super().__init__(results)
+        self._cross_encoder = cross_encoder  # mimic real SearchService attr
+        self._last_mode = None
+
+    def search(self, query_text, limit=10, location_filter=None,
+               price_range=None, mode="auto"):
+        self._last_query = query_text
+        self._last_limit = limit
+        self._last_location_filter = location_filter
+        self._last_price_range = price_range
+        self._last_mode = mode
+        return list(self.results)
+
+
+class TestBaselineComparison:
+    """Tests for --baseline flag, comparison table, --metrics-only, and JSON extension."""
+
+    def _import_all(self):
+        scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from run_eval import (
+            _parse_args,
+            _run_question,
+            _run_all_questions,
+            _print_comparison_table,
+            _build_baseline_json,
+            main,
+        )
+        return (
+            _parse_args,
+            _run_question,
+            _run_all_questions,
+            _print_comparison_table,
+            _build_baseline_json,
+            main,
+        )
+
+    # (a) --baseline flag parsed correctly ──────────────────────────────────
+
+    def test_baseline_flag_parsed(self):
+        _parse_args, *_ = self._import_all()
+        args = _parse_args(["--baseline"])
+        assert args.baseline is True
+
+        args_default = _parse_args([])
+        assert args_default.baseline is False
+
+    def test_metrics_only_flag_parsed(self):
+        _parse_args, *_ = self._import_all()
+        args = _parse_args(["--metrics-only"])
+        assert args.metrics_only is True
+
+        args_default = _parse_args([])
+        assert args_default.metrics_only is False
+
+    # (b) baseline mode forces mode="dense" on search service ───────────────
+
+    def test_baseline_mode_forces_dense(self):
+        _, _run_question, *_ = self._import_all()
+        svc = _MockSearchServiceWithMode(results=[
+            _make_mock_result(1, "Venue A", similarity=0.95),
+        ])
+
+        entry = {
+            "id": "Q001", "category": "retrieval",
+            "query": "test query", "expected_venue_ids": [1],
+            "filters": None,
+        }
+        with mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            _run_question(entry, svc, threshold_recall=0.60, baseline_mode=True)
+
+        assert svc._last_mode == "dense", (
+            f"baseline_mode should force mode='dense', got {svc._last_mode!r}"
+        )
+
+    def test_normal_mode_uses_default(self):
+        """Without baseline_mode, the search call must use default mode (not 'dense')."""
+        _, _run_question, *_ = self._import_all()
+        svc = _MockSearchServiceWithMode(results=[
+            _make_mock_result(1, "Venue A", similarity=0.95),
+        ])
+
+        entry = {
+            "id": "Q001", "category": "retrieval",
+            "query": "test query", "expected_venue_ids": [1],
+            "filters": None,
+        }
+        with mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            _run_question(entry, svc, threshold_recall=0.60)
+
+        assert svc._last_mode == "auto", (
+            f"normal mode should use default 'auto', got {svc._last_mode!r}"
+        )
+
+    # (c) baseline mode temporarily sets _cross_encoder=None and restores ───
+
+    def test_baseline_disables_cross_encoder_temporarily(self):
+        _, _, _run_all_questions, *_ = self._import_all()
+
+        # Create a service with a cross-encoder
+        dummy_ce = object()
+        svc = _MockSearchServiceWithMode(
+            results=[_make_mock_result(1, "Venue A", similarity=0.95)],
+            cross_encoder=dummy_ce,
+        )
+
+        # Simple args-like namespace
+        class _Args:
+            threshold_recall = 0.60
+
+        entries = [
+            {"id": "Q001", "category": "retrieval",
+             "query": "test", "expected_venue_ids": [1], "filters": None,
+             "description": "test"},
+        ]
+
+        with mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            _run_all_questions(entries, svc, _Args(), baseline_mode=True)
+
+        # After the run, cross_encoder must be restored
+        assert svc._cross_encoder is dummy_ce, (
+            "_cross_encoder must be restored after baseline run"
+        )
+
+    def test_baseline_nones_cross_encoder_during_run(self):
+        """Within the baseline run, _cross_encoder must be None."""
+        _, _, _run_all_questions, *_ = self._import_all()
+
+        dummy_ce = object()
+        cross_encoder_during = []
+
+        class _SpyService(_MockSearchServiceWithMode):
+            def search(self, query_text, limit=10, location_filter=None,
+                       price_range=None, mode="auto"):
+                # Record _cross_encoder state during the search call
+                cross_encoder_during.append(self._cross_encoder)
+                return super().search(query_text, limit, location_filter,
+                                      price_range, mode)
+
+        svc = _SpyService(
+            results=[_make_mock_result(1, "Venue A", similarity=0.95)],
+            cross_encoder=dummy_ce,
+        )
+
+        class _Args:
+            threshold_recall = 0.60
+
+        entries = [
+            {"id": "Q001", "category": "retrieval",
+             "query": "test", "expected_venue_ids": [1], "filters": None,
+             "description": "test"},
+        ]
+
+        with mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            _run_all_questions(entries, svc, _Args(), baseline_mode=True)
+
+        assert len(cross_encoder_during) == 1
+        assert cross_encoder_during[0] is None, (
+            f"_cross_encoder should be None during baseline search, "
+            f"got {cross_encoder_during[0]!r}"
+        )
+        # Restored after
+        assert svc._cross_encoder is dummy_ce
+
+    # (d) comparison table printed with correct column headers ──────────────
+
+    def test_comparison_table_headers(self, capsys):
+        _, _, _, _print_comparison_table, *_ = self._import_all()
+
+        # Build two simple category dicts
+        full = {
+            "retrieval": {
+                "recall_sum": 0.80, "ndcg_sum": 0.75,
+                "mrr_sum": 0.70, "precision_sum": 0.65, "hit_rate_sum": 0.90,
+                "pass_count": 3, "fail_count": 1, "total": 4,
+            },
+        }
+        baseline = {
+            "retrieval": {
+                "recall_sum": 0.40, "ndcg_sum": 0.35,
+                "mrr_sum": 0.30, "precision_sum": 0.25, "hit_rate_sum": 0.50,
+                "pass_count": 1, "fail_count": 3, "total": 4,
+            },
+        }
+
+        _print_comparison_table(full, baseline)
+        captured = capsys.readouterr().out
+
+        assert "BASELINE COMPARISON" in captured
+        assert "Dense-only vs. Improved Pipeline" in captured
+        assert "Metric" in captured
+        assert "Baseline" in captured
+        assert "Improved" in captured
+        assert "Delta" in captured
+        assert "Recall@5" in captured
+        assert "NDCG@5" in captured
+        assert "MRR" in captured
+        assert "Precision@5" in captured
+        assert "Hit Rate" in captured
+        assert "Aggregate (non-abstention)" in captured
+
+    # (e) JSON report includes baseline_comparison when --baseline used ─────
+
+    def test_json_includes_baseline_comparison(self, tmp_path):
+        *_, _build_baseline_json, main = self._import_all()
+
+        mock_svc = _MockSearchServiceWithMode(results=[
+            _make_mock_result(1, "Venue A", similarity=0.95),
+        ])
+
+        entries = [
+            {"id": "Q001", "category": "retrieval", "query": "q1",
+             "expected_venue_ids": [1], "filters": None, "description": "test"},
+        ]
+
+        report_path = tmp_path / "baseline_report.json"
+
+        with mock.patch(
+            "run_eval._init_search_service", return_value=mock_svc
+        ), mock.patch(
+            "run_eval._load_benchmark", return_value=entries
+        ), mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            with pytest.raises(SystemExit):
+                main([
+                    "--baseline",
+                    "--threshold-recall", "0.50",
+                    "--report", str(report_path),
+                ])
+
+        assert report_path.exists()
+        with open(report_path, "r") as fh:
+            report = json.load(fh)
+
+        assert "baseline_comparison" in report, (
+            "JSON report must include baseline_comparison when --baseline is used"
+        )
+        bc = report["baseline_comparison"]
+        assert "baseline" in bc
+        assert "improved" in bc
+        assert "deltas" in bc
+
+        # Check structure of each sub-node
+        for node in ("baseline", "improved"):
+            assert "aggregates" in bc[node]
+            assert "categories" in bc[node]
+            for metric in ("recall", "ndcg", "mrr", "precision", "hit_rate"):
+                assert metric in bc[node]["aggregates"], (
+                    f"missing {metric} in {node}.aggregates"
+                )
+
+        assert "aggregates" in bc["deltas"]
+
+    # (f) --metrics-only exits 0 even when recall below threshold ───────────
+
+    def test_metrics_only_exits_zero_on_fail(self):
+        *_, main = self._import_all()
+
+        # Return results that DON'T match → recall=0 < threshold → should be failure,
+        # but --metrics-only forces exit 0
+        mock_svc = _MockSearchServiceWithMode(results=[
+            _make_mock_result(99, "Wrong Venue", similarity=0.50),
+        ])
+
+        entries = [
+            {"id": "Q001", "category": "retrieval", "query": "q1",
+             "expected_venue_ids": [1], "filters": None, "description": "test"},
+        ]
+
+        with mock.patch(
+            "run_eval._init_search_service", return_value=mock_svc
+        ), mock.patch(
+            "run_eval._load_benchmark", return_value=entries
+        ), mock.patch.dict(sys.modules, {"chat_service": _make_chat_mock()}):
+            with pytest.raises(SystemExit) as exc_info:
+                main([
+                    "--metrics-only",
+                    "--threshold-recall", "0.60",
+                ])
+            assert exc_info.value.code == 0, (
+                f"--metrics-only should exit 0 regardless of scores, "
+                f"got {exc_info.value.code}"
+            )
 
 class TestEvalRunnerIntegration:
     """Smoke test that exercises the full eval pipeline against a small

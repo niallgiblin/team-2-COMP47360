@@ -78,6 +78,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional JSON report output path",
     )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Run dense-only baseline pass and print comparison table",
+    )
+    parser.add_argument(
+        "--metrics-only",
+        action="store_true",
+        help="Print metrics but always exit 0 (skip threshold enforcement)",
+    )
     return parser.parse_args(argv)
 
 
@@ -283,6 +293,7 @@ def _run_question(
     entry: dict,
     search_service,
     threshold_recall: float,
+    baseline_mode: bool = False,
 ) -> dict:
     """Execute one benchmark question and return a result record."""
     qid: str = entry["id"]
@@ -295,12 +306,21 @@ def _run_question(
     price_range = filters.get("price_range")
 
     try:
-        results = search_service.search(
-            query,
-            limit=5,
-            location_filter=location_filter,
-            price_range=price_range,
-        )
+        if baseline_mode:
+            results = search_service.search(
+                query,
+                limit=5,
+                location_filter=location_filter,
+                price_range=price_range,
+                mode="dense",
+            )
+        else:
+            results = search_service.search(
+                query,
+                limit=5,
+                location_filter=location_filter,
+                price_range=price_range,
+            )
     except Exception:
         logger.exception("Search failed for %s", qid)
         results = []
@@ -388,6 +408,185 @@ def _category_report(
     )
 
 
+def _run_all_questions(entries, search_service, args, baseline_mode=False):
+    """Run all benchmark questions and return (results, categories).
+
+    In baseline_mode, temporarily sets _cross_encoder = None to force
+    dense-only retrieval without cross-encoder re-ranking.  The
+    original cross-encoder is restored in a finally block.
+    """
+    saved_cross_encoder = None
+
+    if baseline_mode:
+        saved_cross_encoder = getattr(search_service, "_cross_encoder", None)
+        search_service._cross_encoder = None
+
+    try:
+        categories: dict[str, dict] = {}
+        question_results: list[dict] = []
+
+        for entry in entries:
+            qr = _run_question(entry, search_service, args.threshold_recall,
+                               baseline_mode=baseline_mode)
+            question_results.append(qr)
+
+            cat = qr["category"]
+            if cat not in categories:
+                categories[cat] = {
+                    "recall_sum": 0.0,
+                    "ndcg_sum": 0.0,
+                    "mrr_sum": 0.0,
+                    "precision_sum": 0.0,
+                    "hit_rate_sum": 0.0,
+                    "pass_count": 0,
+                    "fail_count": 0,
+                    "total": 0,
+                }
+            categories[cat]["recall_sum"] += qr["recall"]
+            categories[cat]["ndcg_sum"] += qr["ndcg"]
+            categories[cat]["mrr_sum"] += qr["mrr"]
+            categories[cat]["precision_sum"] += qr["precision"]
+            categories[cat]["hit_rate_sum"] += qr["hit_rate"]
+            categories[cat]["pass_count"] += int(qr["passed"])
+            categories[cat]["fail_count"] += int(not qr["passed"])
+            categories[cat]["total"] += 1
+
+            if not qr["passed"]:
+                print(
+                    f"  FAIL {qr['id']} [{cat}]: recall={qr['recall']:.4f} "
+                    f"expected={qr['expected_ids']} actual={qr['retrieved_ids']} "
+                    f"scores={qr['scores']}"
+                )
+
+        return question_results, categories
+    finally:
+        if baseline_mode and saved_cross_encoder is not None:
+            search_service._cross_encoder = saved_cross_encoder
+
+
+_METRIC_DISPLAY = [
+    ("Recall@5",      "recall_sum"),
+    ("NDCG@5",        "ndcg_sum"),
+    ("MRR",           "mrr_sum"),
+    ("Precision@5",   "precision_sum"),
+    ("Hit Rate",      "hit_rate_sum"),
+]
+
+
+def _print_comparison_table(full_categories, baseline_categories):
+    """Print a formatted baseline vs. improved comparison table to stdout."""
+    all_cats = sorted(set(full_categories) | set(baseline_categories))
+
+    print("\n" + "=" * 60)
+    print("BASELINE COMPARISON (Dense-only vs. Improved Pipeline)")
+    print("=" * 60)
+
+    for cat in all_cats:
+        fc = full_categories.get(cat)
+        bc = baseline_categories.get(cat)
+        f_total = fc["total"] if fc else 0
+        b_total = bc["total"] if bc else 0
+
+        print(f"\nCategory: {cat}")
+        print(f"  {'Metric':<14} {'Baseline':>10} {'Improved':>10} {'Delta':>10}")
+        print(f"  {'─' * 14} {'─' * 10} {'─' * 10} {'─' * 10}")
+
+        for name, key in _METRIC_DISPLAY:
+            base_val = (bc[key] / b_total) if bc and b_total else 0.0
+            impr_val = (fc[key] / f_total) if fc and f_total else 0.0
+            delta = impr_val - base_val
+            sign = "+" if delta >= 0 else ""
+            print(f"  {name:<14} {base_val:>10.4f} {impr_val:>10.4f} {sign}{delta:>9.4f}")
+
+    # ---- aggregate (non-abstention) ---------------------------------------
+    _print_comparison_aggregate(full_categories, baseline_categories)
+
+
+def _print_comparison_aggregate(full_categories, baseline_categories):
+    """Print the aggregate (non-abstention) comparison rows."""
+
+    def _agg(categories):
+        sums = {key: 0.0 for _, key in _METRIC_DISPLAY}
+        total = 0
+        for cat, stats in categories.items():
+            if cat == "abstention":
+                continue
+            total += stats["total"]
+            for _, key in _METRIC_DISPLAY:
+                sums[key] += stats[key]
+        if total == 0:
+            return {key: 0.0 for _, key in _METRIC_DISPLAY}
+        return {key: sums[key] / total for _, key in _METRIC_DISPLAY}
+
+    full_agg = _agg(full_categories)
+    base_agg = _agg(baseline_categories)
+
+    print(f"\nAggregate (non-abstention)")
+    print(f"  {'Metric':<14} {'Baseline':>10} {'Improved':>10} {'Delta':>10}")
+    print(f"  {'─' * 14} {'─' * 10} {'─' * 10} {'─' * 10}")
+
+    for name, key in _METRIC_DISPLAY:
+        base_val = base_agg[key]
+        impr_val = full_agg[key]
+        delta = impr_val - base_val
+        sign = "+" if delta >= 0 else ""
+        print(f"  {name:<14} {base_val:>10.4f} {impr_val:>10.4f} {sign}{delta:>9.4f}")
+
+
+def _build_baseline_json(full_categories, baseline_categories):
+    """Build the baseline_comparison node for the JSON report."""
+
+    def _category_aggregates(categories):
+        result = {}
+        for cat, stats in categories.items():
+            total = stats["total"]
+            result[cat] = {
+                "recall_at_5": round(stats["recall_sum"] / total, 4) if total else 0.0,
+                "ndcg_at_5": round(stats["ndcg_sum"] / total, 4) if total else 0.0,
+                "mrr": round(stats["mrr_sum"] / total, 4) if total else 0.0,
+                "precision_at_5": round(stats["precision_sum"] / total, 4) if total else 0.0,
+                "hit_rate": round(stats["hit_rate_sum"] / total, 4) if total else 0.0,
+            }
+        return result
+
+    def _aggregate(categories):
+        sums = {"recall": 0.0, "ndcg": 0.0, "mrr": 0.0,
+                "precision": 0.0, "hit_rate": 0.0}
+        total = 0
+        for cat, stats in categories.items():
+            if cat == "abstention":
+                continue
+            total += stats["total"]
+            sums["recall"] += stats["recall_sum"]
+            sums["ndcg"] += stats["ndcg_sum"]
+            sums["mrr"] += stats["mrr_sum"]
+            sums["precision"] += stats["precision_sum"]
+            sums["hit_rate"] += stats["hit_rate_sum"]
+        if total == 0:
+            return {k: 0.0 for k in sums}
+        return {k: round(v / total, 4) for k, v in sums.items()}
+
+    baseline_agg = _aggregate(baseline_categories)
+    improved_agg = _aggregate(full_categories)
+
+    return {
+        "baseline": {
+            "aggregates": baseline_agg,
+            "categories": _category_aggregates(baseline_categories),
+        },
+        "improved": {
+            "aggregates": improved_agg,
+            "categories": _category_aggregates(full_categories),
+        },
+        "deltas": {
+            "aggregates": {
+                k: round(improved_agg[k] - baseline_agg.get(k, 0.0), 4)
+                for k in baseline_agg
+            },
+        },
+    }
+
+
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
 
@@ -411,43 +610,19 @@ def main(argv: list[str] | None = None) -> None:
     )
     print(f"Re-rank enabled: {re_rank_enabled}")
 
-    # ---- per-category accumulators ----------------------------------------
-    categories: dict[str, dict] = {}
-    question_results: list[dict] = []
+    # ---- full pass --------------------------------------------------------
+    question_results, categories = _run_all_questions(entries, search_service, args)
 
-    for entry in entries:
-        qid = entry["id"]
-        cat = entry["category"]
-
-        qr = _run_question(entry, search_service, args.threshold_recall)
-        question_results.append(qr)
-
-        if cat not in categories:
-            categories[cat] = {
-                "recall_sum": 0.0,
-                "ndcg_sum": 0.0,
-                "mrr_sum": 0.0,
-                "precision_sum": 0.0,
-                "hit_rate_sum": 0.0,
-                "pass_count": 0,
-                "fail_count": 0,
-                "total": 0,
-            }
-        categories[cat]["recall_sum"] += qr["recall"]
-        categories[cat]["ndcg_sum"] += qr["ndcg"]
-        categories[cat]["mrr_sum"] += qr["mrr"]
-        categories[cat]["precision_sum"] += qr["precision"]
-        categories[cat]["hit_rate_sum"] += qr["hit_rate"]
-        categories[cat]["pass_count"] += int(qr["passed"])
-        categories[cat]["fail_count"] += int(not qr["passed"])
-        categories[cat]["total"] += 1
-
-        if not qr["passed"]:
-            print(
-                f"  FAIL {qid} [{cat}]: recall={qr['recall']:.4f} "
-                f"expected={qr['expected_ids']} actual={qr['retrieved_ids']} "
-                f"scores={qr['scores']}"
-            )
+    # ---- baseline pass (optional) -----------------------------------------
+    baseline_results = None
+    baseline_categories = None
+    if args.baseline:
+        print("\n" + "=" * 60)
+        print("BASELINE PASS (dense-only, no cross-encoder)")
+        print("=" * 60)
+        baseline_results, baseline_categories = _run_all_questions(
+            entries, search_service, args, baseline_mode=True,
+        )
 
     # ---- report -----------------------------------------------------------
     print("\n" + "=" * 60)
@@ -488,6 +663,10 @@ def main(argv: list[str] | None = None) -> None:
                 f"actual={fq['retrieved_ids']}"
             )
 
+    # ---- baseline comparison table ----------------------------------------
+    if args.baseline and baseline_categories is not None:
+        _print_comparison_table(categories, baseline_categories)
+
     overall_verdict = "FAIL" if any_breach else "PASS"
     print(f"\nOverall verdict: {overall_verdict}")
 
@@ -524,10 +703,20 @@ def main(argv: list[str] | None = None) -> None:
                 "fail_count": stats["fail_count"],
                 "total": total,
             }
+
+        # ---- baseline comparison in JSON -----------------------------------
+        if args.baseline and baseline_categories is not None:
+            payload["baseline_comparison"] = _build_baseline_json(
+                categories, baseline_categories,
+            )
+
         with open(report_path, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2)
         print(f"\nReport written to {report_path}")
 
+    # Exit code: --metrics-only always exits 0
+    if args.metrics_only:
+        sys.exit(0)
     sys.exit(1 if any_breach else 0)
 
 
