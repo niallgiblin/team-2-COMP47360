@@ -65,6 +65,29 @@ def verify_file_paths():
                 f"{INDEX_PATH} directory exists but metadata.json missing; service will fall back to .npy-built index"
             )
 
+    # BM25_INDEX_PATH is optional — missing BM25 index triggers dense-only fallback.
+    if cfg.HYBRID_SEARCH_ENABLED:
+        bm25_path = cfg.BM25_INDEX_PATH
+        if not os.path.exists(bm25_path):
+            optional_warnings.append(
+                f"BM25_INDEX_PATH ({bm25_path}) not found; hybrid search disabled, falling back to dense-only"
+            )
+        elif not os.path.isdir(bm25_path):
+            optional_warnings.append(
+                f"BM25_INDEX_PATH ({bm25_path}) is not a directory; hybrid search disabled, falling back to dense-only"
+            )
+        else:
+            bm25_pkl = os.path.join(bm25_path, "bm25.pkl")
+            bm25_meta = os.path.join(bm25_path, "metadata.json")
+            if not os.path.isfile(bm25_pkl):
+                optional_warnings.append(
+                    f"BM25_INDEX_PATH directory exists but bm25.pkl missing; hybrid search disabled, falling back to dense-only"
+                )
+            if not os.path.isfile(bm25_meta):
+                optional_warnings.append(
+                    f"BM25_INDEX_PATH directory exists but metadata.json missing; hybrid search disabled, falling back to dense-only"
+                )
+
     return len(missing) == 0, missing, optional_warnings
 
 
@@ -195,5 +218,70 @@ def validate_index_metadata():
         return True, False, f"metadata.json dimensions must be positive, got {dims}"
     if rows < 0:
         return True, False, f"metadata.json row_count must be non-negative, got {rows}"
+
+    return True, True, ""
+
+
+def validate_bm25_index():
+    """Check if a persisted BM25 index exists and has valid metadata.json fields.
+
+    Does NOT load the full BM25 index into memory — only checks file presence
+    and metadata shape to inform the startup decision.
+
+    Returns:
+        (exists: bool, metadata_ok: bool, detail: str)
+        - exists: whether the index directory and bm25.pkl both exist
+        - metadata_ok: whether metadata.json is present and passes field validation
+        - detail: human-readable reason when metadata validation fails, or empty string
+    """
+    import json
+
+    cfg = _reload_config()
+    bm25_dir = Path(cfg.BM25_INDEX_PATH)
+
+    if not bm25_dir.is_dir():
+        return False, False, ""
+
+    bm25_pkl = bm25_dir / "bm25.pkl"
+    metadata_file = bm25_dir / "metadata.json"
+
+    if not bm25_pkl.is_file():
+        return False, False, ""
+
+    exists = True
+    if not metadata_file.is_file():
+        return True, False, "metadata.json missing"
+
+    try:
+        with open(metadata_file, encoding="utf-8") as fh:
+            metadata = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        return True, False, f"metadata.json unreadable: {exc}"
+
+    if not isinstance(metadata, dict):
+        return True, False, "metadata.json is not a JSON object"
+
+    required = {"build_timestamp", "corpus_checksum", "row_count", "bm25_version", "index_type"}
+    missing = required - set(metadata.keys())
+    if missing:
+        return True, False, f"metadata.json missing fields: {sorted(missing)}"
+
+    # Validate index_type is 'bm25'.
+    index_type = metadata.get("index_type")
+    if index_type != "bm25":
+        return True, False, f"metadata.json index_type must be 'bm25', got {index_type!r}"
+
+    # Quick sanity checks on numeric fields.
+    try:
+        rows = int(metadata.get("row_count", -1))
+    except (TypeError, ValueError):
+        return True, False, "metadata.json row_count is not an integer"
+
+    if rows < 0:
+        return True, False, f"metadata.json row_count must be non-negative, got {rows}"
+
+    bm25_version = metadata.get("bm25_version", "")
+    if not bm25_version:
+        return True, False, "metadata.json bm25_version must not be empty"
 
     return True, True, ""

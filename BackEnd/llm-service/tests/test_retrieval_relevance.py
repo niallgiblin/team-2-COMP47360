@@ -252,7 +252,9 @@ def relevance_service():
     rows = _fixture_rows()
     embeddings = _fixture_embeddings()
     encoder = _Encoder(_query_vectors())
-    return SearchService.from_startup(_FakeDf(rows), embeddings, encoder=encoder)
+    return SearchService.from_startup(
+        _FakeDf(rows), embeddings, encoder=encoder, cross_encoder_enabled=False
+    )
 
 
 @pytest.mark.parametrize("example", REFERENCE_EXAMPLES, ids=[item["id"] for item in REFERENCE_EXAMPLES])

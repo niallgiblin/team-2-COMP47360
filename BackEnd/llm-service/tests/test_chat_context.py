@@ -15,9 +15,10 @@ def test_most_similar_locs_includes_loc_type(monkeypatch):
 
     result = app_module._chat_search_helper("jazz bars")
 
-    assert "Test Bar" in result
-    assert "East Village" in result
-    assert "Bar" in result
+    assert len(result) > 0
+    assert result[0]["name"] == "Test Bar"
+    assert result[0]["zone"] == "East Village"
+    assert result[0]["type"] == "Bar"
 
 
 def test_most_similar_locs_missing_loc_type_falls_back(monkeypatch):
@@ -25,9 +26,11 @@ def test_most_similar_locs_missing_loc_type_falls_back(monkeypatch):
 
     result = app_module._chat_search_helper("quiet spot")
 
-    assert "Mystery Spot" in result
-    assert "SoHo" in result
-    assert ": " in result
+    assert len(result) > 0
+    assert result[0]["name"] == "Mystery Spot"
+    assert result[0]["zone"] == "SoHo"
+    # type field should still be present (empty string fallback) even without loc_type
+    assert "type" in result[0]
 
 
 def test_most_similar_locs_does_not_use_type_key(monkeypatch):

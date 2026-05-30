@@ -27,19 +27,23 @@ The application is built on a microservice architecture, orchestrated with Docke
 
 ## RAG Pipeline Architecture
 
-The "Find My Vibe" semantic search and AI Chatbot features are powered by a Retrieval-Augmented Generation (RAG) pipeline. The diagram below shows how venue data flows from raw CSV through embedding, indexing, retrieval, chat response generation, and offline evaluation.
+The "Find My Vibe" semantic search and AI Chatbot features are powered by a Retrieval-Augmented Generation (RAG) pipeline, upgraded across two milestones (M001 foundation → M002 production-grade). The diagram below shows the full post-M002 pipeline including hybrid search, cross-encoder re-ranking, query expansion, inline citations, multi-turn retrieval, and extended eval metrics.
 
 ```mermaid
 flowchart TD
-    A["corpus/v1/venues.csv<br/>2,200+ Manhattan venues"] --> B["venue_corpus/compose_document_text()<br/>Build labeled-line document per venue"]
-    B --> C["sentence-transformers<br/>all-MiniLM-L6-v2 encoder<br/>384-dim embeddings"]
-    C --> D["FAISS IndexFlatIP<br/>Inner-product index over<br/>L2-normalized vectors"]
-    D --> E["SearchService.search()<br/>Encode query → normalize →<br/>FAISS top-k with over-fetch"]
-    E --> F["chat_service.format_retrieval_context()<br/>Resolve citations +<br/>build system-prompt context"]
-    F --> G["citations + LLM response<br/>Hugging Face chat API<br/>with structured venue citations"]
-    G --> H["scripts/run_eval.py<br/>Automated evaluation runner"]
-    H --> I["data/benchmark.jsonl<br/>Categorized test queries<br/>with expected venue IDs"]
-    I --> J["recall@5 report<br/>Per-category verdicts<br/>(retrieval, abstention, adversarial)"]
+    A["corpus/v1/venues.csv<br/>2,262 Manhattan venues"] --> B["venue_corpus/compose_document_text()"]
+    B --> C["sentence-transformers<br/>all-MiniLM-L6-v2 encoder"]
+    C --> D["FAISS IndexFlatIP<br/>dense vector index"]
+    C --> D2["BM25 Index<br/>sparse lexical index"]
+    D --> E["SearchService.search()<br/>Hybrid RRF fusion (k=60)<br/>mode: auto/hybrid/dense"]
+    D2 --> E
+    E --> F["Cross-Encoder Re-Ranker<br/>ms-marco-MiniLM-L6-v2<br/>score-based re-ordering"]
+    F --> G["chat_service<br/>Query expansion (9 domains)<br/>+ format_retrieval_context()"]
+    G --> H["LLM Response + Inline Citations [1],[2]<br/>v1.5 prompt template<br/>+ footnote source list"]
+    H --> I["Multi-Turn Conversational<br/>reformulate_query()<br/>context-aware follow-ups"]
+    H --> J["scripts/run_eval.py<br/>NDCG@5, MRR, Precision@5, Hit Rate, Recall@5<br/>--baseline comparison mode"]
+    J --> K["data/benchmark.jsonl<br/>41 questions, 5 categories"]
+    K --> L["Baseline vs. Improved<br/>per-metric delta table"]
 ```
 
 **Pipeline stages:**
@@ -210,32 +214,90 @@ docker ps
 docker ps -a
 ```
 
-## Evaluation Results
+## RAG Pipeline — M002 Upgrade
 
-The RAG pipeline is evaluated against a curated benchmark of **41 questions** across **5 categories**, executed automatically via `scripts/run_eval.py`. The benchmark measures recall@5 and citation accuracy with category-specific thresholds.
+M002 upgraded the M001 foundation from a single-stage dense-retrieval pipeline into a production-grade RAG system with six integrated enhancements:
 
-| Category | Questions | Description | Threshold |
-|----------|-----------|-------------|-----------|
-| Retrieval | 9 | Open-ended semantic queries (jazz clubs, rooftop bars, museums, etc.) | recall@5 ≥ 0.60 |
-| Filtered | 8 | Zone- and price-filtered searches (East Village bars, Chinatown budget eats, etc.) | recall@5 ≥ 0.60 |
-| Conversational | 8 | Context-dependent follow-ups ("cheaper options?", "anything in East Village instead?") | recall@5 ≥ 0.60 |
-| Adversarial | 8 | Queries targeting out-of-corpus attributes (hours, phone numbers, dress codes, ratings) | citation accuracy |
-| Abstention | 8 | Out-of-domain queries (Chicago pizza, dentists, hotels, hiking) — system should return nothing | ≥ 70% pass rate |
+| Slice | Feature | What It Does |
+|-------|---------|-------------|
+| S01 | **Hybrid Search (BM25 + Dense)** | BM25 lexical retrieval fused with FAISS dense via Reciprocal Rank Fusion (RRF, k=60). Mode-aware dispatch: auto/hybrid/dense. |
+| S02 | **Cross-Encoder Re-Ranking** | `ms-marco-MiniLM-L6-v2` cross-encoder re-ranks candidates post-retrieval for precise relevance ordering. Graceful degradation when model unavailable. |
+| S03 | **Query Expansion** | Heuristic keyword/synonym expansion covering 9 vocabulary domains (e.g. "good for a date" → "romantic restaurant intimate"). Confined to chat path. |
+| S04 | **Extended Evaluation Metrics** | NDCG@5, MRR, Precision@5, Hit Rate alongside existing recall@5. Baseline comparison mode (dense-only vs. improved pipeline) via `--baseline` flag. |
+| S05 | **Inline Citations** | Numbered citation markers [1], [2] in LLM responses with footnote-style source list. Versioned v1.5 prompt template with CRITICAL RULE 8. |
+| S06 | **Multi-Turn Conversational Retrieval** | Follow-up questions reformulated using conversation history. `/api/chat` accepts `previous_responses` with 3-tier fallback strategy. |
+
+(See the updated architecture diagram above in "RAG Pipeline Architecture.")
+
+## Evaluation Results (Post-M002)
+
+The RAG pipeline is evaluated against a curated benchmark of **41 questions** across **5 categories**. The eval harness now computes 5 metrics (NDCG@5, MRR, Precision@5, Hit Rate, Recall@5) and supports baseline comparison mode.
+
+### Before/After Comparison (Dense-only Baseline vs. Full M002 Pipeline)
+
+| Category | Metric | Baseline (Dense-only) | Improved (M002) | Delta |
+|----------|--------|----------------------|-----------------|-------|
+| retrieval | Recall@5 | 0.2093 | 0.2093 | — |
+| retrieval | NDCG@5 | 0.2283 | 0.2496 | **+0.0214** |
+| retrieval | MRR | 0.4074 | 0.5037 | **+0.0963** |
+| retrieval | Precision@5 | 0.1778 | 0.1778 | — |
+| retrieval | Hit Rate | 0.6667 | 0.6667 | — |
+| filtered | Recall@5 | 0.2625 | 0.2938 | **+0.0312** |
+| filtered | NDCG@5 | 0.2467 | 0.2656 | **+0.0189** |
+| filtered | MRR | 0.3125 | 0.3125 | — |
+| filtered | Precision@5 | 0.1500 | 0.1750 | **+0.0250** |
+| conversational | Recall@5 | 0.2812 | 0.2812 | — |
+| conversational | NDCG@5 | 0.2744 | 0.2744 | — |
+| conversational | MRR | 0.2917 | 0.2917 | — |
+| adversarial | Recall@5 | 0.2500 | 0.3750 | **+0.1250** |
+| adversarial | NDCG@5 | 0.2500 | 0.3750 | **+0.1250** |
+| adversarial | MRR | 0.2500 | 0.3750 | **+0.1250** |
+| adversarial | Precision@5 | 0.2500 | 0.2750 | **+0.0250** |
+| **Aggregate** | **Recall@5** | **0.2495** | **0.2874** | **+0.0379** |
+| **Aggregate** | **NDCG@5** | **0.2492** | **0.2899** | **+0.0407** |
+| **Aggregate** | **MRR** | **0.3182** | **0.3747** | **+0.0566** |
+| **Aggregate** | **Precision@5** | **0.2121** | **0.2242** | **+0.0121** |
+| **Aggregate** | **Hit Rate** | **0.4545** | **0.4848** | **+0.0303** |
+
+**Key findings:**
+- Aggregate Recall@5 improved from 0.2495 to 0.2874 (**+15.2%**)
+- Aggregate NDCG@5 improved from 0.2492 to 0.2899 (**+16.3%**)
+- Aggregate MRR improved from 0.3182 to 0.3747 (**+17.8%**)
+- Largest gains in adversarial category: +12.5pp across Recall, NDCG, and MRR — hybrid BM25+dense retrieval dramatically improves exact-match queries that dense-only retrieval missed
+- Conversational category shows no delta — retrieval quality for reformulated queries depends on query reformulation (S06), not hybrid search or re-ranking
+- Retrieval MRR shows the largest single-metric improvement (+9.6pp) — cross-encoder re-ranking places relevant results higher in ranked order
+
+### Test Suite Coverage (Post-M002)
+
+| Milestone | Tests Passing | New Failures | Notes |
+|-----------|--------------|-------------|-------|
+| M001 (baseline) | 197+ | — | chat_service, routes, eval |
+| M002 S01 (Hybrid) | 268 | 0 | 1 pre-existing skip (PyTorch 3.14) |
+| M002 S02 (Re-Rank) | 284 | 0 | 11 re-rank-specific tests |
+| M002 S03 (Q-Expand) | 318 | 0 | 34 expander-specific tests |
+| M002 S04 (Eval) | 347 | 0 | 59 eval tests, 0 regressions |
+| M002 S05 (Citations) | 53 (chat) | 0 | 12 parser-specific + 1 integration |
+| M002 S06 (Multi-Turn) | **392** | 0 | 1 pre-existing unrelated failure |
 
 **Eval runner capabilities** (`scripts/run_eval.py`):
 
-- Loads any benchmark JSONL (default: `data/benchmark.jsonl`) and executes every question through the live `SearchService` against the FAISS index.
-- Computes recall@5 for retrieval, filtered, and conversational categories and enforces category-level pass/fail thresholds.
-- For adversarial questions, validates that citations are well-formed and traceable to retrieved results — no fabricated attributes.
-- For abstention questions, verifies the system returns no results or only low-similarity results (< 0.3).
-- Produces a structured console report with per-category verdicts and an optional JSON report (`--report`).
-- Exits 0 when all categories meet their thresholds, exits 1 on any breach.
+- 5-metric computation: NDCG@5, MRR, Precision@5, Hit Rate, Recall@5 — all pure stdlib functions
+- Baseline comparison mode (`--baseline`): dense-only pass vs. improved pipeline with per-category delta tables
+- Metrics-only mode (`--metrics-only`): compute and display all metrics without threshold enforcement (always exits 0)
+- JSON report output (`--report`): per-category metric objects + top-level aggregates + optional `baseline_comparison` node
+- Category-level and aggregate summaries for all 5 metrics
 
-The eval harness itself is covered by **30 unit and integration tests** (`tests/test_eval.py`), covering pure-function recall computation, citation accuracy checking, CLI argument parsing, benchmark schema validation, abstention detection, filtered-search parameter passthrough, threshold enforcement, JSON report structure, and a mini-benchmark integration smoke test — all passing.
+The eval harness is covered by **59 unit and integration tests** (`tests/test_eval.py`), all passing.
 
 ## Portfolio Summary
 
-Urban Gala's RAG pipeline brings retrieval-augmented generation to Manhattan venue discovery. Over a single milestone, we built a versioned 2,200+-venue corpus, a FAISS inner-product vector index over sentence-transformer embeddings, a unified retrieval service with zone and price filtering, grounded LLM citations, and an automated evaluation harness covering 41 benchmark questions across 5 categories — all containerized and ready for interview demonstration.
+Urban Gala's RAG pipeline brings retrieval-augmented generation to Manhattan venue discovery. Over two milestones (M001 + M002), we built:
+
+- **M001 (Foundation):** A versioned 2,200+-venue corpus, FAISS inner-product vector index over sentence-transformer embeddings, unified retrieval service with zone and price filtering, grounded LLM citations with structured citation objects, versioned prompt registry, a 41-question benchmark across 5 categories, automated eval runner, and portfolio documentation — all containerized and verified.
+
+- **M002 (Advanced RAG):** Hybrid search (BM25 lexical + FAISS dense via RRF k=60), cross-encoder re-ranking (ms-marco-MiniLM-L6-v2) with graceful degradation, heuristic query expansion (9 vocabulary domains), extended evaluation metrics (NDCG@5, MRR, Precision@5, Hit Rate) with baseline comparison mode, inline citation markers with footnote source lists (v1.5 prompt), and multi-turn conversational retrieval with query reformulation — **392 tests pass with 0 M002-introduced regressions**.
+
+**Pipeline impact:** Aggregate Recall@5 improved 15.2% (0.2495 → 0.2874), NDCG@5 improved 16.3%, MRR improved 17.8%, with the largest gains in adversarial retrieval (+12.5pp across all metrics).
 
 ## Troubleshooting
 

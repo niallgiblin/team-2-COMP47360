@@ -14,6 +14,7 @@ from loader import (
     MANIFEST_PATH,
     MODEL_PATH,
     StartupLoadError,
+    validate_bm25_index,
     validate_corpus_at_startup,
     validate_embeddings_matrix,
     validate_index_metadata,
@@ -407,3 +408,228 @@ def test_validate_index_metadata_bad_dimensions(monkeypatch, tmp_path):
     assert exists is True
     assert meta_ok is False
     assert "dimensions" in detail
+
+
+# --- BM25 index validation tests ---
+
+
+def test_verify_file_paths_warns_missing_bm25_index_when_hybrid_enabled(monkeypatch, tmp_path):
+    """When HYBRID_SEARCH_ENABLED=true and BM25_INDEX_PATH is missing, warn but don't fail."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    data_file = tmp_path / "venues.csv"
+    data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    emb_file = tmp_path / "embeddings.npy"
+    np.save(emb_file, np.ones((1, 4), dtype="float32"))
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setenv("MODEL_PATH", str(model_dir))
+    monkeypatch.setenv("DATA_PATH", str(data_file))
+    monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
+    monkeypatch.setenv("HYBRID_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(tmp_path / "nonexistent-bm25"))
+
+    ok, missing, warnings = verify_file_paths()
+
+    assert ok is True
+    assert missing == []
+    assert any("BM25_INDEX_PATH" in w for w in warnings)
+    assert any("falling back to dense-only" in w for w in warnings)
+
+
+def test_verify_file_paths_warns_incomplete_bm25_files_when_hybrid_enabled(monkeypatch, tmp_path):
+    """BM25_INDEX_PATH dir exists but bm25.pkl is missing — warn, not fail."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    data_file = tmp_path / "venues.csv"
+    data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    emb_file = tmp_path / "embeddings.npy"
+    np.save(emb_file, np.ones((1, 4), dtype="float32"))
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+
+    monkeypatch.setenv("MODEL_PATH", str(model_dir))
+    monkeypatch.setenv("DATA_PATH", str(data_file))
+    monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
+    monkeypatch.setenv("HYBRID_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+
+    ok, missing, warnings = verify_file_paths()
+
+    assert ok is True
+    assert missing == []
+    assert any("bm25.pkl missing" in w for w in warnings)
+
+
+def test_verify_file_paths_skips_bm25_when_hybrid_disabled(monkeypatch, tmp_path):
+    """When HYBRID_SEARCH_ENABLED=false, BM25_INDEX_PATH is not checked."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    data_file = tmp_path / "venues.csv"
+    data_file.write_text("id,name\n1,Test\n", encoding="utf-8")
+    emb_file = tmp_path / "embeddings.npy"
+    np.save(emb_file, np.ones((1, 4), dtype="float32"))
+    manifest_file = tmp_path / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setenv("MODEL_PATH", str(model_dir))
+    monkeypatch.setenv("DATA_PATH", str(data_file))
+    monkeypatch.setenv("EMBEDDINGS_PATH", str(emb_file))
+    monkeypatch.setenv("MANIFEST_PATH", str(manifest_file))
+    monkeypatch.setenv("HYBRID_SEARCH_ENABLED", "false")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(tmp_path / "nonexistent-bm25"))
+
+    ok, missing, warnings = verify_file_paths()
+
+    assert ok is True
+    assert missing == []
+    # No BM25 warnings when hybrid is disabled.
+    assert not any("BM25" in w for w in warnings)
+
+
+def test_validate_bm25_index_missing_dir(monkeypatch, tmp_path):
+    missing = tmp_path / "no-such-bm25"
+    monkeypatch.setenv("BM25_INDEX_PATH", str(missing))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is False
+    assert meta_ok is False
+
+
+def test_validate_bm25_index_dir_exists_no_files(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is False  # no bm25.pkl
+    assert meta_ok is False
+
+
+def test_validate_bm25_index_missing_metadata(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is False
+    assert "metadata.json missing" in detail
+
+
+def test_validate_bm25_index_valid(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    import json
+
+    metadata = {
+        "build_timestamp": "2025-01-01T00:00:00",
+        "corpus_checksum": "abc123",
+        "row_count": 10,
+        "bm25_version": "1.0.0",
+        "index_type": "bm25",
+    }
+    (bm25_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is True
+    assert detail == ""
+
+
+def test_validate_bm25_index_wrong_index_type(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    import json
+
+    metadata = {
+        "build_timestamp": "2025-01-01T00:00:00",
+        "corpus_checksum": "abc123",
+        "row_count": 10,
+        "bm25_version": "1.0.0",
+        "index_type": "vector",
+    }
+    (bm25_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is False
+    assert "index_type" in detail
+
+
+def test_validate_bm25_index_missing_fields(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    import json
+
+    (bm25_dir / "metadata.json").write_text(
+        json.dumps({"build_timestamp": "x"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is False
+    assert "missing fields" in detail
+
+
+def test_validate_bm25_index_unreadable_json(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    (bm25_dir / "metadata.json").write_text("not json", encoding="utf-8")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is False
+    assert "unreadable" in detail
+
+
+def test_validate_bm25_index_negative_row_count(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    import json
+
+    metadata = {
+        "build_timestamp": "2025-01-01T00:00:00",
+        "corpus_checksum": "abc123",
+        "row_count": -1,
+        "bm25_version": "1.0.0",
+        "index_type": "bm25",
+    }
+    (bm25_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is False
+    assert "row_count" in detail
+
+
+def test_validate_bm25_index_missing_bm25_version(monkeypatch, tmp_path):
+    bm25_dir = tmp_path / "bm25"
+    bm25_dir.mkdir()
+    (bm25_dir / "bm25.pkl").write_text("dummy", encoding="utf-8")
+    import json
+
+    metadata = {
+        "build_timestamp": "2025-01-01T00:00:00",
+        "corpus_checksum": "abc123",
+        "row_count": 10,
+        "bm25_version": "",
+        "index_type": "bm25",
+    }
+    (bm25_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setenv("BM25_INDEX_PATH", str(bm25_dir))
+    exists, meta_ok, detail = validate_bm25_index()
+    assert exists is True
+    assert meta_ok is False
+    assert "bm25_version" in detail
