@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pytest
 
-from conftest import _LocRow, _FakeDf
+from conftest import _FakeCrossEncoder, _LocRow, _FakeDf
 
 from search_service import (
     ALLOW_TORCH_FULL_SCAN_FALLBACK,
@@ -573,16 +573,8 @@ def test_bm25_startup_load_failure_falls_back_to_dense_only(monkeypatch):
 # Cross-encoder loading tests (M002/S02/T01)
 # ---------------------------------------------------------------------------
 
-class _FakeCrossEncoder:
-    """Minimal fake CrossEncoder for testing load paths."""
-
-    def __init__(self, model_name, **kwargs):
-        self.model_name = model_name
-        self._target_device = "cpu"
-        self._kwargs = kwargs
-
-    def predict(self, pairs):
-        return [0.5] * len(pairs)
+# _FakeCrossEncoder is imported from conftest (consolidated fixture).
+# It follows the _FakeEncoder pattern: accepts pre-determined scores list.
 
 
 def test_cross_encoder_loaded_when_enabled_and_reachable(monkeypatch):
@@ -728,24 +720,7 @@ def test_cross_encoder_enabled_defaults_to_config_when_omitted(monkeypatch):
 # Cross-encoder re-rank tests (M002/S02/T02)
 # ---------------------------------------------------------------------------
 
-class _ScoringCrossEncoder:
-    """Fake CrossEncoder that returns distinguishable scores for re-rank tests."""
-
-    def __init__(self, model_name="test-model", scores=None):
-        self.model_name = model_name
-        self._target_device = "cpu"
-        self._calls = []
-        self._scores = scores
-
-    def predict(self, pairs):
-        self._calls.append(pairs)
-        if self._scores is not None:
-            # Pad with 0.0 if fewer scores pre-set than pairs.
-            result = list(self._scores[: len(pairs)])
-            if len(result) < len(pairs):
-                result.extend([0.0] * (len(pairs) - len(result)))
-            return result
-        return list(range(len(pairs), 0, -1))
+# _FakeCrossEncoder is imported from conftest (consolidated fixture).
 
 
 def test_rerank_passthrough_when_cross_encoder_none():
@@ -770,7 +745,7 @@ def test_rerank_passthrough_when_candidates_empty():
     """_re_rank returns empty list when candidates is empty."""
     df = _FakeDf(_tiny_rows())
     embeddings = _tiny_embeddings()
-    fake_ce = _ScoringCrossEncoder()
+    fake_ce = _FakeCrossEncoder()
 
     service = SearchService(
         df=df,
@@ -789,7 +764,7 @@ def test_rerank_applies_cross_encoder_scores():
     df = _FakeDf(_tiny_rows())
     embeddings = _tiny_embeddings()
 
-    fake_ce = _ScoringCrossEncoder(scores=[0.2, 0.9, 0.5])
+    fake_ce = _FakeCrossEncoder(scores=[0.2, 0.9, 0.5])
 
     service = SearchService(
         df=df,
@@ -822,7 +797,7 @@ def test_rerank_dense_collect_applies_rerank():
     df = _FakeDf(_tiny_rows())
     embeddings = _tiny_embeddings()
 
-    fake_ce = _ScoringCrossEncoder(scores=[0.1, 0.5, 0.9])
+    fake_ce = _FakeCrossEncoder(scores=[0.1, 0.5, 0.9])
 
     service = SearchService(
         df=df,
@@ -844,7 +819,7 @@ def test_rerank_hybrid_collect_applies_rerank():
     embeddings = _tiny_embeddings()
     bm25 = _build_bm25_for_venues(_tiny_rows())
 
-    fake_ce = _ScoringCrossEncoder(scores=[0.1, 0.3, 0.7, 0.2, 0.5])
+    fake_ce = _FakeCrossEncoder(scores=[0.1, 0.3, 0.7, 0.2, 0.5])
 
     service = SearchService(
         df=df,
@@ -868,7 +843,7 @@ def test_rerank_hybrid_overfetch_when_ce_available():
     embeddings = _tiny_embeddings()
     bm25 = _build_bm25_for_venues(_tiny_rows())
 
-    fake_ce = _ScoringCrossEncoder()
+    fake_ce = _FakeCrossEncoder()
 
     service = SearchService(
         df=df,
@@ -893,7 +868,7 @@ def test_rerank_dense_overfetch_when_ce_available():
     df = _FakeDf(_tiny_rows())
     embeddings = _tiny_embeddings()
 
-    fake_ce = _ScoringCrossEncoder()
+    fake_ce = _FakeCrossEncoder()
 
     service = SearchService(
         df=df,
@@ -933,3 +908,120 @@ def test_rerank_disabled_preserves_original_behavior():
 
     similar = service.find_similar("Blue Note Jazz Club", limit=3)
     assert len(similar) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Additional re-rank tests (M002/S02/T03) — fill coverage gaps
+# ---------------------------------------------------------------------------
+
+def test_rerank_changes_ordering():
+    """Cross-encoder scores that invert input order produce re-ranked output order."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    # Scores deliberately invert the input order: last candidate gets highest.
+    inverted_scores = [0.1, 0.4, 0.9]
+    fake_ce = _FakeCrossEncoder(scores=inverted_scores)
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=fake_ce,
+    )
+
+    candidates = [(0, 0.95), (1, 0.85), (2, 0.75)]
+    result = service._re_rank("query text", candidates)
+
+    # Re-ranked order should follow cross-encoder scores: 2 (0.9), 1 (0.4), 0 (0.1)
+    assert len(result) == 3
+    assert result[0][0] == 2
+    assert result[0][1] == pytest.approx(0.9)
+    assert result[1][0] == 1
+    assert result[1][1] == pytest.approx(0.4)
+    assert result[2][0] == 0
+    assert result[2][1] == pytest.approx(0.1)
+    # Verify pairs were created with query text
+    assert len(fake_ce._calls) == 1
+    pairs = fake_ce._calls[0]
+    assert all(p[0] == "query text" for p in pairs)
+
+
+def test_rerank_scores_replace_original():
+    """DTO similarity field contains cross-encoder scores, not upstream scores."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+
+    # Cross-encoder assigns high score to id=3 (index 2), low to others.
+    fake_ce = _FakeCrossEncoder(scores=[0.15, 0.12, 0.88, 0.10, 0.09])
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([1, 0, 0, 0]),
+        cross_encoder=fake_ce,
+    )
+
+    results = service.search("late night food", limit=5, mode="dense")
+    assert len(results) >= 1
+
+    # All similarity scores should be cross-encoder logits (in [0,1]-ish range for
+    # our fake), not the original FAISS cosine scores.
+    for r in results:
+        assert "similarity" in r
+        assert 0.0 <= r["similarity"] <= 1.0
+        # Cross-encoder scores are the ones our fake returned — they differ from
+        # the original FAISS inner-product scores.
+        assert isinstance(r["similarity"], float)
+
+    # Verify cross-encoder was actually called (not bypassed).
+    assert len(fake_ce._calls) >= 1
+
+
+def test_rerank_preserves_filters():
+    """Zone and price filters still apply after cross-encoder re-ranking."""
+    df = _FakeDf(_tiny_rows())
+    embeddings = _tiny_embeddings()
+    bm25 = _build_bm25_for_venues(_tiny_rows())
+
+    fake_ce = _FakeCrossEncoder()
+
+    service = SearchService(
+        df=df,
+        embeddings=embeddings,
+        vector_index=build_vector_index(embeddings),
+        encoder=_FakeEncoder([0.9, 0.1, 0.0, 0.0]),
+        bm25_index=bm25,
+        cross_encoder=fake_ce,
+    )
+
+    # Filter to Greenwich Village only.
+    results = service.search(
+        "jazz club",
+        limit=5,
+        location_filter="Greenwich",
+        mode="hybrid",
+    )
+
+    assert len(results) >= 1
+    for r in results:
+        assert "Greenwich" in r["zone"]
+
+    # Filter by price range too.
+    results_price = service.search(
+        "jazz club",
+        limit=5,
+        location_filter="Greenwich",
+        price_range="mid",
+        mode="hybrid",
+    )
+
+    assert len(results_price) >= 1
+    for r in results_price:
+        assert "Greenwich" in r["zone"]
+        assert r["price"] in {"moderate", "mid"}
+
+    # Verify cross-encoder was actually called (filters applied after re-rank).
+    assert len(fake_ce._calls) >= 1

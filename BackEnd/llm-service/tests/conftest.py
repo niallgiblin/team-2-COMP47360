@@ -1,6 +1,12 @@
 import importlib
+import os
 import sys
 import types
+
+# Prevent OpenMP conflict between faiss's bundled libomp and torch's bundled libomp.
+# Both ship their own OpenMP runtime; loading both in the same process crashes.
+# See: https://github.com/pytorch/pytorch/issues/19964
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 def load_app(monkeypatch, extra_env=None):
@@ -37,6 +43,7 @@ def load_app(monkeypatch, extra_env=None):
     import loader
 
     monkeypatch.setattr(loader, "validate_corpus_at_startup", lambda: (True, []))
+    monkeypatch.setattr(loader, "verify_file_paths", lambda: (False, ["MODEL_PATH"], []))
     sys.modules.pop("app", None)
     return importlib.import_module("app")
 
@@ -61,6 +68,30 @@ def _make_topk_stub(row_count):
 
 def _stub_topk(similarities, k):
     return _make_topk_stub(3)(similarities, k)
+
+
+class _FakeCrossEncoder:
+    """Fake cross-encoder for tests — follows _FakeEncoder pattern.
+
+    Accepts a list of pre-determined scores. Its .predict(pairs) returns
+    those scores as a list of floats, padded with 0.0 if the list is longer.
+    If no scores list is provided, returns descending scores (n, n-1, ..., 1).
+    """
+
+    def __init__(self, model_name="test-cross-encoder", scores=None):
+        self.model_name = model_name
+        self._target_device = "cpu"
+        self._calls = []
+        self._scores = scores
+
+    def predict(self, pairs):
+        self._calls.append(pairs)
+        if self._scores is not None:
+            result = list(self._scores[: len(pairs)])
+            if len(result) < len(pairs):
+                result.extend([0.0] * (len(pairs) - len(result)))
+            return [float(s) for s in result]
+        return [float(n) for n in range(len(pairs), 0, -1)]
 
 
 class _LocRow(dict):
