@@ -1,13 +1,25 @@
 """Tests for BM25 sparse lexical index.
 
 Covers exact name match retrieval, edge cases (empty query/corpus),
-stop-word handling, score monotonicity, and the 'Blue Note Jazz Club'
-scenario using venue-corpus document texts.
+stop-word handling, score monotonicity, the 'Blue Note Jazz Club'
+scenario using venue-corpus document texts, and persistence
+round-trip (save → load → verify).
 """
+
+import json
+import pickle
+import tempfile
+from pathlib import Path
 
 import pytest
 
 from bm25_index import _STOP_WORDS, _tokenize, Bm25Index
+from retrieval.bm25_loader import (
+    Bm25LoadError,
+    load_bm25_index,
+    save_bm25_index,
+    write_bm25_metadata,
+)
 from venue_corpus.document import compose_document_text
 
 # ---------------------------------------------------------------------------
@@ -283,3 +295,329 @@ class TestBm25Search:
         assert len(results) >= 1
         top_idx = results[0][0]
         assert "Blue Note Hawaii" in _VENUE_CORPUS[top_idx]
+
+
+# ---------------------------------------------------------------------------
+# Persistence: save / load round-trip
+# ---------------------------------------------------------------------------
+
+
+def _manifest_for_checksum(checksum: str) -> dict:
+    """Minimal valid manifest dict for checksum validation."""
+    return {
+        "corpus_version": "v1",
+        "schema_version": "1.0.0",
+        "created_at": "2025-01-15T10:00:00Z",
+        "venues_csv": {
+            "path": "venues.csv",
+            "sha256": checksum,
+            "row_count": 6,
+            "columns": ["id", "name", "description"],
+        },
+        "document_model": {
+            "format": "labeled_lines",
+            "one_document_per_venue": True,
+            "embed_fields": ["name", "description"],
+            "metadata_fields": ["id"],
+        },
+    }
+
+
+def _write_manifest(path: Path, checksum: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(_manifest_for_checksum(checksum), fh, indent=2)
+
+
+class TestBm25PersistenceRoundTrip:
+    """Verify that a BM25 index survives save → load with identical scores."""
+
+    def test_round_trip_preserves_scores(self):
+        """Build → save → load → scores must be identical."""
+        idx = Bm25Index(_VENUE_CORPUS)
+        queries = [
+            "Blue Note Jazz Club",
+            "Smalls",
+            "jazz",
+            "Hawaii",
+        ]
+
+        # Capture pre-save scores.
+        pre_scores = {}
+        for q in queries:
+            pre_scores[q] = idx.search(q, top_k=10)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            save_bm25_index(idx, index_dir)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test-abc123",
+                row_count=idx._doc_count,
+            )
+
+            loaded = load_bm25_index(index_dir)
+
+            for q in queries:
+                post_scores = loaded.search(q, top_k=10)
+                assert len(post_scores) == len(pre_scores[q]), (
+                    f"Result count mismatch for query '{q}': "
+                    f"{len(post_scores)} vs {len(pre_scores[q])}"
+                )
+                for (pre_idx, pre_score), (post_idx, post_score) in zip(
+                    pre_scores[q], post_scores
+                ):
+                    assert pre_idx == post_idx, (
+                        f"Doc index mismatch for query '{q}': "
+                        f"{pre_idx} vs {post_idx}"
+                    )
+                    assert pre_score == pytest.approx(post_score), (
+                        f"Score mismatch for query '{q}', doc {pre_idx}: "
+                        f"{pre_score} vs {post_score}"
+                    )
+
+    def test_round_trip_empty_corpus(self):
+        """Empty corpus round-trip preserves empty state."""
+        idx = Bm25Index([])
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            save_bm25_index(idx, index_dir)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test-empty",
+                row_count=0,
+            )
+            loaded = load_bm25_index(index_dir)
+
+            assert loaded._doc_count == 0
+            assert loaded._avgdl == 0.0
+            assert loaded.search("anything") == []
+
+    def test_round_trip_preserves_parameters(self):
+        """k1 and b parameters must be preserved through round-trip."""
+        idx = Bm25Index(["doc one", "doc two"], k1=2.5, b=0.3)
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            save_bm25_index(idx, index_dir)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test-params",
+                row_count=2,
+            )
+            loaded = load_bm25_index(index_dir)
+
+            assert loaded.k1 == 2.5
+            assert loaded.b == 0.3
+
+
+class TestBm25LoadErrorPaths:
+    """Negative tests for BM25 loader error paths."""
+
+    def test_missing_index_directory(self):
+        with pytest.raises(Bm25LoadError, match="BM25 index directory not found"):
+            load_bm25_index("/nonexistent/bm25/path/99999")
+
+    def test_missing_pkl_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            # Write metadata but no bm25.pkl.
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test",
+                row_count=0,
+            )
+            with pytest.raises(Bm25LoadError, match="BM25 index file not found"):
+                load_bm25_index(index_dir)
+
+    def test_missing_metadata_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            # Write pickle but no metadata.
+            (index_dir / "bm25.pkl").write_bytes(b"not valid pickle")
+            with pytest.raises(Bm25LoadError, match="Metadata file not found"):
+                load_bm25_index(index_dir)
+
+    def test_missing_required_metadata_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+
+            idx = Bm25Index(_VENUE_CORPUS)
+            save_bm25_index(idx, index_dir)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test",
+                row_count=idx._doc_count,
+            )
+
+            # Remove a required field.
+            md_path = index_dir / "metadata.json"
+            with open(md_path, encoding="utf-8") as fh:
+                md = json.load(fh)
+            del md["corpus_checksum"]
+            with open(md_path, "w", encoding="utf-8") as fh:
+                json.dump(md, fh)
+
+            with pytest.raises(Bm25LoadError, match="missing required fields"):
+                load_bm25_index(index_dir)
+
+    def test_wrong_index_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+
+            idx = Bm25Index(_VENUE_CORPUS)
+            save_bm25_index(idx, index_dir)
+
+            md_path = index_dir / "metadata.json"
+            md_path.write_text(json.dumps({
+                "build_timestamp": "2025-01-15T10:00:00Z",
+                "corpus_checksum": "test",
+                "row_count": idx._doc_count,
+                "bm25_version": "1.0.0",
+                "index_type": "not-bm25",
+            }))
+
+            with pytest.raises(Bm25LoadError, match="Unsupported index_type"):
+                load_bm25_index(index_dir)
+
+    def test_empty_build_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+
+            idx = Bm25Index(_VENUE_CORPUS)
+            save_bm25_index(idx, index_dir)
+
+            md_path = index_dir / "metadata.json"
+            md_path.write_text(json.dumps({
+                "build_timestamp": "",
+                "corpus_checksum": "test",
+                "row_count": idx._doc_count,
+                "bm25_version": "1.0.0",
+                "index_type": "bm25",
+            }))
+
+            with pytest.raises(Bm25LoadError, match="must not be empty"):
+                load_bm25_index(index_dir)
+
+    def test_row_count_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+
+            idx = Bm25Index(_VENUE_CORPUS)
+            save_bm25_index(idx, index_dir)
+
+            md_path = index_dir / "metadata.json"
+            md_path.write_text(json.dumps({
+                "build_timestamp": "2025-01-15T10:00:00Z",
+                "corpus_checksum": "test",
+                "row_count": 999,
+                "bm25_version": "1.0.0",
+                "index_type": "bm25",
+            }))
+
+            with pytest.raises(Bm25LoadError, match="does not match"):
+                load_bm25_index(index_dir)
+
+    def test_corrupt_pickle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            (index_dir / "bm25.pkl").write_bytes(b"this is not a valid pickle")
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test",
+                row_count=6,
+            )
+            with pytest.raises(Bm25LoadError, match="Failed to read BM25 index"):
+                load_bm25_index(index_dir)
+
+    def test_pickle_not_a_dict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            with open(index_dir / "bm25.pkl", "wb") as fh:
+                pickle.dump(["not", "a", "dict"], fh)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test",
+                row_count=6,
+            )
+            with pytest.raises(Bm25LoadError, match="BM25 pickle must contain a dict"):
+                load_bm25_index(index_dir)
+
+    def test_pickle_missing_required_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_dir = Path(tmp) / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            with open(index_dir / "bm25.pkl", "wb") as fh:
+                pickle.dump({"k1": 1.5, "b": 0.75}, fh)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="test",
+                row_count=6,
+            )
+            with pytest.raises(Bm25LoadError, match="missing required keys"):
+                load_bm25_index(index_dir)
+
+    def test_bm25_load_error_is_exception_subclass(self):
+        assert issubclass(Bm25LoadError, Exception)
+
+    def test_checksum_validation_with_manifest(self):
+        """load_bm25_index validates corpus_checksum against manifest."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            index_dir = tmp_path / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = tmp_path / "manifest.json"
+
+            idx = Bm25Index(_VENUE_CORPUS)
+            save_bm25_index(idx, index_dir)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="match123",
+                row_count=idx._doc_count,
+            )
+            _write_manifest(manifest_path, "match123")
+
+            # Matching checksums — no error.
+            loaded = load_bm25_index(index_dir, manifest_path=manifest_path)
+            assert loaded._doc_count == idx._doc_count
+
+            # Mismatched checksums — should raise.
+            _write_manifest(manifest_path, "different456")
+            with pytest.raises(Bm25LoadError, match="checksum mismatch"):
+                load_bm25_index(index_dir, manifest_path=manifest_path)
+
+    def test_manifest_missing_checksum_raises(self):
+        """Raises when manifest lacks venues_csv.sha256."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            index_dir = tmp_path / "bm25"
+            index_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = tmp_path / "manifest.json"
+
+            idx = Bm25Index(_VENUE_CORPUS)
+            save_bm25_index(idx, index_dir)
+            write_bm25_metadata(
+                index_dir / "metadata.json",
+                corpus_checksum="abc123",
+                row_count=idx._doc_count,
+            )
+
+            # Write manifest without sha256.
+            bad_manifest = _manifest_for_checksum("abc123")
+            del bad_manifest["venues_csv"]["sha256"]
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(manifest_path, "w", encoding="utf-8") as fh:
+                json.dump(bad_manifest, fh)
+
+            with pytest.raises(Bm25LoadError, match="missing required keys"):
+                load_bm25_index(index_dir, manifest_path=manifest_path)

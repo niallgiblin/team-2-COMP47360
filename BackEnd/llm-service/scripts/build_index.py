@@ -5,9 +5,12 @@ Reads corpus/v1/venues.csv, composes document text per venue, encodes via the
 sentence-transformer model, builds a FAISS IndexFlatIP over normalized vectors,
 and writes the index + build metadata to corpus/v1/index/.
 
+When --with-bm25 is passed, also builds a BM25 sparse lexical index and writes
+bm25.pkl + metadata.json to corpus/v1/index/bm25/.
+
 Usage:
     cd BackEnd/llm-service
-    python3 scripts/build_index.py [--corpus-version v1] [--force]
+    python3 scripts/build_index.py [--corpus-version v1] [--force] [--with-bm25]
 
 Environment:
     MODEL_PATH     — path to sentence-transformers model (default: models/sentence-transformers)
@@ -56,6 +59,11 @@ def parse_args(argv=None):
         "--force",
         action="store_true",
         help="Overwrite an existing index without confirmation",
+    )
+    parser.add_argument(
+        "--with-bm25",
+        action="store_true",
+        help="Also build a BM25 sparse lexical index alongside the FAISS dense index",
     )
     return parser.parse_args(argv)
 
@@ -283,6 +291,41 @@ def run(args):
     except Exception as exc:
         logger.error("Failed to write metadata: %s", exc)
         return 1
+
+    # Build BM25 index alongside FAISS when --with-bm25 is set.
+    if args.with_bm25:
+        logger.info("--with-bm25 set: building BM25 sparse lexical index")
+        try:
+            from bm25_index import Bm25Index
+            from retrieval.bm25_loader import save_bm25_index, write_bm25_metadata
+
+            # Compose document texts using the same pipeline as FAISS.
+            bm25_texts = []
+            for _, row in df.iterrows():
+                text = compose_document_text(row)
+                if not text:
+                    text = f"Name: {row.get('name', 'Unknown')}"
+                bm25_texts.append(text)
+
+            bm25 = Bm25Index(bm25_texts)
+            logger.info(
+                "BM25 index built: %d documents, avgdl=%.1f",
+                bm25._doc_count,
+                bm25._avgdl,
+            )
+
+            bm25_dir = index_dir / "bm25"
+            bm25_dir.mkdir(parents=True, exist_ok=True)
+            save_bm25_index(bm25, bm25_dir)
+            write_bm25_metadata(
+                bm25_dir / "metadata.json",
+                corpus_checksum,
+                bm25._doc_count,
+            )
+            logger.info("BM25 index persisted to %s", bm25_dir)
+        except Exception as exc:
+            logger.error("BM25 index build failed: %s", exc)
+            return 1
 
     logger.info("Index build complete. Index: %s, Metadata: %s", index_path, metadata_path)
     return 0
