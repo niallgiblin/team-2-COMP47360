@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -96,6 +97,74 @@ def compute_recall_at_k(expected_ids: list[int], retrieved_ids: list[int], k: in
     top_k = set(retrieved_ids[:k])
     expected = set(expected_ids)
     return len(expected & top_k) / len(expected)
+
+
+def compute_ndcg_at_k(expected_ids: list[int], retrieved_ids: list[int], k: int = 5) -> float:
+    """Return NDCG@k with binary relevance (rel=1 if doc in expected, else 0).
+
+    DCG  = Σᵢ relᵢ / log₂(i+2)  for i = 0 .. k-1.
+    IDCG = ideal DCG (all relevant docs ranked first).
+
+    When *expected_ids* is empty or IDCG = 0 the function returns 1.0.
+    """
+    if not expected_ids:
+        return 1.0
+    expected_set = set(expected_ids)
+    top_k = retrieved_ids[:k]
+
+    dcg = 0.0
+    for i, doc_id in enumerate(top_k):
+        if doc_id in expected_set:
+            dcg += 1.0 / math.log2(i + 2)  # i+2 = position+1
+
+    num_rel = min(len(expected_set), k)
+    idcg = 0.0
+    for i in range(num_rel):
+        idcg += 1.0 / math.log2(i + 2)
+
+    if idcg == 0.0:
+        return 1.0
+    return dcg / idcg
+
+
+def compute_mrr(expected_ids: list[int], retrieved_ids: list[int]) -> float:
+    """Return MRR = 1 / rank of the first relevant result.
+
+    Returns 1.0 when *expected_ids* is empty (no expectations).
+    Returns 0.0 when no relevant result is found in *retrieved_ids*.
+    """
+    if not expected_ids:
+        return 1.0
+    expected_set = set(expected_ids)
+    for i, doc_id in enumerate(retrieved_ids):
+        if doc_id in expected_set:
+            return 1.0 / (i + 1)
+    return 0.0
+
+
+def compute_precision_at_k(expected_ids: list[int], retrieved_ids: list[int], k: int = 5) -> float:
+    """Return precision@k = |expected_ids ∩ retrieved_ids[:k]| / k.
+
+    When *expected_ids* is empty the function returns 1.0 (no expectations
+    to miss).
+    """
+    if not expected_ids:
+        return 1.0
+    expected_set = set(expected_ids)
+    top_k = set(retrieved_ids[:k])
+    return len(expected_set & top_k) / k
+
+
+def compute_hit_rate(expected_ids: list[int], retrieved_ids: list[int], k: int = 5) -> float:
+    """Return 1.0 if any relevant doc appears in the top-k, else 0.0.
+
+    When *expected_ids* is empty the function returns 1.0 (no expectations).
+    """
+    if not expected_ids:
+        return 1.0
+    expected_set = set(expected_ids)
+    top_k = set(retrieved_ids[:k])
+    return 1.0 if expected_set & top_k else 0.0
 
 
 def check_citation_accuracy(results: list[dict]) -> tuple[bool, str]:

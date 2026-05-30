@@ -166,6 +166,158 @@ class TestRecallAtK:
         assert fn([100], [1, 2, 3, 100, 101], k=4) == 1.0
 
 
+class TestNdcgAtK:
+    """Pure-function tests for compute_ndcg_at_k."""
+
+    def _import_compute(self):
+        scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from run_eval import compute_ndcg_at_k
+
+        return compute_ndcg_at_k
+
+    def test_perfect_ndcg(self):
+        """NDCG@5 = 1.0 when all expected docs are at the top in ideal order."""
+        fn = self._import_compute()
+        # All expected docs first → DCG == IDCG.
+        assert fn([1, 2, 3], [1, 2, 3, 99, 100], k=5) == pytest.approx(1.0)
+
+    def test_partial_ndcg(self):
+        """NDCG@5 between 0 and 1 for partial matches."""
+        fn = self._import_compute()
+        # 1 relevant at position 1, 1 relevant at position 4.
+        result = fn([1, 2], [1, 99, 100, 2, 101], k=5)
+        assert 0.0 < result < 1.0
+
+    def test_zero_ndcg(self):
+        """NDCG@5 = 0.0 when no relevant docs in top-k."""
+        fn = self._import_compute()
+        assert fn([1, 2, 3], [99, 100, 101, 102, 103], k=5) == 0.0
+
+    def test_empty_expected(self):
+        """Empty expected_venue_ids must return 1.0."""
+        fn = self._import_compute()
+        assert fn([], [1, 2, 3], k=5) == 1.0
+
+    def test_k_edge(self):
+        """Verify k truncation: doc at position k is not in top-(k-1)."""
+        fn = self._import_compute()
+        # Expected doc at position 4 (0-indexed 3); k=3 excludes it, k=4 includes it.
+        before = fn([100], [1, 2, 3, 100, 101], k=3)
+        after = fn([100], [1, 2, 3, 100, 101], k=4)
+        assert before == 0.0
+        assert after > 0.0
+
+
+class TestMrr:
+    """Pure-function tests for compute_mrr."""
+
+    def _import_compute(self):
+        scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from run_eval import compute_mrr
+
+        return compute_mrr
+
+    def test_first_hit(self):
+        """MRR = 1.0 when the first result is relevant."""
+        fn = self._import_compute()
+        assert fn([1], [1, 99, 100]) == 1.0
+
+    def test_no_hit(self):
+        """MRR = 0.0 when no relevant result is found."""
+        fn = self._import_compute()
+        assert fn([1, 2], [99, 100, 101]) == 0.0
+
+    def test_empty_expected(self):
+        """Empty expected returns 1.0."""
+        fn = self._import_compute()
+        assert fn([], [1, 2, 3]) == 1.0
+
+    def test_hit_at_3(self):
+        """MRR = 1/3 when the first hit is at rank 3."""
+        fn = self._import_compute()
+        assert fn([100], [99, 101, 100, 1]) == pytest.approx(1.0 / 3)
+
+    def test_hit_at_1(self):
+        """MRR = 1.0 when the first result is relevant (redundant with first_hit but explicit)."""
+        fn = self._import_compute()
+        assert fn([1, 2], [1, 99, 100]) == 1.0
+
+
+class TestPrecisionAtK:
+    """Pure-function tests for compute_precision_at_k."""
+
+    def _import_compute(self):
+        scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from run_eval import compute_precision_at_k
+
+        return compute_precision_at_k
+
+    def test_perfect_precision(self):
+        """Precision@5 = 1.0 when top-5 are all relevant."""
+        fn = self._import_compute()
+        assert fn([1, 2, 3, 4, 5], [1, 2, 3, 4, 5], k=5) == 1.0
+
+    def test_partial_precision(self):
+        """Precision@5 = 2/5 when 2 of top-5 are relevant."""
+        fn = self._import_compute()
+        assert fn([1, 2], [1, 99, 100, 2, 101], k=5) == pytest.approx(2 / 5)
+
+    def test_zero_precision(self):
+        """Precision@5 = 0.0 when no relevant docs in top-k."""
+        fn = self._import_compute()
+        assert fn([1, 2, 3], [99, 100, 101, 102, 103], k=5) == 0.0
+
+    def test_empty_expected(self):
+        """Empty expected_venue_ids must return 1.0."""
+        fn = self._import_compute()
+        assert fn([], [1, 2, 3], k=5) == 1.0
+
+    def test_k_boundary(self):
+        """Only top-k results count toward precision."""
+        fn = self._import_compute()
+        # Relevant doc at position 3 (0-indexed); k=3 excludes it, k=4 includes it.
+        assert fn([100], [1, 2, 3, 100, 101], k=3) == 0.0
+        assert fn([100], [1, 2, 3, 100, 101], k=4) == pytest.approx(1 / 4)
+
+
+class TestHitRate:
+    """Pure-function tests for compute_hit_rate."""
+
+    def _import_compute(self):
+        scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from run_eval import compute_hit_rate
+
+        return compute_hit_rate
+
+    def test_hit(self):
+        """Hit rate = 1.0 when at least one relevant doc in top-k."""
+        fn = self._import_compute()
+        assert fn([1], [99, 100, 1, 101, 102], k=5) == 1.0
+
+    def test_miss(self):
+        """Hit rate = 0.0 when no relevant doc in top-k."""
+        fn = self._import_compute()
+        assert fn([1, 2], [99, 100, 101, 102, 103], k=5) == 0.0
+
+    def test_empty_expected(self):
+        """Empty expected returns 1.0."""
+        fn = self._import_compute()
+        assert fn([], [1, 2, 3], k=5) == 1.0
+
+    def test_single_match(self):
+        """Hit rate = 1.0 when exactly one relevant doc appears."""
+        fn = self._import_compute()
+        assert fn([1], [99, 1, 100, 101, 102], k=5) == 1.0
+
+
 class TestCitationAccuracy:
     """Pure-function tests for check_citation_accuracy."""
 
