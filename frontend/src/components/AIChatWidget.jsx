@@ -26,7 +26,23 @@ function isClearChatRequest(message) {
   const text = String(message || '').trim().replace(/\s+/g, ' ');
   if (!text) return false;
 
+  // Negation guard: "do not clear chat" etc.
   if (/\b(do not|don't|dont|not)\b.*\b(clear|reset|delete|erase|wipe|forget)\b/i.test(text)) {
+    return false;
+  }
+
+  // Embedded-noun guard: the chat-related noun must immediately follow
+  // the verb + determiner group.  Rejects queries like
+  // "please clear my doubts about the chat" — "doubts about the"
+  // separates "clear" from "chat".
+  const IMMEDIATE_NOUN_RE = /^(please\s+)?(can|could|would\s+you\s+(please\s+)?)?(clear|reset|delete|erase|wipe|forget)\s+(the\s+|this\s+|my\s+|our\s+|your\s+)?(chat|conversation|history|context|chat history|chat context|conversation history)/i;
+  if (!IMMEDIATE_NOUN_RE.test(text)) {
+    return false;
+  }
+
+  // Conjunction guard: if text contains a conjunction (and, but, or)
+  // followed by content that is NOT chat-related, reject.
+  if (/\band\s+(?!.*\b(chat|conversation|history|context)\b).{3,}$/i.test(text)) {
     return false;
   }
 
@@ -96,7 +112,8 @@ const stripSourcesBlock = (text = '') => (
 
 const stripInlineCitationMarkers = (text = '') => (
   text
-    .replace(/\s*\[\d+\]/g, '')
+    // Only strip [N] when preceded by a word char (letter or digit), not $ or :.
+    .replace(/(?<=\w)\s*\[(\d+)\](?=\s|[.,!?;:]|$)/gu, '')
     .replace(/\s+([.,!?;:])/g, '$1')
     .replace(/\s{2,}/g, ' ')
     .trim()
@@ -149,6 +166,11 @@ const getReferencedCitationIndexes = (text = '', citationCount = 0) => {
   return [...new Set(matches)];
 };
 
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for',
+  'inc', 'llc', 'ltd',
+]);
+
 const normalizeCitationMatchText = (text = '') => (
   stripInlineCitationMarkers(stripSourcesBlock(text))
     .toLowerCase()
@@ -161,7 +183,18 @@ const isCitationVenueNamed = (text = '', citation = {}) => {
   const visibleText = normalizeCitationMatchText(text);
   const venueName = normalizeCitationMatchText(citation.name || '');
 
-  return Boolean(venueName && visibleText.includes(venueName));
+  if (!venueName || !visibleText) return false;
+
+  // Token-based overlap: split both into tokens, filter stop words,
+  // and check if >= 50% of venue name tokens appear in visible text.
+  const visibleTokens = new Set(visibleText.split(/\s+/).filter(Boolean));
+  const nameTokens = venueName.split(/\s+/).filter(Boolean);
+
+  const significantTokens = nameTokens.filter((t) => !STOP_WORDS.has(t));
+  if (significantTokens.length === 0) return false;
+
+  const matchedCount = significantTokens.filter((t) => visibleTokens.has(t)).length;
+  return matchedCount / significantTokens.length >= 0.5;
 };
 
 const getDisplayCitations = (text = '', citations = []) => {
@@ -294,46 +327,75 @@ const hydrateVenueFromCanonicalApi = async (venue) => {
   return fallbackVenue;
 };
 
-const VenueCitationCard = ({ citation, displayIndex, onOpenVenue, isPending }) => {
+const VenueCitationCard = ({ citation, displayIndex, onOpenVenue, onDismiss, isPending }) => {
   const venue = normalizeCitationVenue(citation);
   const rating = Number(venue.rating);
   const venueKey = String(venue.id ?? venue.name);
   const pending = isPending === venueKey;
+  const [isDismissing, setIsDismissing] = useState(false);
+  const dismissTimerRef = useRef(null);
+
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    if (isDismissing) return;
+    setIsDismissing(true);
+    dismissTimerRef.current = setTimeout(() => {
+      onDismiss?.(venueKey);
+    }, 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
+  }, []);
 
   return (
-    <button
-      type="button"
-      className="venue-citation-card"
-      onClick={() => onOpenVenue(venue)}
-      disabled={pending}
-      aria-label={`Add ${venue.name} to plan and view on map`}
-    >
-      <div className="venue-citation-main">
-        <div className="venue-citation-name">{venue.name}</div>
-        <div className="venue-citation-meta">
-          {venue.zone && (
-            <span>
-              <LocationOnIcon fontSize="inherit" />
-              {venue.zone}
-            </span>
-          )}
-          {rating > 0 && (
-            <span>
-              <StarIcon fontSize="inherit" />
-              {rating.toFixed(1)}
-            </span>
-          )}
+    <div className={`venue-citation-card${isDismissing ? ' dismissing' : ''}`}>
+      {onDismiss && (
+        <button
+          type="button"
+          className="venue-card-dismiss"
+          onClick={handleDismiss}
+          aria-label={`Dismiss ${venue.name}`}
+        >
+          <CloseIcon />
+        </button>
+      )}
+      <button
+        type="button"
+        className="venue-citation-card-inner"
+        onClick={() => onOpenVenue(venue)}
+        disabled={pending}
+        aria-label={`Add ${venue.name} to plan and view on map`}
+      >
+        <div className="venue-citation-main">
+          <div className="venue-citation-name">{venue.name}</div>
+          <div className="venue-citation-meta">
+            {venue.zone && (
+              <span>
+                <LocationOnIcon fontSize="inherit" />
+                {venue.zone}
+              </span>
+            )}
+            {rating > 0 && (
+              <span>
+                <StarIcon fontSize="inherit" />
+                {rating.toFixed(1)}
+              </span>
+            )}
+          </div>
+          {venue.address && <div className="venue-citation-address">{venue.address}</div>}
         </div>
-        {venue.address && <div className="venue-citation-address">{venue.address}</div>}
-      </div>
-      <div className="venue-citation-action-area" aria-hidden="true">
-        <span className="venue-citation-action">
-          Add to Plan
-          {pending && <span className="venue-action-spinner" />}
-        </span>
-        <ArrowForwardIcon fontSize="small" />
-      </div>
-    </button>
+        <div className="venue-citation-action-area" aria-hidden="true">
+          <span className="venue-citation-action">
+            Add to Plan
+            {pending && <span className="venue-action-spinner" />}
+          </span>
+          <ArrowForwardIcon fontSize="small" />
+        </div>
+      </button>
+    </div>
   );
 };
 
@@ -349,6 +411,7 @@ const AIChatWidget = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingVenueKey, setPendingVenueKey] = useState(null);
+  const [dismissedVenues, setDismissedVenues] = useState({});
   const messagesEndRef = useRef(null);
   const launcherRef = useRef(null);
   const inputRef = useRef(null);
@@ -441,6 +504,10 @@ const AIChatWidget = () => {
 
   const toggleChat = () => setIsOpen(!isOpen);
 
+  const handleDismissVenue = (venueKey) => {
+    setDismissedVenues((prev) => ({ ...prev, [venueKey]: true }));
+  };
+
   const handleOpenVenue = async (venue) => {
     const key = String(venue.id ?? venue.name);
     if (pendingVenueKey === key) return;
@@ -486,12 +553,18 @@ const AIChatWidget = () => {
                     ))}
                     {msg.sender === 'bot' && getDisplayCitations(msg.text, msg.citations).length > 0 && (
                       <div className="venue-citation-list">
-                        {getDisplayCitations(msg.text, msg.citations).map(({ citation, displayIndex }) => (
+                        {getDisplayCitations(msg.text, msg.citations)
+                          .filter(({ citation }) => {
+                            const v = normalizeCitationVenue(citation);
+                            return !dismissedVenues[String(v.id ?? v.name)];
+                          })
+                          .map(({ citation, displayIndex }) => (
                           <VenueCitationCard
                             key={citation.venue_id || citation.id || displayIndex}
                             citation={citation}
                             displayIndex={displayIndex}
                             onOpenVenue={handleOpenVenue}
+                            onDismiss={handleDismissVenue}
                             isPending={pendingVenueKey}
                           />
                         ))}
