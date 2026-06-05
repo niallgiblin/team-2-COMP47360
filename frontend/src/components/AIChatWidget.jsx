@@ -194,7 +194,7 @@ const isCitationVenueNamed = (text = '', citation = {}) => {
   if (significantTokens.length === 0) return false;
 
   const matchedCount = significantTokens.filter((t) => visibleTokens.has(t)).length;
-  return matchedCount / significantTokens.length >= 0.5;
+  return matchedCount / significantTokens.length > 0.5;
 };
 
 const getDisplayCitations = (text = '', citations = []) => {
