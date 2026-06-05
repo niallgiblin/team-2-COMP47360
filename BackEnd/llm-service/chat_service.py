@@ -16,6 +16,7 @@ from config import (
 )
 from dto import create_citation_dto
 from prompt_loader import PromptLoadError, load_prompt_template
+from search_service import _LOCATION_FILTER_GROUPS
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,27 @@ def _load_known_zones():
         return _KNOWN_ZONES
 
 
+def _expand_zone_filter(zone_name):
+    """Expand a zone name to include sub-zones via ``_LOCATION_FILTER_GROUPS``.
+
+    Returns a set containing the original zone name plus all sub-zones
+    from the filter groups dictionary.  Unknown zones return a set containing
+    only the original name.
+
+    Examples
+    --------
+    >>> sorted(_expand_zone_filter("upper east side"))
+    ['carnegie hill', 'lenox hill', 'upper east side', 'yorkville']
+    >>> _expand_zone_filter("nonexistent_zone")
+    {'nonexistent_zone'}
+    """
+    if not zone_name or not str(zone_name).strip():
+        return set()
+    normalized = str(zone_name).strip().lower()
+    sub_zones = _LOCATION_FILTER_GROUPS.get(normalized, set())
+    return {normalized} | sub_zones
+
+
 def extract_location_from_query(query):
     """Scan a natural-language query for Manhattan zone names or common aliases.
 
@@ -141,6 +163,111 @@ CHAT_RESPONSE_ERROR_MESSAGE = (
 )
 NO_VENUES_MESSAGE = "no matching venues found"
 NO_BUSYNESS_MESSAGE = "Live busyness data is not available at the moment."
+
+# ---------------------------------------------------------------------------
+# General / non-venue chat detection (prevents random venue results for meta
+# questions like "how do you work?" or "what can you do?")
+# ---------------------------------------------------------------------------
+
+import re
+
+_GENERAL_CHAT_PATTERNS = [
+    # Greetings / small talk
+    r"^(hi|hey|hello|yo|sup|howdy|good (morning|afternoon|evening))\b",
+    r"^how are you[?!]*$",
+    r"^what'?s up[?!]*$",
+    # Meta / self-referential
+    r"how (do|does) (you|this|the (chatbot|bot|ai|assistant)) work",
+    r"what (can|do) you do",
+    r"what are you",
+    r"who are you",
+    r"who made you",
+    r"what (is )?your (name|purpose|function)",
+    r"tell me about yourself",
+    r"are you (an? )?ai",
+    r"are you (a |an )?(chatbot|bot|llm|language model)",
+    r"what model",
+    r"what data (do you|are you)",
+    r"how (were|are) you (trained|built|made)",
+    r"what (is )?(urban gala|this app|this website)",
+    r"help me (understand|use|navigate) (the |this )(app|chat|chatbot)",
+    # Capability questions (non-venue)
+    r"what (features|functionality) (do you|does this) (have|offer)",
+    r"what (can|should) I (ask|type|say)",
+    r"how (do|can) I (use|interact with|start)",
+    r"(give me )?(a |some )?(tips|advice|suggestions) (on |for |about )?(using |how to use )",
+    # Thank you / closing
+    r"^(thanks?|thank you|thx|ty|ok|okay|bye|goodbye|see ya|later)[!\s]*$",
+    r"^(cool|nice|great|awesome|perfect|got it|understood)[!\s]*$",
+]
+
+_GENERAL_CHAT_RE = [re.compile(p, re.IGNORECASE) for p in _GENERAL_CHAT_PATTERNS]
+
+# Queries that are explicitly requesting venue/service recommendations and
+# should ALWAYS trigger retrieval (overrides general-chat detection).
+_VENUE_INTENT_PATTERNS = [
+    r"\b(bar|bars|club|clubs|lounge|pub|restaurant|venue|place|spot|nightlife|cafe|diner|rooftop|speakeasy|jazz|wine|cocktail|dance|dancing|drink|food|eat|dinner|lunch|brunch|date|party|hangout|night)\b",
+    r"\b(recommend|suggest|find|search|looking for|show me|give me|tell me about|what'?s (good|hot|trending|popular|nearby|open)|where|any (good|nice|cool|fun))\b",
+]
+
+_VENUE_INTENT_RE = [re.compile(p, re.IGNORECASE) for p in _VENUE_INTENT_PATTERNS]
+
+
+def is_general_chat_query(query):
+    """Detect whether a user query is a general/meta question that should not
+    trigger venue retrieval.
+
+    Returns True when the query looks like small talk, a meta question about
+    the bot/app itself, or a capability question — not a venue recommendation
+    request.  Returns False when venue intent keywords are detected AND no
+    high-confidence general-chat pattern matched.
+
+    The general-chat check runs first so that unambiguous meta queries like
+    "tell me about yourself" are not accidentally classified as venue intent
+    due to the substring "tell me about".
+
+    Examples
+    --------
+    >>> is_general_chat_query("how do you work?")
+    True
+    >>> is_general_chat_query("find me a jazz bar in Midtown")
+    False
+    >>> is_general_chat_query("hello")
+    True
+    >>> is_general_chat_query("tell me about yourself")
+    True
+    """
+    if not query or not str(query).strip():
+        return False
+
+    text = str(query).strip()
+
+    # 1. Check high-confidence general-chat patterns first — these are
+    #    unambiguous meta/small-talk queries, not venue requests.
+    for pattern in _GENERAL_CHAT_RE:
+        if pattern.search(text):
+            return True
+
+    # 2. If no general pattern matched, check for venue intent keywords.
+    for pattern in _VENUE_INTENT_RE:
+        if pattern.search(text):
+            return False
+
+    # 3. Default: no clear signal either way → not general chat.
+    return False
+
+
+GENERAL_CHAT_SYSTEM_PROMPT = (
+    "You are a helpful AI assistant for Urban Gala, a Manhattan nightlife app. "
+    "You help users discover bars, clubs, lounges, and restaurants in Manhattan. "
+    "Users can ask you to find venues by vibe, neighborhood, or activity, and you "
+    "search our curated Manhattan venue database to recommend real places. "
+    "Keep responses friendly and concise — 2-3 sentences. "
+    "If the user asks how you work, explain that you use a hybrid search system "
+    "(semantic embeddings + keyword matching) over a curated database of Manhattan "
+    "nightlife venues, powered by a language model for natural conversation. "
+    "If the user is just saying hello or making small talk, respond warmly."
+)
 
 # ---------------------------------------------------------------------------
 # Busyness context
@@ -257,10 +384,15 @@ def build_busyness_context():
 
 
 def _truncate(text, max_len=120):
-    """Truncate text to *max_len* characters with ellipsis."""
+    """Truncate text to *max_len* characters with ellipsis, breaking on a word
+    boundary (last space) to avoid mid-word cuts."""
     if not text or len(text) <= max_len:
         return text
-    return text[: max_len - 1] + "…"
+    truncated = text[: max_len - 1]
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        truncated = truncated[:last_space]
+    return truncated + "…"
 
 
 def format_retrieval_context(results):
@@ -370,11 +502,33 @@ def build_retrieval_context(query, limit=5, search_helper=None, location_filter=
     if search_helper is None:
         return (CHAT_UNAVAILABLE_MESSAGE, [])
 
+    # Expand location filter to include sub-zones (D-04).
+    expanded_filter = None
+    if location_filter:
+        expanded_zones = _expand_zone_filter(location_filter)
+        if len(expanded_zones) > 1:
+            logger.debug(
+                "Expanded zone filter %r -> %r", location_filter, expanded_zones,
+            )
+        expanded_filter = location_filter  # original name for display/fallback text
+
     try:
         raw = search_helper(query, limit=limit, location_filter=location_filter)
         if isinstance(raw, str):
             # Backward-compat: caller returned a pre-formatted string.
             return (raw, [])
+        if not raw and location_filter:
+            fallback_raw = search_helper(query, limit=limit, location_filter=None)
+            if isinstance(fallback_raw, str):
+                return (fallback_raw, [])
+            if fallback_raw:
+                context, citations = format_retrieval_context(fallback_raw)
+                caveat = (
+                    f"No exact venue matches were found in {location_filter}. "
+                    "The venues below are relevant alternatives outside the requested area; "
+                    "tell the user this clearly and recommend them only with that caveat.\n\n"
+                )
+                return (caveat + context, citations)
         return format_retrieval_context(raw)
     except Exception as exc:
         logger.error("Error building chat retrieval context: %s", exc)
@@ -564,7 +718,7 @@ def huggingface_chat_api_call(messages, model=None, requests_module=None, max_to
 # Inline citation parsing (S05)
 # ---------------------------------------------------------------------------
 
-_INLINE_CITATION_RE = __import__("re").compile(r"\[(\d+)\]")
+_INLINE_CITATION_RE = __import__("re").compile(r"(?<=[a-zA-Z])[ \t]?\[([1-9]\d?)\](?=\s|[.,!?;:]|$)")
 
 
 def parse_inline_citations(response_text, citations):
@@ -615,6 +769,222 @@ def parse_inline_citations(response_text, citations):
         lines.append(f"[{n}] {name} — {snippet}")
 
     return response_text + "\n" + "\n".join(lines)
+
+
+def _zone_matches_location_filter(zone, location_filter):
+    """Return whether a venue zone satisfies a natural location filter."""
+    if not location_filter:
+        return True
+    normalized_zone = str(zone or "").strip().lower()
+    normalized_filter = str(location_filter or "").strip().lower()
+    if not normalized_zone or not normalized_filter:
+        return True
+    return normalized_zone == normalized_filter or normalized_filter in normalized_zone
+
+
+def append_location_corrections(response_text, citations, location_filter):
+    """Append a correction when cited venue zones contradict the requested area."""
+    if not response_text or not citations or not location_filter:
+        return response_text
+
+    cited_numbers = [
+        int(number)
+        for number in _INLINE_CITATION_RE.findall(response_text)
+        if 1 <= int(number) <= len(citations)
+    ]
+    if not cited_numbers:
+        return response_text
+
+    corrections = []
+    seen = set()
+    for number in cited_numbers:
+        if number in seen:
+            continue
+        seen.add(number)
+        citation = citations[number - 1]
+        zone = citation.get("zone")
+        if _zone_matches_location_filter(zone, location_filter):
+            continue
+        name = citation.get("name") or f"venue [{number}]"
+        corrections.append(
+            f"{name} [{number}] is in {zone}, not {location_filter}."
+        )
+
+    if not corrections:
+        return response_text
+
+    prefix = "One location correction: " if len(corrections) == 1 else "Location corrections: "
+    return f"{response_text}\n\n{prefix}{' '.join(corrections)}"
+
+
+# ---------------------------------------------------------------------------
+# Activity category detection — generalised from the original bowling-only
+# implementation.  When the user asks for an activity that has no matching
+# venue in the retrieval results, a notice is prepended so the user knows
+# the category was not found rather than guessing the AI ignored it.
+# ---------------------------------------------------------------------------
+
+_ACTIVITY_PATTERNS: dict[str, re.Pattern] = {
+    "bowling":     re.compile(r"\bbowling\b|\bbowl\b|\bbowling alley\b"),
+    "comedy":      re.compile(r"\bcomedy\b|\bcomedian\b|\bstand[- ]?up\b|\bcomic\b"),
+    "jazz":        re.compile(r"\bjazz\b"),
+    "dance":       re.compile(r"\bdanc(e|ing)\b|\bdj\b"),
+    "rooftop":     re.compile(r"\brooftop\b"),
+    "wine":        re.compile(r"\bwine\b"),
+    "cocktail":    re.compile(r"\bcocktail\b|\bmixology\b"),
+    "speakeasy":   re.compile(r"\bspeakeasy\b|\bspeak[- ]?easy\b"),
+    "brunch":      re.compile(r"\bbrunch\b"),
+    "karoake":     re.compile(r"\bkaroake\b"),
+    "live music":  re.compile(r"\blive music\b|\blive band\b|\bconcert\b"),
+    "outdoor":     re.compile(r"\boutdoor\b|\bpatio\b|\bterrace\b"),
+    "quiet":       re.compile(r"\bquiet\b|\bcozy\b|\bintimate\b"),
+}
+
+
+def _detect_requested_categories(query):
+    """Return the set of activity category names whose patterns match *query*."""
+    text = str(query or "").strip().lower()
+    if not text:
+        return set()
+    matched = set()
+    for category, pattern in _ACTIVITY_PATTERNS.items():
+        if pattern.search(text):
+            matched.add(category)
+    return matched
+
+
+def _citation_matches_category(citation, category):
+    """Return whether a citation's name, type, description, or tags mention
+    *category* (or common synonyms)."""
+    searchable = " ".join(
+        str(citation.get(field, "") or "")
+        for field in ("name", "type", "snippet", "description", "tags")
+    ).lower()
+    cat_lower = category.lower()
+    if cat_lower in searchable:
+        return True
+    # Known synonyms that imply the category.
+    synonyms: dict[str, list[str]] = {
+        "bowling": ["bowling alley", "bowl"],
+        "comedy": ["comedian", "stand-up", "stand up", "comic", "comedy club"],
+        "jazz": ["jazz club", "jazz bar"],
+        "dance": ["dancing", "dj", "dance club"],
+        "rooftop": ["rooftop bar"],
+        "wine": ["wine bar"],
+        "cocktail": ["mixology"],
+        "speakeasy": ["speak easy"],
+        "karoake": ["karoake bar"],
+        "live music": ["live band", "concert"],
+    }
+    for synonym in synonyms.get(cat_lower, []):
+        if synonym in searchable:
+            return True
+    return False
+
+
+def prepend_missing_category_notice(response_text, query, citations):
+    """Prepend a notice when activity categories were requested but none of
+    the retrieved citations match them."""
+    if not response_text or not citations:
+        return response_text
+
+    requested = _detect_requested_categories(query)
+    if not requested:
+        return response_text
+
+    # Remove categories the user explicitly wants to skip.
+    text = str(query or "").strip().lower()
+    active_requested = set()
+    for cat in requested:
+        if re.search(rf"\b(forget|skip|ignore|drop|no|not)\b.{{0,30}}\b{re.escape(cat)}\b", text):
+            continue
+        active_requested.add(cat)
+
+    if not active_requested:
+        return response_text
+
+    # Filter out categories already covered by a citation.
+    lowered = response_text.lower()
+    missing = []
+    for cat in sorted(active_requested):
+        # If the LLM already mentioned the category is missing, skip.
+        if cat in lowered and (
+            "don't have" in lowered
+            or "do not have" in lowered
+            or "couldn't find" in lowered
+            or "could not find" in lowered
+            or "no matching" in lowered
+        ):
+            continue
+        if any(_citation_matches_category(citation, cat) for citation in citations):
+            continue
+        missing.append(cat)
+
+    if not missing:
+        return response_text
+
+    notice = (
+        "I don't have suggestions for "
+        + ", ".join(missing)
+        + ", but here are suggestions for the other things:"
+    )
+    return f"{notice}\n\n{response_text}"
+
+
+# Backward-compatible aliases for existing callers.
+def _query_requests_bowling(query):
+    return "bowling" in _detect_requested_categories(query)
+
+
+def _citation_is_bowling(citation):
+    return _citation_matches_category(citation, "bowling")
+
+
+def prepend_missing_bowling_notice(response_text, query, citations):
+    return prepend_missing_category_notice(response_text, query, citations)
+
+
+def build_retrieval_fallback_response(retrieval_context, citations):
+    """Create a readable venue answer when the chat model is unavailable.
+
+    Retrieval has already succeeded at this point, so returning the venue
+    matches is more useful than hiding them behind a generic model error.
+    """
+    if not citations:
+        return CHAT_RESPONSE_ERROR_MESSAGE
+
+    outside_requested_area = "outside the requested area" in (retrieval_context or "").lower()
+    if outside_requested_area:
+        lines = [
+            "I found a few nearby options, but they look a little outside the exact area you asked for:",
+        ]
+    else:
+        lines = [
+            "I found a few matching options, but the AI wording service is temporarily unavailable:",
+        ]
+
+    for idx, citation in enumerate(citations[:3], start=1):
+        name = citation.get("name") or "This venue"
+        venue_type = citation.get("type") or "Venue"
+        zone = citation.get("zone") or ""
+        rating = citation.get("rating")
+        address = citation.get("address") or ""
+
+        details = []
+        if venue_type:
+            details.append(venue_type)
+        if zone:
+            details.append(zone)
+        if rating:
+            details.append(f"{rating}/5")
+        if address:
+            details.append(address)
+
+        suffix = f" — {', '.join(str(part) for part in details)}" if details else ""
+        lines.append(f"{name} [{idx}]{suffix}.")
+
+    lines.append("Tap a venue card to see it on the map.")
+    return parse_inline_citations("\n\n".join(lines), citations)
 
 
 # ---------------------------------------------------------------------------
@@ -740,6 +1110,10 @@ def get_ai_response(
     options?") become self-contained retrieval queries.  The original user
     query is preserved in the chat prompt — reformulation only affects search.
 
+    General / meta queries (greetings, "how do you work?", etc.) skip
+    retrieval entirely and use a short system prompt so the LLM does not
+    hallucinate venue recommendations for non-venue questions.
+
     Returns
     -------
     tuple[str, list[dict]]
@@ -748,6 +1122,27 @@ def get_ai_response(
         results).
     """
     try:
+        # ---- General chat: skip retrieval for non-venue queries ---------
+        if is_general_chat_query(query):
+            logger.info(
+                "General chat query detected — skipping retrieval: %r", query[:80]
+            )
+            chat_history = _build_chat_history(previous_questions, previous_responses)
+            user_content = GENERAL_CHAT_SYSTEM_PROMPT
+            if chat_history:
+                user_content = f"{chat_history}\n\nUser question: {query}"
+            else:
+                user_content = f"User question: {query}"
+
+            messages = [
+                {"role": "system", "content": GENERAL_CHAT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ]
+            call = hf_call or huggingface_chat_api_call
+            response = call(messages, max_tokens=200, timeout=15)
+            response_text = response["choices"][0]["message"]["content"]
+            return response_text, []
+
         # ---- Reformulate for retrieval when history exists --------------
         search_query = reformulate_query(
             query, previous_questions, previous_responses, hf_call=hf_call,
@@ -773,8 +1168,17 @@ def get_ai_response(
             busyness_context=busyness_context,
         )
         call = hf_call or huggingface_chat_api_call
-        response = call(messages)
+        try:
+            response = call(messages)
+        except Exception as exc:
+            logger.error("Error calling chat model after retrieval: %s", exc)
+            fallback_text = build_retrieval_fallback_response(retrieval_context, citations)
+            fallback_text = append_location_corrections(fallback_text, citations, location_filter)
+            fallback_text = prepend_missing_bowling_notice(fallback_text, query, citations)
+            return fallback_text, citations
         response_text = response["choices"][0]["message"]["content"]
+        response_text = append_location_corrections(response_text, citations, location_filter)
+        response_text = prepend_missing_bowling_notice(response_text, query, citations)
         response_text = parse_inline_citations(response_text, citations)
         return response_text, citations
     except Exception as exc:
