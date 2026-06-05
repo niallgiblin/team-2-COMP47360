@@ -766,6 +766,70 @@ describe('AIChatWidget', () => {
     expect(window.sessionStorage.getItem('urban-gala-chat-messages:user:user-1')).not.toContain('Earlier user question');
   });
 
+  test('disables only the activated venue card while hydration is pending, prevents duplicate activation', async () => {
+    const user = userEvent.setup();
+    let resolveHydration;
+    mockLocationAPI.getLocationById.mockImplementation(() =>
+      new Promise(resolve => { resolveHydration = resolve; })
+    );
+
+    const citations = [
+      { venue_id: 1, name: 'Restaurant A', zone: 'East Village', rating: 4.5, address: '1 Main St' },
+      { venue_id: 2, name: 'Restaurant B', zone: 'Lower East Side', rating: 4.2, address: '2 Main St' },
+    ];
+    mockChatAPI.sendMessage.mockResolvedValue({
+      response: 'Restaurant A [1] and Restaurant B [2] are great options.',
+      citations,
+    });
+
+    renderWithProviders(<AIChatWidget />);
+
+    await user.click(screen.getByRole('button', { name: 'Open AI Concierge' }));
+    await user.type(screen.getByPlaceholderText('Type a message...'), 'restaurants');
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add restaurant a to plan and view on map/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add restaurant b to plan and view on map/i })).toBeInTheDocument();
+    });
+
+    const cardA = screen.getByRole('button', { name: /add restaurant a to plan and view on map/i });
+    const cardB = screen.getByRole('button', { name: /add restaurant b to plan and view on map/i });
+
+    // First click on card A
+    await user.click(cardA);
+
+    // Card A should be disabled immediately, card B should remain enabled
+    expect(cardA).toBeDisabled();
+    expect(cardB).not.toBeDisabled();
+
+    // Click card A again while pending — should be a no-op
+    await user.click(cardA);
+
+    // getLocationById should only be called once
+    expect(mockLocationAPI.getLocationById).toHaveBeenCalledTimes(1);
+
+    // Resolve the hydration
+    resolveHydration({
+      location: {
+        id: 1,
+        name: 'Restaurant A',
+        lat: 40.71,
+        lng: -73.99,
+        review: 4.8,
+        price: 4,
+        isRestaurant: true,
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockPlanContext.addToPlan).toHaveBeenCalledTimes(1);
+    });
+    expect(mockPlanContext.setFromPlan).toHaveBeenCalledWith(false);
+    // Chat input should still be rendered after activation
+    expect(screen.getByPlaceholderText('Type a message...')).toBeInTheDocument();
+  });
+
   test('does not send cleared user turns as context after clearing chat', async () => {
     const user = userEvent.setup();
     window.sessionStorage.setItem(

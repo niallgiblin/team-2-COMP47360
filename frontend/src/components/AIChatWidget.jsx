@@ -297,7 +297,7 @@ const hydrateVenueFromCanonicalApi = async (venue) => {
 const VenueCitationCard = ({ citation, displayIndex, onOpenVenue, isPending }) => {
   const venue = normalizeCitationVenue(citation);
   const rating = Number(venue.rating);
-  const venueKey = venue.id ?? venue.name;
+  const venueKey = String(venue.id ?? venue.name);
   const pending = isPending === venueKey;
 
   return (
