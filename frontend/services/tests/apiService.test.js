@@ -1,5 +1,5 @@
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest'
-import { authAPI, apiService, planAPI, vibeAPI, chatAPI, authFetch, joinApiPath, resolveApiBaseUrl } from '../apiService'
+import { authAPI, apiService, planAPI, vibeAPI, chatAPI, locationAPI, authFetch, joinApiPath, resolveApiBaseUrl } from '../apiService'
 
 global.fetch = vi.fn()
 
@@ -264,6 +264,36 @@ describe('production-style relative routes', () => {
 
   test('vibeAPI.trendingUrl resolves to /api/vibe/trending', () => {
     expect(vibeAPI.trendingUrl()).toBe('/api/vibe/trending')
+  })
+
+  test('locationAPI.getLocationById calls canonical location endpoint', async () => {
+    const fakeLocation = { location: { id: 42, name: 'Venue', review: 4.6 } }
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => fakeLocation })
+
+    const result = await locationAPI.getLocationById(42)
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/locations/42',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' })
+      })
+    )
+    expect(result).toEqual(fakeLocation)
+  })
+
+  test('locationAPI.searchLocations calls location search by input', async () => {
+    const fakeResult = { content: [{ id: 5, name: 'Slate' }] }
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => fakeResult })
+
+    const result = await locationAPI.searchLocations('Slate', 3)
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/locations/search?input=Slate&size=3',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' })
+      })
+    )
+    expect(result).toEqual(fakeResult)
   })
 
   test('chatAPI.sendMessage POSTs to /api/chat with message in body (D-16)', async () => {

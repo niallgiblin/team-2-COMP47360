@@ -19,6 +19,31 @@ _PRICE_FILTERS = {
     "luxury": {"expensive", "luxury"},
 }
 
+_LOCATION_FILTER_GROUPS = {
+    "upper east side": {
+        "upper east side",
+        "lenox hill",
+        "yorkville",
+        "carnegie hill",
+    },
+    "ues": {
+        "upper east side",
+        "lenox hill",
+        "yorkville",
+        "carnegie hill",
+    },
+    "upper west side": {
+        "upper west side",
+        "lincoln square",
+        "manhattan valley",
+    },
+    "uws": {
+        "upper west side",
+        "lincoln square",
+        "manhattan valley",
+    },
+}
+
 VALID_PRICE_RANGES = frozenset(_PRICE_FILTERS.keys())
 
 
@@ -63,7 +88,12 @@ def _matches_location_filter(row, location_filter):
     if not location_filter:
         return True
     zone = str(row.get("zone", ""))
-    return location_filter.lower() in zone.lower()
+    normalized_zone = zone.lower()
+    normalized_filter = str(location_filter).lower().strip()
+    if normalized_filter in normalized_zone:
+        return True
+    grouped_terms = _LOCATION_FILTER_GROUPS.get(normalized_filter, set())
+    return any(term in normalized_zone for term in grouped_terms)
 
 
 def _matches_price_range(row, price_range):

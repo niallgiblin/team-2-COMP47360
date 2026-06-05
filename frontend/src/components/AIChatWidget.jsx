@@ -88,9 +88,9 @@ const ChatIcon = () => (
 );
 
 const CloseIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="4" y1="4" x2="12" y2="12"></line>
+    <line x1="12" y1="4" x2="4" y2="12"></line>
   </svg>
 );
 
@@ -327,41 +327,14 @@ const hydrateVenueFromCanonicalApi = async (venue) => {
   return fallbackVenue;
 };
 
-const VenueCitationCard = ({ citation, displayIndex, onOpenVenue, onDismiss, isPending }) => {
+const VenueCitationCard = ({ citation, displayIndex, onOpenVenue, isPending }) => {
   const venue = normalizeCitationVenue(citation);
   const rating = Number(venue.rating);
   const venueKey = String(venue.id ?? venue.name);
   const pending = isPending === venueKey;
-  const [isDismissing, setIsDismissing] = useState(false);
-  const dismissTimerRef = useRef(null);
-
-  const handleDismiss = (e) => {
-    e.stopPropagation();
-    if (isDismissing) return;
-    setIsDismissing(true);
-    dismissTimerRef.current = setTimeout(() => {
-      onDismiss?.(venueKey);
-    }, 150);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-    };
-  }, []);
 
   return (
-    <div className={`venue-citation-card${isDismissing ? ' dismissing' : ''}`}>
-      {onDismiss && (
-        <button
-          type="button"
-          className="venue-card-dismiss"
-          onClick={handleDismiss}
-          aria-label={`Dismiss ${venue.name}`}
-        >
-          <CloseIcon />
-        </button>
-      )}
+    <div className="venue-citation-card">
       <button
         type="button"
         className="venue-citation-card-inner"
@@ -411,7 +384,6 @@ const AIChatWidget = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingVenueKey, setPendingVenueKey] = useState(null);
-  const [dismissedVenues, setDismissedVenues] = useState({});
   const messagesEndRef = useRef(null);
   const launcherRef = useRef(null);
   const inputRef = useRef(null);
@@ -504,10 +476,6 @@ const AIChatWidget = () => {
 
   const toggleChat = () => setIsOpen(!isOpen);
 
-  const handleDismissVenue = (venueKey) => {
-    setDismissedVenues((prev) => ({ ...prev, [venueKey]: true }));
-  };
-
   const handleOpenVenue = async (venue) => {
     const key = String(venue.id ?? venue.name);
     if (pendingVenueKey === key) return;
@@ -554,17 +522,12 @@ const AIChatWidget = () => {
                     {msg.sender === 'bot' && getDisplayCitations(msg.text, msg.citations).length > 0 && (
                       <div className="venue-citation-list">
                         {getDisplayCitations(msg.text, msg.citations)
-                          .filter(({ citation }) => {
-                            const v = normalizeCitationVenue(citation);
-                            return !dismissedVenues[String(v.id ?? v.name)];
-                          })
                           .map(({ citation, displayIndex }) => (
                           <VenueCitationCard
                             key={citation.venue_id || citation.id || displayIndex}
                             citation={citation}
                             displayIndex={displayIndex}
                             onOpenVenue={handleOpenVenue}
-                            onDismiss={handleDismissVenue}
                             isPending={pendingVenueKey}
                           />
                         ))}

@@ -27,8 +27,7 @@ export default function DirectionSidebar({
       anchor="right"
       open={open}
       onClose={onClose}
-      variant="temporary"
-      ModalProps={{ keepMounted: false }}
+      variant="persistent"
       sx={{
         '& .MuiDrawer-paper': {
           position: 'fixed',

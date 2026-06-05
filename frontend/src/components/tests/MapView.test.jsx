@@ -20,6 +20,11 @@ const planVenues = [
   { id: 2, name: 'Venue B', lat: 40.7614, lng: -73.9778 },
 ];
 
+const threeStopPlanVenues = [
+  ...planVenues,
+  { id: 3, name: 'Venue C', lat: 40.7505, lng: -73.9934 },
+];
+
 let mockPlanState = {
   plan: planVenues,
   fromPlan: true,
@@ -42,6 +47,8 @@ const localStorageMock = (() => {
   };
 })();
 
+const demoMapProps = { current: null };
+
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children, ...props }) => (
     <div data-testid="map-container" {...props}>{children}</div>
@@ -55,7 +62,10 @@ vi.mock('react-leaflet', () => ({
 }));
 
 vi.mock('../DemoMap', () => ({
-  default: () => <div data-testid="demo-map">Demo Map</div>,
+  default: (props) => {
+    demoMapProps.current = props;
+    return <div data-testid="demo-map">Demo Map</div>;
+  },
 }));
 
 const forecastSliderProps = { current: null };
@@ -147,6 +157,7 @@ describe('MapView route and sidebar integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     forecastSliderProps.current = null;
+    demoMapProps.current = null;
     mockPlanState = {
       plan: planVenues,
       fromPlan: true,
@@ -207,7 +218,7 @@ describe('MapView route and sidebar integration', () => {
     });
   });
 
-  test('does not alert when Get Directions clicked without start or destination', async () => {
+  test('does not select a default venue when opening map view without a plan', async () => {
     mockPlanState = {
       plan: [],
       fromPlan: false,
@@ -215,6 +226,28 @@ describe('MapView route and sidebar integration', () => {
     };
 
     renderMapView();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('demo-map')).toBeInTheDocument();
+      expect(demoMapProps.current?.fromPlan).toBe(false);
+      expect(demoMapProps.current?.selectedVenue).toBeNull();
+    });
+  });
+
+  test('does not alert when Get Directions clicked without a start location', async () => {
+    mockPlanState = {
+      plan: [],
+      fromPlan: false,
+      setFromPlan: vi.fn(),
+    };
+
+    renderMapView();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/destination/i)).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText(/destination/i), {
+      target: { value: 'Times Square' },
+    });
     await openDirectionsDrawer();
 
     await waitFor(() => {
@@ -342,6 +375,76 @@ describe('MapView route and sidebar integration', () => {
     });
   });
 
+  test('routes every walking plan leg even when fromPlan flag has not caught up', async () => {
+    mockPlanState = {
+      plan: threeStopPlanVenues,
+      fromPlan: false,
+      setFromPlan: vi.fn(),
+    };
+
+    let routeCalls = 0;
+    fetch.mockImplementation(async (url, options) => {
+      if (typeof url === 'string' && url.includes('routes.googleapis.com')) {
+        routeCalls += 1;
+        const body = JSON.parse(options.body);
+
+        expect(body.origin.location.latLng).toEqual({
+          latitude: threeStopPlanVenues[0].lat,
+          longitude: threeStopPlanVenues[0].lng,
+        });
+        expect(body.intermediates).toHaveLength(1);
+        expect(body.intermediates[0].location.latLng).toEqual({
+          latitude: threeStopPlanVenues[1].lat,
+          longitude: threeStopPlanVenues[1].lng,
+        });
+        expect(body.destination.location.latLng).toEqual({
+          latitude: threeStopPlanVenues[2].lat,
+          longitude: threeStopPlanVenues[2].lng,
+        });
+
+        return {
+          ok: true,
+          json: async () => ({
+            routes: [{
+              legs: [
+                {
+                  steps: [{
+                    navigationInstruction: { instructions: 'Walk from first to second' },
+                    distanceMeters: 100,
+                    staticDuration: '120s',
+                  }],
+                  startLocation: { latLng: { latitude: threeStopPlanVenues[0].lat, longitude: threeStopPlanVenues[0].lng } },
+                  endLocation: { latLng: { latitude: threeStopPlanVenues[1].lat, longitude: threeStopPlanVenues[1].lng } },
+                },
+                {
+                  steps: [{
+                    navigationInstruction: { instructions: 'Walk from second to third' },
+                    distanceMeters: 200,
+                    staticDuration: '180s',
+                  }],
+                  startLocation: { latLng: { latitude: threeStopPlanVenues[1].lat, longitude: threeStopPlanVenues[1].lng } },
+                  endLocation: { latLng: { latitude: threeStopPlanVenues[2].lat, longitude: threeStopPlanVenues[2].lng } },
+                },
+              ],
+              polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' },
+            }],
+          }),
+        };
+      }
+      return defaultFetchHandler(url);
+    });
+
+    renderMapView();
+    await openDirectionsDrawer();
+
+    await waitFor(() => {
+      expect(routeCalls).toBe(1);
+      expect(screen.getByText(/Venue A -> Venue B/)).toBeInTheDocument();
+      expect(screen.getByText(/Venue B -> Venue C/)).toBeInTheDocument();
+      expect(screen.getByText(/Walk from second to third/)).toBeInTheDocument();
+    });
+  });
+
   test('renders leg headings with Start -> Destination text', async () => {
     fetch.mockImplementation(async (url) => {
       if (typeof url === 'string' && url.includes('routes.googleapis.com')) {
@@ -371,6 +474,99 @@ describe('MapView route and sidebar integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Venue A -> Venue B/)).toBeInTheDocument();
+    });
+  });
+
+  test('labels walking plan legs from custom start to first venue before final venue', async () => {
+    fetch.mockImplementation(async (url, options) => {
+      if (typeof url === 'string' && url.includes('nominatim.openstreetmap.org')) {
+        return {
+          ok: true,
+          json: async () => [{ lat: '40.7484', lon: '-73.9857' }],
+        };
+      }
+      if (typeof url === 'string' && url.includes('routes.googleapis.com')) {
+        const body = JSON.parse(options.body);
+
+        expect(body.origin.location.latLng).toEqual({
+          latitude: 40.7484,
+          longitude: -73.9857,
+        });
+        expect(body.destination.location.latLng).toEqual({
+          latitude: planVenues[1].lat,
+          longitude: planVenues[1].lng,
+        });
+        expect(body.intermediates).toHaveLength(1);
+        expect(body.intermediates[0].location.latLng).toEqual({
+          latitude: planVenues[0].lat,
+          longitude: planVenues[0].lng,
+        });
+
+        return {
+          ok: true,
+          json: async () => ({
+            routes: [{
+              legs: [
+                {
+                  steps: [{
+                    navigationInstruction: { instructions: 'Walk from custom start' },
+                    distanceMeters: 100,
+                    staticDuration: '120s',
+                  }],
+                  startLocation: { latLng: { latitude: 40.7484, longitude: -73.9857 } },
+                  endLocation: { latLng: { latitude: planVenues[0].lat, longitude: planVenues[0].lng } },
+                },
+                {
+                  steps: [{
+                    navigationInstruction: { instructions: 'Continue to second venue' },
+                    distanceMeters: 200,
+                    staticDuration: '180s',
+                  }],
+                  startLocation: { latLng: { latitude: planVenues[0].lat, longitude: planVenues[0].lng } },
+                  endLocation: { latLng: { latitude: planVenues[1].lat, longitude: planVenues[1].lng } },
+                },
+              ],
+              polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' },
+            }],
+          }),
+        };
+      }
+      return defaultFetchHandler(url);
+    });
+
+    renderMapView();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /get directions/i })).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText(/start location/i), {
+      target: { value: 'empire state building' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /get directions/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Start -> Venue A/)).toBeInTheDocument();
+      expect(screen.getByText(/Venue A -> Venue B/)).toBeInTheDocument();
+    });
+  });
+
+  test('keeps directions available for the current plan after reset map', async () => {
+    renderMapView();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /get directions/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /get directions/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/hide directions/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/reset map/i));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /get directions/i })).toBeInTheDocument();
     });
   });
 });

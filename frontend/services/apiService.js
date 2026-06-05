@@ -169,13 +169,37 @@ export const vibeAPI = {
   googleReviewsUrl: (locationId) => joinApiPath(resolveApiBaseUrl(), `/vibe/venue/${locationId}/google-reviews`),
 };
 
+export const locationAPI = {
+  getLocationById: async (id) => {
+    return makeRequest(joinApiPath(resolveApiBaseUrl(), `/locations/${id}`));
+  },
+
+  searchLocations: async (input, size = 1) => {
+    const params = new URLSearchParams({
+      input: String(input || ''),
+      size: String(size),
+    });
+    return makeRequest(`${joinApiPath(resolveApiBaseUrl(), '/locations/search')}?${params.toString()}`);
+  },
+};
+
 // Chat API — proxied Flask route requires the same Bearer JWT boundary as Spring.
 export const chatAPI = {
   sendMessage: async (message, history) => {
-    const previous_questions = (history || [])
-      .filter((m) => m.sender === 'user')
-      .map((m) => m.text)
-      .filter(Boolean);
+    const previous_questions = [];
+    const previous_responses = [];
+    let pendingQuestion = null;
+
+    (history || []).forEach((m) => {
+      if (m.sender === 'user' && m.text) {
+        pendingQuestion = m.text;
+        previous_questions.push(m.text);
+      } else if (m.sender === 'bot' && m.text && pendingQuestion) {
+        previous_responses.push(m.text);
+        pendingQuestion = null;
+      }
+    });
+
     const token = getAuthToken();
     const headers = { 'Content-Type': 'application/json' };
     if (token) {
@@ -184,7 +208,11 @@ export const chatAPI = {
     const response = await fetch(resolveLlmApiUrl(), {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message, previous_questions }),
+      body: JSON.stringify({
+        message,
+        previous_questions: previous_questions.slice(-3),
+        previous_responses: previous_responses.slice(-3),
+      }),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));

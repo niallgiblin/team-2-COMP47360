@@ -282,7 +282,25 @@ export default function VenueCard({ venue, variant = 'default', disableActions =
                     fullWidth
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (addToPlan) addToPlan({ id, name, lat, lng, review: parsedRating, rating: parsedRating, price: level, tags, imageUrl: imageUrlFinal, description, uri });
+                      if (addToPlan) addToPlan({
+                        id,
+                        name,
+                        lat,
+                        lng,
+                        review: parsedRating,
+                        rating: parsedRating,
+                        price: level,
+                        tags,
+                        imageUrl: imageUrlFinal,
+                        description,
+                        uri,
+                        address: venue.address,
+                        zone: venue.zone,
+                        isRestaurant: venue.isRestaurant,
+                        isBar: venue.isBar,
+                        isClub: venue.isClub,
+                        isLandmark: venue.isLandmark,
+                      });
                     }}
                     disabled={isPlanFull}
                     sx={{

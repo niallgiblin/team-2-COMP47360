@@ -12,6 +12,7 @@ from search_service import (
     REQUIRED_DTO_FIELDS,
     SearchService,
     SearchStartupError,
+    _matches_location_filter,
     build_vector_index,
     create_location_dto,
 )
@@ -161,6 +162,13 @@ def test_search_service_over_fetch_then_filters_by_zone_and_price():
     assert len(results) <= 2
     assert all(item["zone"] == "Greenwich Village" for item in results)
     assert all(item["price"] in {"moderate", "mid"} for item in results)
+
+
+def test_upper_east_side_filter_includes_local_subareas():
+    assert _matches_location_filter({"zone": "Lenox Hill East"}, "upper east side")
+    assert _matches_location_filter({"zone": "Yorkville West"}, "upper east side")
+    assert _matches_location_filter({"zone": "Upper East Side North"}, "upper east side")
+    assert not _matches_location_filter({"zone": "Greenwich Village"}, "upper east side")
 
 
 def test_find_similar_excludes_source_name():

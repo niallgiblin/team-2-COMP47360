@@ -92,7 +92,27 @@ async function fetchCachedSegment(origin, destination, mode, apiKey) {
   return response;
 }
 
-function buildMultiStopWalkingRequest(start, venues, isUserStart) {
+function buildMultiStopWalkingRequest(start, venues, isUserStart, customDestination = null) {
+  if (customDestination) {
+    if (isUserStart) {
+      return {
+        origin: start,
+        destination: customDestination,
+        intermediates: venues.map((venue) => ({
+          lat: venue.lat,
+          lng: venue.lng,
+        })),
+      };
+    }
+    return {
+      origin: { lat: venues[0].lat, lng: venues[0].lng },
+      destination: customDestination,
+      intermediates: venues.slice(1).map((venue) => ({
+        lat: venue.lat,
+        lng: venue.lng,
+      })),
+    };
+  }
   if (isUserStart) {
     return {
       origin: start,
@@ -119,7 +139,7 @@ function buildMultiStopWalkingRequest(start, venues, isUserStart) {
   };
 }
 
-function attachPlanVenueNames(steps, plan, travelMode) {
+function attachPlanVenueNames(steps, plan, travelMode, { hasCustomStart = false } = {}) {
   return steps.map((step) => {
     const legIndex = step.legIndex ?? 0;
     let startName = step.legStartLocation?.name ?? "Start";
@@ -129,6 +149,9 @@ function attachPlanVenueNames(steps, plan, travelMode) {
       if (travelMode === "TRANSIT" && plan.length > 1) {
         startName = plan[0].name;
         endName = plan[plan.length - 1].name;
+      } else if (hasCustomStart && plan.length > 1) {
+        startName = legIndex === 0 ? "Start" : plan[legIndex - 1]?.name ?? startName;
+        endName = plan[legIndex]?.name ?? endName;
       } else if (plan.length > 1) {
         startName = plan[legIndex]?.name ?? startName;
         endName = plan[legIndex + 1]?.name ?? endName;
@@ -144,6 +167,18 @@ function attachPlanVenueNames(steps, plan, travelMode) {
       legEndLocation: { ...(step.legEndLocation ?? {}), name: endName },
     };
   });
+}
+
+function normalizeSelectedVenue(venue) {
+  if (!venue) return null;
+  const lat = Number(venue.lat ?? venue.latitude);
+  const lng = Number(venue.lng ?? venue.longitude);
+
+  return {
+    ...venue,
+    lat: Number.isFinite(lat) ? lat : venue.lat,
+    lng: Number.isFinite(lng) ? lng : venue.lng,
+  };
 }
 
 // geocode address into lat/lng using nominatim
@@ -205,6 +240,7 @@ export default function MapView() {
   const [manualStart, setManualStart] = useState("");
   const [startLocationError, setStartLocationError] = useState("");
   const [manualDestination, setManualDestination] = useState("");
+  const [destination, setDestination] = useState(null);
   const [showDirections, setShowDirections] = useState(false);
   const [directions, setDirections] = useState(null);
   const [travelMode, setTravelMode] = useState("WALK");
@@ -220,7 +256,7 @@ export default function MapView() {
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
   const [mode, setMode] = useState("live");
   const [viewMode, setViewMode] = useState("plan");
-  const [resetMapKey] = useState(0);
+  const [resetMapKey, setResetMapKey] = useState(0);
   const [zoneCenter, setZoneCenter] = useState(null);
 
   // Debug mode changes
@@ -231,7 +267,11 @@ export default function MapView() {
   // Refs
   const mapSectionRef = useRef(null);
   const { busynessData: contextBusynessData, predictionData: contextPredictionData, fetchAllData } = useBusyness();
-  const { plan: currentPlan, fromPlan: contextFromPlan, setFromPlan: setContextFromPlan } = usePlan();
+  const {
+    plan: currentPlan,
+    fromPlan: contextFromPlan,
+    setFromPlan: setContextFromPlan,
+  } = usePlan();
 
   const mapBusynessData = useMemo(
     () => contextBusynessData || [],
@@ -245,6 +285,12 @@ export default function MapView() {
     setSelectedVenue(venue);
   }, []);
 
+  // Stabilize labels so DemoMap props don't change on every keystroke
+  const mapLabels = useMemo(() => ({
+    start: manualStart.trim() || "Start",
+    destination: manualDestination.trim() || "Destination",
+  }), [manualStart, manualDestination]);
+
   const forecastTimestamps = useMemo(() => {
     const firstZone = contextPredictionData?.[0]?.predictions;
     if (Array.isArray(firstZone) && firstZone.length > 0) {
@@ -253,13 +299,16 @@ export default function MapView() {
     return getFallbackForecastTimestamps();
   }, [contextPredictionData]);
 
-  // Use context values for plan and fromPlan
+  // Use context values for plan
   const plan = currentPlan || [];
-  const fromPlan = contextFromPlan || false;
 
   // Get state from navigation
   const location = useLocation();
-  const selectedVenueFromState = location.state?.selectedVenue;
+  const selectedVenueFromState = useMemo(
+    () => normalizeSelectedVenue(location.state?.selectedVenue),
+    [location.state?.selectedVenue]
+  );
+  const fromPlan = contextFromPlan || plan.length > 0;
 
   // Update context when venue is selected from navigation
   useEffect(() => {
@@ -272,16 +321,25 @@ export default function MapView() {
   // Initialize plan state from context or navigation
   useEffect(() => {
     if (selectedVenueFromState) {
-      setContextFromPlan(true);
-      // Plan is already set in context
+      setContextFromPlan(false);
     } else if (currentPlan && currentPlan.length > 0) {
       setContextFromPlan(true);
       // Plan is already set in context
     } else {
       setContextFromPlan(false);
+      setSelectedVenue(null);
       // Plan is already cleared in context
     }
   }, [selectedVenueFromState, currentPlan, setContextFromPlan]);
+
+  // Clear selectedVenue whenever it's removed from the plan
+  useEffect(() => {
+    if (!selectedVenue) return;
+    const stillInPlan = plan.some((v) => String(v.id) === String(selectedVenue.id));
+    if (!stillInPlan) {
+      setSelectedVenue(null);
+    }
+  }, [plan, selectedVenue]);
 
   const getCachedMapData = () => {
     const zoneData = mapDataCache.get(ZONE_CACHE_KEY);
@@ -372,11 +430,17 @@ export default function MapView() {
               address: venue.address,
               lat: venue.lat || venue.latitude,
               lng: venue.lng || venue.longitude,
+              latitude: venue.latitude || venue.lat,
+              longitude: venue.longitude || venue.lng,
               zone: venue.zone,
               zoneId: venue.zoneId,
               type: venue.type,
               price: venue.price,
               rating: venue.rating,
+              review: venue.rating,
+              uri: venue.uri,
+              description: venue.description,
+              tags: venue.tags,
             }));
           }
         );
@@ -418,7 +482,7 @@ export default function MapView() {
   // Always use dummy busyness and prediction data if isMock is true
   useEffect(() => {
     if (!zoneData || !isMock) return;
-    
+
     // No longer using dummy data - just return
   }, [zoneData, isMock]);
 
@@ -442,9 +506,6 @@ export default function MapView() {
 
     const enriched = enrichVenuesWithZones(venues, zoneData);
     setEnrichedVenues(enriched);
-    if (!selectedVenueFromState && !selectedVenue && enriched.length > 0) {
-      setSelectedVenue(enriched[0]);
-    }
   }, [zoneData, venues, fromPlan, plan, selectedVenue, selectedVenueFromState]);
 
 
@@ -462,7 +523,13 @@ export default function MapView() {
     }
   }, [showDirections]);
 
-  const applyRouteResult = (response, routeStart, routeDestination, isStale) => {
+  const applyRouteResult = (
+    response,
+    routeStart,
+    routeDestination,
+    isStale,
+    { hasCustomStart = false } = {}
+  ) => {
     if (response?.error) {
       if (!isStale()) {
         setRouteError(
@@ -477,8 +544,8 @@ export default function MapView() {
     const normalized = normalizeRoute(response);
     let steps = normalized.steps;
 
-    if (fromPlan && plan.length > 0) {
-      steps = attachPlanVenueNames(steps, plan, travelMode);
+    if (plan.length > 0) {
+      steps = attachPlanVenueNames(steps, plan, travelMode, { hasCustomStart });
     }
 
     if (isStale()) return;
@@ -497,7 +564,7 @@ export default function MapView() {
     } else if (routeStart && routeDestination) {
       setDirectionsPolyline(buildFallbackPolyline(routeStart, routeDestination));
       setRouteFallbackNotice(FALLBACK_POLYLINE_NOTICE);
-    } else if (fromPlan && plan.length > 0) {
+    } else if (plan.length > 0) {
       setDirectionsPolyline(plan.map((venue) => [venue.lat, venue.lng]));
       setRouteFallbackNotice(FALLBACK_POLYLINE_NOTICE);
     } else {
@@ -521,7 +588,7 @@ export default function MapView() {
       return;
     }
 
-    const hasPlan = fromPlan && plan.length > 0;
+    const hasPlan = plan.length > 0;
     const planVenues = hasPlan ? plan : [];
     const mode = travelMode === "WALK" ? "WALK" : "TRANSIT";
 
@@ -538,22 +605,29 @@ export default function MapView() {
             setRouteError(ROUTE_LOAD_ERROR);
             return;
           }
+          if (!isInNYC(start.lat, start.lng)) {
+            setRouteError("The selected location is not in New York City. Please enter a valid NYC address.");
+            return;
+          }
           if (!isStale()) setUserLocation(start);
         }
-        destination = {
-          lat: planVenues[planVenues.length - 1].lat,
-          lng: planVenues[planVenues.length - 1].lng,
-        };
       } else {
         start = { lat: planVenues[0].lat, lng: planVenues[0].lng };
+      }
+
+      if (manualDestination.trim()) {
+        destination = await geocodeAddress(manualDestination);
+        if (!destination) {
+          setRouteError(ROUTE_LOAD_ERROR);
+          return;
+        }
+      } else {
         destination = {
           lat: planVenues[planVenues.length - 1].lat,
           lng: planVenues[planVenues.length - 1].lng,
         };
       }
     } else if (hasPlan && planVenues.length === 1) {
-      destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
-
       if (userLocation) {
         start = userLocation;
       } else if (manualStart.trim()) {
@@ -562,9 +636,22 @@ export default function MapView() {
           setRouteError(ROUTE_LOAD_ERROR);
           return;
         }
+        if (!isInNYC(start.lat, start.lng)) {
+          setRouteError("The selected location is not in New York City. Please enter a valid NYC address.");
+          return;
+        }
         if (!isStale()) setUserLocation(start);
       } else {
         start = { lat: planVenues[0].lat, lng: planVenues[0].lng };
+      }
+
+      if (manualDestination.trim()) {
+        destination = await geocodeAddress(manualDestination);
+        if (!destination) {
+          setRouteError(ROUTE_LOAD_ERROR);
+          return;
+        }
+      } else {
         destination = { lat: planVenues[0].lat, lng: planVenues[0].lng };
       }
     } else {
@@ -574,6 +661,10 @@ export default function MapView() {
         start = await geocodeAddress(manualStart);
         if (!start) {
           setRouteError(ROUTE_LOAD_ERROR);
+          return;
+        }
+        if (!isInNYC(start.lat, start.lng)) {
+          setRouteError("The selected location is not in New York City. Please enter a valid NYC address.");
           return;
         }
         if (!isStale()) setUserLocation(start);
@@ -598,6 +689,8 @@ export default function MapView() {
 
     if (isStale()) return;
 
+    if (destination && manualDestination.trim()) setDestination(destination);
+
     try {
       if (
         hasPlan &&
@@ -619,8 +712,9 @@ export default function MapView() {
 
       if (hasPlan && planVenues.length > 1 && travelMode === "WALK") {
         const isUserStart = Boolean(userLocation || manualStart.trim());
+        const isCustomDest = Boolean(manualDestination.trim());
         const { origin, destination: routeDestination, intermediates } =
-          buildMultiStopWalkingRequest(start, planVenues, isUserStart);
+          buildMultiStopWalkingRequest(start, planVenues, isUserStart, isCustomDest ? destination : null);
         const response = await computeMultiStopRoute({
           origin,
           destination: routeDestination,
@@ -628,7 +722,9 @@ export default function MapView() {
           travelMode: mode,
           apiKey,
         });
-        applyRouteResult(response, start, destination, isStale);
+        applyRouteResult(response, start, destination, isStale, {
+          hasCustomStart: isUserStart,
+        });
         return;
       }
 
@@ -661,6 +757,15 @@ export default function MapView() {
               toName: planVenues[i + 1].name,
             });
           }
+        }
+
+        if (manualDestination.trim()) {
+          segmentPairs.push({
+            from: { lat: planVenues[planVenues.length - 1].lat, lng: planVenues[planVenues.length - 1].lng },
+            to: destination,
+            fromName: planVenues[planVenues.length - 1].name,
+            toName: "Your Destination",
+          });
         }
 
         for (let i = 0; i < segmentPairs.length; i += 1) {
@@ -721,15 +826,20 @@ export default function MapView() {
   // Reset map function
   const handleResetMap = () => {
     directionsFetchIdRef.current += 1;
+    setResetMapKey((key) => key + 1);
     setShowDirections(false);
     setDirections(null);
     setDirectionsPolyline(null);
     setRouteError(null);
     setRouteFallbackNotice(null);
-    setSelectedVenue(null);
+    setZoneCenter(null);
     setUserLocation(null);
     setManualStart("");
     setManualDestination("");
+    setDestination(null);
+    setStartLocationError("");
+    setSelectedVenue(null);
+    setContextFromPlan(plan.length > 0);
   };
 
   // Toggle directions function
@@ -741,6 +851,7 @@ export default function MapView() {
       setDirectionsPolyline(null);
       setRouteError(null);
       setRouteFallbackNotice(null);
+      setDestination(null);
     } else {
       handleGetDirections();
     }
@@ -751,11 +862,11 @@ export default function MapView() {
     if (!showDirections) return;
 
     const hasValidStart =
-      userLocation || manualStart.trim() || (fromPlan && plan.length > 0);
+      userLocation || manualStart.trim() || plan.length > 0;
     const hasValidDestination =
-      selectedVenue || manualDestination.trim() || (fromPlan && plan.length > 0);
+      selectedVenue || manualDestination.trim() || plan.length > 0;
 
-    const venuesReady = fromPlan ? plan.length > 0 : selectedVenue || manualDestination.trim();
+    const venuesReady = plan.length > 0 || selectedVenue || manualDestination.trim();
     const zonesReady = zoneData !== null;
     const allReady =
       hasValidStart && hasValidDestination && venuesReady && zonesReady;
@@ -808,7 +919,7 @@ export default function MapView() {
         </Typography>
         <Button
           onClick={() => {
-    
+
             setMode("live");
           }}
           sx={{
@@ -912,6 +1023,9 @@ export default function MapView() {
                 onChange={(e) => {
                   setManualStart(e.target.value);
                   if (startLocationError) setStartLocationError("");
+                  if (e.target.value.trim() === "") {
+                    setUserLocation(null);
+                  }
                 }}
                 data-testid="location-filter"
                 sx={{
@@ -939,11 +1053,16 @@ export default function MapView() {
 
               <TextField
                 size="small"
-                label="Destination"
-                placeholder="Enter destination address or venue"
+                label={fromPlan ? "Destination (optional)" : "Destination"}
+                placeholder={fromPlan ? "Enter address or leave empty for last venue" : "Enter destination address or venue"}
                 variant="outlined"
                 value={manualDestination}
-                onChange={(e) => setManualDestination(e.target.value)}
+                onChange={(e) => {
+                  setManualDestination(e.target.value);
+                  if (e.target.value.trim() === "") {
+                    setDestination(null);
+                  }
+                }}
                 sx={{
                   width: 280,
                   "& .MuiInputBase-input": { color: "white" },
@@ -963,28 +1082,28 @@ export default function MapView() {
             </Box>
             {((fromPlan && (userLocation || plan.length > 0)) ||
               selectedVenue || manualDestination.trim()) && (
-              <Button
-                variant="contained"
-                onClick={toggleDirections}
-                sx={{
-                  mt: 1,
-                  background: showDirections
-                    ? "linear-gradient(to right, #FF4ECD, #3ABEFF)"
-                    : "linear-gradient(to right, #3ABEFF, #FF4ECD)",
-                  color: "#000",
-                  fontWeight: "bold",
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 2,
-                  "&:hover": {
-                    background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
-                  },
-                }}
-              >
-                {showDirections ? "Hide Directions" : "Get Directions"}
-              </Button>
-            )}
-            
+                <Button
+                  variant="contained"
+                  onClick={toggleDirections}
+                  sx={{
+                    mt: 1,
+                    background: showDirections
+                      ? "linear-gradient(to right, #FF4ECD, #3ABEFF)"
+                      : "linear-gradient(to right, #3ABEFF, #FF4ECD)",
+                    color: "#000",
+                    fontWeight: "bold",
+                    px: 4,
+                    py: 1.5,
+                    borderRadius: 2,
+                    "&:hover": {
+                      background: "linear-gradient(to right, #FF4ECD, #3ABEFF)",
+                    },
+                  }}
+                >
+                  {showDirections ? "Hide Directions" : "Get Directions"}
+                </Button>
+              )}
+
             {/* Reset map button - positioned below start location */}
             <Box
               sx={{
@@ -1008,28 +1127,28 @@ export default function MapView() {
                 Reset Map
               </Typography>
             </Box>
-            
-          {/* Forecast Slider */}
-          {mode === "forecast" && forecastTimestamps.length > 0 && (
-            <Box
-              sx={{
-                width: "100%",
-                maxWidth: "700px",
-                mt: -1,
-                mb: -5,
-              }}
-            >
-              <ForecastSlider
-                timestamps={forecastTimestamps}
-                selectedTimestamp={selectedTimestamp}
-                onChange={setSelectedTimestamp}
-                mode={mode}
-              />
-            </Box>
-          )}
-          
 
-        </Box>
+            {/* Forecast Slider */}
+            {mode === "forecast" && forecastTimestamps.length > 0 && (
+              <Box
+                sx={{
+                  width: "100%",
+                  maxWidth: "700px",
+                  mt: -1,
+                  mb: -5,
+                }}
+              >
+                <ForecastSlider
+                  timestamps={forecastTimestamps}
+                  selectedTimestamp={selectedTimestamp}
+                  onChange={setSelectedTimestamp}
+                  mode={mode}
+                />
+              </Box>
+            )}
+
+
+          </Box>
 
 
           {/* Vertical Divider */}
@@ -1102,23 +1221,23 @@ export default function MapView() {
               <Tab label="Shared With Me" value="shared" sx={tabStyles} />
             </Tabs>
 
-          {/* Conditional View Content */}
-          <Box 
-            sx={{ 
-              flexGrow: 1,
-              minWidth: 0,
-              overflow: 'hidden',
+            {/* Conditional View Content */}
+            <Box
+              sx={{
+                flexGrow: 1,
+                minWidth: 0,
+                overflow: 'hidden',
               }}
             >
-            {viewMode === 'plan' && (
-              <CompactPlanSummary />
-            )}
+              {viewMode === 'plan' && (
+                <CompactPlanSummary />
+              )}
 
-            {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
+              {viewMode === 'saved' && <CompactSavedPlans setViewMode={setViewMode} />}
 
-            {viewMode === 'favourites' && <CompactFavorites />}
-            {viewMode === 'shared' && <CompactSharedPlans setViewMode={setViewMode} />}
-          </Box>
+              {viewMode === 'favourites' && <CompactFavorites />}
+              {viewMode === 'shared' && <CompactSharedPlans setViewMode={setViewMode} />}
+            </Box>
           </Box>
         </Box>
 
@@ -1151,8 +1270,11 @@ export default function MapView() {
             resetMapKey={resetMapKey}
             zoneCenter={zoneCenter}
             setZoneCenter={setZoneCenter}
+            destination={destination}
+            startLabel={mapLabels.start}
+            destinationLabel={mapLabels.destination}
           />
-          
+
 
           <DirectionSidebar
             open={showDirections}

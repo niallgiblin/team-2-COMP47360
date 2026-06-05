@@ -108,12 +108,12 @@ services:
       - "5000"
     # Corpus catalog (read-only) and precomputed embeddings under data/
     volumes:
-      - ./BackEnd/llm-service/corpus:/app/corpus:ro
+      - ./BackEnd/llm-service/corpus:/app/corpus:rw
       - ./BackEnd/llm-service/data:/app/data:ro
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformers
-      - CROSS_ENCODER_ENABLED=true
+      - CROSS_ENCODER_ENABLED=false
       - CROSS_ENCODER_MODEL_NAME=/app/models/cross-encoder
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - HF_TOKEN=${HF_TOKEN}
@@ -139,10 +139,10 @@ services:
       resources:
         limits:
           memory: 3G  # Increased from 2G for sentence transformers
-          cpus: '1.5'  # Increased from 1.0 for better processing
+          cpus: '4.0'  # Cross-encoder re-ranking on CPU needs ≥4 cores for <3s batches
         reservations:
           memory: 2G  # Guaranteed memory for model loading
-          cpus: '0.5'  # Guaranteed CPU for responsiveness
+          cpus: '2.0'  # Guaranteed CPU for responsiveness
     restart: unless-stopped
 
   busyness-service:

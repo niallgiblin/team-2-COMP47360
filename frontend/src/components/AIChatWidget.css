@@ -337,7 +337,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: #BBBBBB;
+  color: #888888;
   transition: background 150ms ease;
 }
 
@@ -354,6 +354,8 @@
 .venue-card-dismiss svg {
   width: 16px;
   height: 16px;
+  stroke: currentColor;
+  fill: none;
 }
 
 .venue-citation-main {

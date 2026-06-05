@@ -13,9 +13,11 @@ from chat_service import (
     _busyness_label,
     _KNOWN_ZONES,
     _ZONE_ALIASES,
+    append_location_corrections,
     build_busyness_context,
     build_chat_messages,
     build_retrieval_context,
+    build_retrieval_fallback_response,
     extract_location_from_query,
     fetch_busyness_predictions,
     format_busyness_context,
@@ -23,6 +25,7 @@ from chat_service import (
     get_ai_response,
     huggingface_chat_api_call,
     parse_inline_citations,
+    prepend_missing_bowling_notice,
     reformulate_query,
 )
 from dto import create_citation_dto, create_location_dto
@@ -161,7 +164,8 @@ class TestFormatRetrievalContext:
              "latitude": 40.73, "longitude": -74.0,
              "price": "moderate", "rating": 4.5, "zoneId": 1,
              "description": "Legendary jazz club", "summary": "Great jazz vibes",
-             "tags": "jazz, music, cocktails", "num_reviews": 500},
+             "tags": "jazz, music, cocktails", "num_reviews": 500,
+             "url": "https://bluenotejazz.com/"},
             similarity_score=0.92,
         )
         ctx, citations = format_retrieval_context([dto])
@@ -181,6 +185,9 @@ class TestFormatRetrievalContext:
         assert "Jazz Club" in cit["snippet"]
         assert "Greenwich Village" in cit["snippet"]
         assert cit["score"] == 0.92
+        assert cit["uri"] == "https://bluenotejazz.com/"
+        assert cit["tags"] == "jazz, music, cocktails"
+        assert cit["summary"] == "Great jazz vibes"
 
     def test_minimal_dto_omits_empty_fields_gracefully(self):
         dto = create_location_dto(
@@ -412,6 +419,34 @@ class TestBuildRetrievalContext:
         assert ctx == NO_VENUES_MESSAGE
         assert citations == []
 
+    def test_location_empty_falls_back_to_unfiltered_results_with_caveat(self):
+        calls = []
+
+        def fake_search(query, limit=5, location_filter=None):
+            calls.append(location_filter)
+            if location_filter == "east village":
+                return []
+            return [
+                create_location_dto(
+                    {"id": 20, "name": "Thai Diner", "zone": "Little Italy/NoLiTa",
+                     "type": "Restaurant", "address": "186 Mott St", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.4, "zoneId": 4},
+                    similarity_score=0.7,
+                )
+            ]
+
+        ctx, citations = build_retrieval_context(
+            "thai food before the bar",
+            search_helper=fake_search,
+            location_filter="east village",
+        )
+
+        assert calls == ["east village", None]
+        assert "No exact venue matches were found in east village" in ctx
+        assert "Thai Diner" in ctx
+        assert len(citations) == 1
+        assert citations[0]["venue_id"] == 20
+
     def test_search_helper_raises_returns_error_and_empty_citations(self):
         def fake_search(query, limit=5, location_filter=None):
             raise RuntimeError("boom")
@@ -490,6 +525,20 @@ class TestBuildChatMessages:
         assert "LIVE BUSYNESS DATA" in system
         assert "Test Venue" in system
         assert _STUB_BUSYNESS in system
+        assert citations == []
+
+    def test_system_template_guides_nearby_concise_alternatives(self):
+        messages, citations = build_chat_messages(
+            query="Find me a cozy pub near Upper East Side, then comedy nearby",
+            previous_questions=[],
+            retrieval_context="- Test Venue (Upper East Side): Bar",
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        system = messages[0]["content"]
+        assert "Prefer 2-3 total recommendations" in system
+        assert "don't want to travel far" in system
+        assert "broader-fit local option" in system
         assert citations == []
 
     def test_fallback_system_prompt_when_template_unavailable(self, monkeypatch):
@@ -732,17 +781,17 @@ class TestGetAiResponse:
         assert reply == "no matching venues found"
         assert citations == []
 
-    def test_error_path_returns_fallback_and_empty_citations(self, monkeypatch):
-        """When the HF call raises, get_ai_response returns the error message
-        and empty citations."""
+    def test_main_hf_failure_returns_retrieval_fallback_with_citations(self, monkeypatch):
+        """When retrieval succeeds but the main HF call fails, return venue cards."""
         monkeypatch.setenv("HF_TOKEN", "test-token")
 
         def fake_search(query, limit=5, location_filter=None):
             return [
                 create_location_dto(
-                    {"id": 1, "name": "V", "zone": "Z", "type": "T",
-                     "address": "", "latitude": 0, "longitude": 0,
-                     "price": "", "rating": 0, "zoneId": 0},
+                    {"id": 1, "name": "Thai Diner", "zone": "Little Italy/NoLiTa",
+                     "type": "Restaurant", "address": "186 Mott St",
+                     "latitude": 40.72, "longitude": -73.99,
+                     "price": "", "rating": 4.4, "zoneId": 4},
                     similarity_score=0.5,
                 )
             ]
@@ -758,8 +807,175 @@ class TestGetAiResponse:
             busyness_context=_STUB_BUSYNESS,
         )
 
-        assert "trouble" in reply.lower()
+        assert "Thai Diner [1]" in reply
+        assert "Tap a venue card" in reply
+        assert "**Sources:**" in reply
+        assert len(citations) == 1
+        assert citations[0]["venue_id"] == 1
+
+    def test_main_hf_failure_without_citations_returns_error_message(self, monkeypatch):
+        """When neither retrieval nor HF can produce an answer, keep generic fallback."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        def fake_search(query, limit=5, location_filter=None):
+            return []
+
+        def fake_hf(messages, model=None, requests_module=None):
+            raise RuntimeError("API down")
+
+        reply, citations = get_ai_response(
+            query="q",
+            previous_questions=[],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        assert reply == "I'm having trouble processing your request right now. Please try again later."
         assert citations == []
+
+    def test_location_correction_added_for_cited_outside_zone(self):
+        citations = [
+            create_citation_dto(
+                create_location_dto(
+                    {"id": 1, "name": "East Village Pizza", "zone": "East Village",
+                     "type": "Restaurant", "address": "145 1st Ave", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.5, "zoneId": 1},
+                    similarity_score=0.8,
+                )
+            ),
+            create_citation_dto(
+                create_location_dto(
+                    {"id": 2, "name": "Bleecker Street Pizza", "zone": "West Village",
+                     "type": "Restaurant", "address": "69 7th Ave S", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.5, "zoneId": 2},
+                    similarity_score=0.7,
+                )
+            ),
+        ]
+
+        corrected = append_location_corrections(
+            "Both of these options are in the East Village: East Village Pizza [1] "
+            "and Bleecker Street Pizza [2].",
+            citations,
+            "East Village",
+        )
+
+        assert "Bleecker Street Pizza [2] is in West Village, not East Village." in corrected
+
+    def test_location_correction_integrates_before_source_block(self, monkeypatch):
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        def fake_search(query, limit=5, location_filter=None):
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "East Village Pizza", "zone": "East Village",
+                     "type": "Restaurant", "address": "145 1st Ave", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.5, "zoneId": 1},
+                    similarity_score=0.8,
+                ),
+                create_location_dto(
+                    {"id": 2, "name": "Bleecker Street Pizza", "zone": "West Village",
+                     "type": "Restaurant", "address": "69 7th Ave S", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.5, "zoneId": 2},
+                    similarity_score=0.7,
+                ),
+            ]
+
+        def fake_hf(messages, model=None, requests_module=None):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": "Both options are in East Village: East Village Pizza [1] and Bleecker Street Pizza [2]."
+                    }
+                }]
+            }
+
+        reply, citations = get_ai_response(
+            query="pizza in East Village",
+            previous_questions=[],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+            location_filter="East Village",
+        )
+
+        assert "Bleecker Street Pizza [2] is in West Village, not East Village." in reply
+        assert "**Sources:**" in reply
+        assert len(citations) == 2
+
+    def test_retrieval_fallback_mentions_nearby_alternatives_for_location_fallback(self):
+        citations = [
+            create_citation_dto(
+                create_location_dto(
+                    {"id": 20, "name": "Thai Diner", "zone": "Little Italy/NoLiTa",
+                     "type": "Restaurant", "address": "186 Mott St", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.4, "zoneId": 4},
+                    similarity_score=0.7,
+                )
+            )
+        ]
+
+        reply = build_retrieval_fallback_response(
+            "No exact venue matches were found in east village. "
+            "The venues below are relevant alternatives outside the requested area.",
+            citations,
+        )
+
+        assert "nearby options" in reply
+        assert "outside the exact area" in reply
+        assert "Thai Diner [1]" in reply
+
+    def test_missing_bowling_notice_for_partial_activity_match(self):
+        citations = [
+            create_citation_dto(
+                create_location_dto(
+                    {"id": 30, "name": "Comic Strip Live", "zone": "Yorkville West",
+                     "type": "Entertainment comedy club", "address": "1568 2nd Ave",
+                     "latitude": 0, "longitude": 0, "price": "", "rating": 4.3,
+                     "zoneId": 8},
+                    similarity_score=0.8,
+                )
+            ),
+            create_citation_dto(
+                create_location_dto(
+                    {"id": 31, "name": "The Milton", "zone": "Yorkville West",
+                     "type": "Bar", "address": "1754 2nd Ave", "latitude": 0,
+                     "longitude": 0, "price": "", "rating": 4.4, "zoneId": 8},
+                    similarity_score=0.7,
+                )
+            ),
+        ]
+
+        reply = prepend_missing_bowling_notice(
+            "Start at The Milton [2], then walk to Comic Strip Live [1].",
+            "find bowling, a cozy bar, and comedy near Upper East Side",
+            citations,
+        )
+
+        assert reply.startswith("I don't have suggestions for bowling")
+        assert "other things" in reply
+
+    def test_missing_bowling_notice_not_added_when_user_drops_bowling(self):
+        citations = [
+            create_citation_dto(
+                create_location_dto(
+                    {"id": 30, "name": "Comic Strip Live", "zone": "Yorkville West",
+                     "type": "Entertainment comedy club", "address": "1568 2nd Ave",
+                     "latitude": 0, "longitude": 0, "price": "", "rating": 4.3,
+                     "zoneId": 8},
+                    similarity_score=0.8,
+                )
+            )
+        ]
+
+        reply = prepend_missing_bowling_notice(
+            "Comic Strip Live [1] works for comedy.",
+            "forget about the bowling, find venues for the other things",
+            citations,
+        )
+
+        assert reply == "Comic Strip Live [1] works for comedy."
 
     def test_inline_citation_parsing_integration(self, monkeypatch):
         """End-to-end: HF returns marker-annotated text → response includes

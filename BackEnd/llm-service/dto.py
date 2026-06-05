@@ -93,6 +93,7 @@ def create_location_dto(row, similarity_score=None):
         "tags": str(getter("tags", "")),
         "reviews": str(getter("reviews", "")),
         "num_reviews": _safe_to_int(getter("num_reviews", 0)),
+        "uri": str(getter("uri", "") or getter("url", "") or getter("website", "")),
     }
 
     return dto
@@ -122,7 +123,21 @@ def create_citation_dto(result):
 
     return {
         "venue_id": result.get("id"),
+        "id": result.get("id"),
         "name": str(result.get("name", "")),
         "snippet": " ".join(snippet_parts) if snippet_parts[0] else "",
         "score": result.get("similarity"),
+        "address": address,
+        "latitude": result.get("latitude"),
+        "longitude": result.get("longitude"),
+        "type": str(result.get("type", "")),
+        "price": result.get("price"),
+        "rating": result.get("rating"),
+        "zone": zone,
+        "zoneId": result.get("zoneId"),
+        "description": result.get("description", ""),
+        "summary": result.get("summary", ""),
+        "tags": result.get("tags", ""),
+        "uri": result.get("uri", ""),
+        "url": result.get("uri", ""),
     }
