@@ -218,20 +218,55 @@ def _chat_search_helper(query, limit=5, location_filter=None):
 
 
 def get_ai_response(query, previous_questions, previous_responses=None, location_filter=None):
-    """Route-owned wrapper delegating prompt assembly and HF call to chat_service.
+    """Route-owned wrapper returning ChatExecutionResult.
 
-    Returns
-    -------
-    tuple[str, list[dict]]
-        ``(response_text, citations)``
+    Tests may monkeypatch this with a simple tuple-returning lambda for
+    backward compatibility — chat_endpoint detects tuple returns and wraps
+    them into a minimal ChatExecutionResult.
     """
-    return _chat_get_ai_response(
+    return _get_ai_response_with_metadata(
         query,
         previous_questions,
         previous_responses=previous_responses,
-        search_helper=_chat_search_helper,
         location_filter=location_filter,
     )
+
+
+def _get_ai_response_with_metadata(query, previous_questions, previous_responses=None, location_filter=None):
+    """Route-owned wrapper returning ChatExecutionResult with metadata."""
+    from chat_service import get_ai_response_with_metadata as _svc_get_with_meta
+    return _svc_get_with_meta(
+        query,
+        previous_questions,
+        previous_responses=previous_responses,
+        search_helper=_chat_search_helper_with_metadata,
+        location_filter=location_filter,
+    )
+
+
+def _chat_search_helper_with_metadata(query, limit=5, location_filter=None):
+    """Search helper returning SearchExecutionResult with effective mode."""
+    if not initialized or search_service is None:
+        from observability import SearchExecutionResult
+        return SearchExecutionResult([], effective_mode="dense", degradation="retrieval_unavailable")
+
+    try:
+        search_query = query
+        if QUERY_EXPANSION_ENABLED:
+            try:
+                search_query = expand_query(query) or query
+            except Exception as exc:
+                logger.warning("Query expansion failed; falling back to original: %s", exc)
+                search_query = query
+
+        result = search_service.search_with_metadata(
+            search_query, limit=limit, location_filter=location_filter
+        )
+        return result
+    except Exception as exc:
+        logger.error("Error in chat search helper: %s", exc)
+        from observability import SearchExecutionResult
+        return SearchExecutionResult([], effective_mode="dense", degradation="retrieval_unavailable")
 
 
 if os.environ.get("FLASK_ENV") == "development":
@@ -419,53 +454,169 @@ if not initialization_success:
 
 @app.route("/api/chat", methods=["POST"])
 def chat_endpoint():
-    """Chat endpoint for AI interactions.
+    """Chat endpoint with structured observability.
 
-    Accepts an optional ``location`` field to scope venue recommendations
-    to a Manhattan zone (e.g. 'midtown', 'upper west side').  When omitted,
-    the endpoint auto-extracts a location from the user's message when
-    detectable (e.g. 'find a bar in the East Village').
+    Every attempt (including auth/validation failures) emits exactly one
+    canonical chat_request event and increments bounded Prometheus metrics.
     """
+    import time as _time
+    from observability import (
+        ChatRequestState,
+        finalize_chat_request,
+        hash_query,
+        _queue_event,
+        uuid4,
+    )
+
+    # Route-owned request lifecycle: create state BEFORE any early return.
+    request_id = uuid4()
+    state = ChatRequestState(request_id=request_id)
+
+    # ---- Auth gate -------------------------------------------------------
     auth_error = validate_chat_jwt()
     if auth_error is not None:
-        return auth_error
+        state.mode = "unknown"
+        state.status = "error"
+        state.error_type = "auth_error"
+        state.error_stage = "auth"
+        state.error_code = "auth_required"
+        state.finish_after_response_construction()
+        # auth_error is (response_body, status_code) from chat_auth_error()
+        auth_body, auth_status = auth_error
+        auth_body.headers["X-Request-ID"] = request_id
+        finalize_chat_request(state, queue_sink=_queue_event)
+        return auth_body, auth_status
 
+    # ---- Content-type validation -----------------------------------------
     if not request.is_json:
-        return jsonify({"error": "Content-Type must be application/json"}), 415
+        state.mode = "unknown"
+        state.status = "error"
+        state.error_type = "validation_error"
+        state.error_stage = "validation"
+        state.error_code = "invalid_payload"
+        state.finish_after_response_construction()
+        resp = jsonify({"error": "Content-Type must be application/json"})
+        resp.status_code = 415
+        resp.headers["X-Request-ID"] = request_id
+        finalize_chat_request(state, queue_sink=_queue_event)
+        return resp
 
+    response = None
     try:
         data = request.get_json()
         query = data.get("message", "").strip()
         previous_questions = data.get("previous_questions", [])
         if not isinstance(previous_questions, list):
             previous_questions = []
-        previous_questions = [str(question) for question in previous_questions if question][-3:]
+        previous_questions = [str(q) for q in previous_questions if q][-3:]
 
         previous_responses = data.get("previous_responses", [])
         if not isinstance(previous_responses, list):
             previous_responses = []
-        previous_responses = [str(response) for response in previous_responses if response][-3:]
+        previous_responses = [str(r) for r in previous_responses if r][-3:]
 
         if not query:
-            return jsonify({"error": "Message is required"}), 400
+            state.mode = "unknown"
+            state.status = "error"
+            state.error_type = "validation_error"
+            state.error_stage = "validation"
+            state.error_code = "message_required"
+            state.finish_after_response_construction()
+            response = jsonify({"error": "Message is required"})
+            response.status_code = 400
+            response.headers["X-Request-ID"] = request_id
+            finalize_chat_request(state, queue_sink=_queue_event)
+            return response
 
-        # Resolve location filter: explicit field takes precedence, then auto-extract.
+        state.query_hash = hash_query(query)
+
+        # Resolve location filter.
         from chat_service import extract_location_from_query
 
         location_filter = (data.get("location") or "").strip() or None
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
-        response, citations = get_ai_response(query, previous_questions, previous_responses=previous_responses, location_filter=location_filter)
+        # Call the route wrapper (tests monkeypatch this).
+        result_or_tuple = get_ai_response(
+            query, previous_questions,
+            previous_responses=previous_responses,
+            location_filter=location_filter,
+        )
+
+        # Handle both ChatExecutionResult and backward-compatible tuple mock.
+        from observability import ChatExecutionResult as _CER, ChatExecutionMetadata
+        if isinstance(result_or_tuple, _CER):
+            result = result_or_tuple
+        else:
+            # Tuple mock from existing tests — wrap with minimal metadata.
+            text, citations = result_or_tuple
+            result = _CER(
+                text, citations,
+                ChatExecutionMetadata(
+                    mode="dense", retrieval_started=bool(citations),
+                    candidates=len(citations), fallback_triggered=False,
+                    retrieval_elapsed_s=0.0, generation_elapsed_s=0.0,
+                    error_stage=None, error_code=None,
+                ),
+            )
+
+        # Transfer metadata from chat execution to request state.
+        meta = result.metadata
+        state.mode = meta.mode
+        state.status = "success" if not meta.fallback_triggered and meta.error_stage is None else (
+            "fallback" if meta.fallback_triggered else "error"
+        )
+        if meta.error_stage:
+            state.status = "error" if not meta.fallback_triggered else "fallback"
+        state.candidates = meta.candidates
+        state.citations_count = len(result.citations)
+        state.fallback_triggered = meta.fallback_triggered
+        state.retrieval_started = meta.retrieval_started
+        state.retrieval_elapsed_s = meta.retrieval_elapsed_s
+        state.generation_elapsed_s = meta.generation_elapsed_s
+        state.error_stage = meta.error_stage
+        state.error_code = meta.error_code
+        state.error_type = (
+            f"{meta.error_stage}_error" if meta.error_stage else None
+        )
+
+        state.finish_after_response_construction()
+        response = jsonify({"response": result.text, "citations": result.citations})
+        response.headers["X-Request-ID"] = request_id
+
         logger.info(
             "Chat response: %d citations returned (location_filter=%s)",
-            len(citations),
+            len(result.citations),
             location_filter,
         )
-        return jsonify({"response": response, "citations": citations})
+
     except Exception as exc:
         logger.error("Error in chat endpoint: %s", exc)
-        return jsonify({"error": "Internal server error"}), 500
+        state.mode = state.mode if state.mode != "unknown" else "unknown"
+        state.status = "error"
+        state.error_stage = state.error_stage or "response"
+        state.error_code = state.error_code or "internal_error"
+        state.error_type = "response_error"
+        state.finish_after_response_construction()
+        response = jsonify({"error": "Internal server error"})
+        response.status_code = 500
+        response.headers["X-Request-ID"] = request_id
+
+    # Exactly-once finalization (after response/header constructed)
+    finalize_chat_request(state, queue_sink=_queue_event)
+    return response
+
+
+@app.route("/metrics")
+def metrics_endpoint():
+    """Prometheus metrics exposition for the LLM service."""
+    from prometheus_client import CollectorRegistry, multiprocess, generate_latest, CONTENT_TYPE_LATEST
+    registry = CollectorRegistry()
+    multiprocess.MultiProcessCollector(registry)
+    data = generate_latest(registry)
+    from flask import Response
+    return Response(data, content_type=CONTENT_TYPE_LATEST)
 
 
 def _jwt_verification_key(secret: str) -> bytes:

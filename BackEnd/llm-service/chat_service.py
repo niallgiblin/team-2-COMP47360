@@ -1103,30 +1103,53 @@ def get_ai_response(
     busyness_context=None,
     location_filter=None,
 ):
-    """Get AI response using Hugging Face API and optional retrieval context.
+    """Get AI response (compatibility wrapper — returns tuple only)."""
+    result = get_ai_response_with_metadata(
+        query,
+        previous_questions,
+        previous_responses=previous_responses,
+        search_helper=search_helper,
+        hf_call=hf_call,
+        busyness_context=busyness_context,
+        location_filter=location_filter,
+    )
+    return result.text, result.citations
 
-    Follow-up questions are automatically reformulated using conversation
-    history so that context-dependent queries (e.g. "what about cheaper
-    options?") become self-contained retrieval queries.  The original user
-    query is preserved in the chat prompt — reformulation only affects search.
 
-    General / meta queries (greetings, "how do you work?", etc.) skip
-    retrieval entirely and use a short system prompt so the LLM does not
-    hallucinate venue recommendations for non-venue questions.
+def get_ai_response_with_metadata(
+    query,
+    previous_questions,
+    previous_responses=None,
+    search_helper=None,
+    hf_call=None,
+    busyness_context=None,
+    location_filter=None,
+):
+    """Get AI response with execution metadata for observability.
 
-    Returns
-    -------
-    tuple[str, list[dict]]
-        ``(response_text, citations)`` — *citations* contains structured
-        venue citations (empty when retrieval is unavailable or produces no
-        results).
+    Returns ChatExecutionResult with text, citations, and ChatExecutionMetadata
+    containing mode, retrieval/generation timings, candidates, fallback flags,
+    and bounded error stage/code.
     """
+    import time as _time
+    from observability import ChatExecutionResult, ChatExecutionMetadata
+
+    retrieval_elapsed = 0.0
+    generation_elapsed = 0.0
+    mode = "unknown"
+    retrieval_started = False
+    candidates = 0
+    fallback_triggered = False
+    error_stage = None
+    error_code = None
+
     try:
         # ---- General chat: skip retrieval for non-venue queries ---------
         if is_general_chat_query(query):
             logger.info(
                 "General chat query detected — skipping retrieval: %r", query[:80]
             )
+            mode = "general_chat"
             chat_history = _build_chat_history(previous_questions, previous_responses)
             user_content = GENERAL_CHAT_SYSTEM_PROMPT
             if chat_history:
@@ -1139,17 +1162,47 @@ def get_ai_response(
                 {"role": "user", "content": user_content},
             ]
             call = hf_call or huggingface_chat_api_call
-            response = call(messages, max_tokens=200, timeout=15)
+            gen_start = _time.perf_counter()
+            try:
+                response = call(messages, max_tokens=200, timeout=15)
+            except Exception:
+                generation_elapsed = _time.perf_counter() - gen_start
+                error_stage = "generation"
+                error_code = "hf_request_failed"
+                logger.error("General chat HF call failed")
+                return ChatExecutionResult(
+                    CHAT_RESPONSE_ERROR_MESSAGE, [],
+                    ChatExecutionMetadata(
+                        mode=mode, retrieval_started=False, candidates=0,
+                        fallback_triggered=False, retrieval_elapsed_s=0.0,
+                        generation_elapsed_s=generation_elapsed,
+                        error_stage=error_stage, error_code=error_code,
+                    ),
+                )
+            generation_elapsed = _time.perf_counter() - gen_start
             response_text = response["choices"][0]["message"]["content"]
-            return response_text, []
+            return ChatExecutionResult(
+                response_text, [],
+                ChatExecutionMetadata(
+                    mode=mode, retrieval_started=False, candidates=0,
+                    fallback_triggered=False, retrieval_elapsed_s=0.0,
+                    generation_elapsed_s=generation_elapsed,
+                    error_stage=None, error_code=None,
+                ),
+            )
 
-        # ---- Reformulate for retrieval when history exists --------------
+        # ---- Venue query: retrieval + generation ------------------------
+        retrieval_start = _time.perf_counter()
+        retrieval_started = True
+
+        # Reformulate for retrieval when history exists
+        reformulation_code = None
         search_query = reformulate_query(
             query, previous_questions, previous_responses, hf_call=hf_call,
         )
         if search_query != query:
             logger.info(
-                "Query reformulated for retrieval: %d→%d chars (original→reformulated)",
+                "Query reformulated for retrieval: %d→%d chars",
                 len(query), len(search_query),
             )
 
@@ -1158,29 +1211,98 @@ def get_ai_response(
             search_query, search_helper=search_helper, location_filter=location_filter,
         )
 
+        # Determine mode and fallback from search result metadata.
+        # The search_helper wraps the SearchService; we check degradation
+        # from the search result if available, else from context signals.
+        if search_helper is not None:
+            # The helper returns list only; mode is inferred from context.
+            # For now, default to dense; Plan 19-02 Task 2 will wire
+            # search_with_metadata through the app helper.
+            if location_filter:
+                candidates = len(citations)  # rough proxy until app wiring
+            else:
+                candidates = len(citations)
+        else:
+            candidates = len(citations)
+
+        # Heuristic mode detection (will be replaced by direct metadata
+        # when app.py wires search_with_metadata in Task 2).
+        # The actual effective mode is communicated through the app search
+        # helper result; here we use a safe default.
+        mode = "dense"  # default — overridden by app.py in Task 2
+
+        retrieval_elapsed = _time.perf_counter() - retrieval_start
+
         # ---- Build chat messages with ORIGINAL query in user prompt -----
         messages, _ = build_chat_messages(
             query=query,
             previous_questions=previous_questions,
             previous_responses=previous_responses,
             retrieval_context=retrieval_context,
-            search_helper=None,       # already resolved above
+            search_helper=None,
             busyness_context=busyness_context,
         )
         call = hf_call or huggingface_chat_api_call
+        gen_start = _time.perf_counter()
         try:
             response = call(messages)
         except Exception as exc:
+            generation_elapsed = _time.perf_counter() - gen_start
             logger.error("Error calling chat model after retrieval: %s", exc)
-            fallback_text = build_retrieval_fallback_response(retrieval_context, citations)
-            fallback_text = append_location_corrections(fallback_text, citations, location_filter)
-            fallback_text = prepend_missing_bowling_notice(fallback_text, query, citations)
-            return fallback_text, citations
+            if citations:
+                # Citation-backed fallback
+                fallback_triggered = True
+                error_stage = "generation"
+                error_code = "hf_request_failed"
+                fallback_text = build_retrieval_fallback_response(retrieval_context, citations)
+                fallback_text = append_location_corrections(fallback_text, citations, location_filter)
+                fallback_text = prepend_missing_bowling_notice(fallback_text, query, citations)
+                return ChatExecutionResult(
+                    fallback_text, citations,
+                    ChatExecutionMetadata(
+                        mode=mode, retrieval_started=True, candidates=candidates,
+                        fallback_triggered=True, retrieval_elapsed_s=retrieval_elapsed,
+                        generation_elapsed_s=generation_elapsed,
+                        error_stage=error_stage, error_code=error_code,
+                    ),
+                )
+            else:
+                # Generation failure without citations → error
+                return ChatExecutionResult(
+                    CHAT_RESPONSE_ERROR_MESSAGE, [],
+                    ChatExecutionMetadata(
+                        mode=mode, retrieval_started=True, candidates=candidates,
+                        fallback_triggered=False, retrieval_elapsed_s=retrieval_elapsed,
+                        generation_elapsed_s=generation_elapsed,
+                        error_stage="generation", error_code="hf_request_failed",
+                    ),
+                )
+        generation_elapsed = _time.perf_counter() - gen_start
         response_text = response["choices"][0]["message"]["content"]
         response_text = append_location_corrections(response_text, citations, location_filter)
         response_text = prepend_missing_bowling_notice(response_text, query, citations)
         response_text = parse_inline_citations(response_text, citations)
-        return response_text, citations
+        return ChatExecutionResult(
+            response_text, citations,
+            ChatExecutionMetadata(
+                mode=mode, retrieval_started=True, candidates=candidates,
+                fallback_triggered=False, retrieval_elapsed_s=retrieval_elapsed,
+                generation_elapsed_s=generation_elapsed,
+                error_stage=None, error_code=None,
+            ),
+        )
     except Exception as exc:
         logger.error("Error getting AI response: %s", exc)
-        return CHAT_RESPONSE_ERROR_MESSAGE, []
+        return ChatExecutionResult(
+            CHAT_RESPONSE_ERROR_MESSAGE, [],
+            ChatExecutionMetadata(
+                mode=mode if mode != "unknown" else "unknown",
+                retrieval_started=retrieval_started,
+                candidates=candidates,
+                fallback_triggered=False,
+                retrieval_elapsed_s=retrieval_elapsed,
+                generation_elapsed_s=generation_elapsed,
+                error_stage=error_stage or "response",
+                error_code=error_code or "internal_error",
+            ),
+        )

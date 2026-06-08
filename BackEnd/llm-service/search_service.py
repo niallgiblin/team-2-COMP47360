@@ -697,6 +697,39 @@ class SearchService:
             mode=mode,
         )
 
+    def search_with_metadata(self, query_text, limit=10, location_filter=None, price_range=None, mode="auto"):
+        """Return SearchExecutionResult with effective mode and degradation facts."""
+        # Import here to avoid circular dependency at module load
+        from observability import SearchExecutionResult
+
+        if not str(query_text).strip():
+            return SearchExecutionResult([], effective_mode="dense", degradation=None)
+
+        # Determine effective mode before execution
+        effective_mode = mode
+        degradation = None
+        if mode == "auto":
+            effective_mode = "hybrid" if self._bm25_index is not None else "dense"
+            if self._bm25_index is None:
+                degradation = "dense_only_fallback"
+        elif mode == "hybrid" and self._bm25_index is None:
+            effective_mode = "dense"
+            degradation = "dense_only_fallback"
+
+        results = self._collect_results(
+            query_text,
+            limit=limit,
+            location_filter=location_filter,
+            price_range=price_range,
+            mode=mode,
+        )
+
+        return SearchExecutionResult(
+            results=results,
+            effective_mode=effective_mode,
+            degradation=degradation,
+        )
+
     def find_similar(self, query_text, exclude_names=None, limit=5, mode="auto"):
         return self._collect_results(
             query_text,
