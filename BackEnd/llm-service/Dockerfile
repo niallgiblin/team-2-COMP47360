@@ -10,13 +10,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pip-tools for dependency management
-RUN pip install --no-cache-dir pip-tools
-
-# Copy and compile requirements, then install them with a longer timeout
-COPY requirements.in .
-RUN pip-compile requirements.in -o requirements.txt && \
-    pip install --no-cache-dir --timeout=100 -r requirements.txt
+# Copy and install the committed requirements.txt lock file
+COPY requirements.in requirements.txt ./
+RUN pip install --no-cache-dir --timeout=100 -r requirements.txt
 
 # --- Final Stage ---
 FROM python:3.11-slim
@@ -33,16 +29,19 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application modules into the container
-COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py query_expander.py bm25_index.py ./
+COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py query_expander.py bm25_index.py observability.py ./
 COPY retrieval/ ./retrieval/
 COPY venue_corpus/ ./venue_corpus/
 COPY prompts/ ./prompts/
+
+# Copy Phase 19 lifecycle files
+COPY gunicorn.conf.py docker-entrypoint.sh ./
 
 # Copy the sentence transformer model into the image
 COPY models/ ./models/
 # Copy pre-baked cross-encoder model (run scripts/download_cross_encoder.py first)
 COPY models/cross-encoder/ ./models/cross-encoder/
 
-# Command to run the application using Gunicorn
-# Use --preload to load the app once before forking workers, which is essential for ML models.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--preload", "--timeout", "120", "app:app"]
+# Use the entrypoint for Prometheus multiprocess directory cleanup
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]

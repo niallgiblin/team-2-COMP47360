@@ -106,10 +106,11 @@ services:
     container_name: urban-gala-llm
     expose:
       - "5000"
-    # Corpus catalog (read-only) and precomputed embeddings under data/
+    # Corpus catalog (read-only), precomputed embeddings, and chat logs
     volumes:
       - ./BackEnd/llm-service/corpus:/app/corpus:rw
       - ./BackEnd/llm-service/data:/app/data:ro
+      - chat_logs:/app/logs
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/sentence-transformers
@@ -125,10 +126,11 @@ services:
       - MANIFEST_PATH=/app/corpus/v1/manifest.json
       - PYTHONUNBUFFERED=1
       - BUSYNESS_SERVICE_URL=http://busyness-service:5000
+      - CHAT_LOG_PATH=/app/logs/chat-requests.jsonl
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
     networks:
       - app-network
-    # Gunicorn command matches BackEnd/llm-service/Dockerfile CMD exactly
-    command: gunicorn --bind 0.0.0.0:5000 --workers 2 --preload --timeout 120 app:app
+    # Gunicorn is configured via gunicorn.conf.py (Dockerfile CMD)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -191,3 +193,4 @@ networks:
 
 volumes:
   db_data:
+  chat_logs:
