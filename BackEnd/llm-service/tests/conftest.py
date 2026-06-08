@@ -1,6 +1,8 @@
 import importlib
 import os
+import shutil
 import sys
+import tempfile
 import types
 
 # Prevent OpenMP conflict between faiss's bundled libomp and torch's bundled libomp.
@@ -46,6 +48,41 @@ def load_app(monkeypatch, extra_env=None):
     monkeypatch.setattr(loader, "verify_file_paths", lambda: (False, ["MODEL_PATH"], []))
     sys.modules.pop("app", None)
     return importlib.import_module("app")
+
+
+def _setup_observability_env(monkeypatch, tmp_path):
+    """Set PROMETHEUS_MULTIPROC_DIR and CHAT_LOG_PATH for observability tests."""
+    metrics_dir = tmp_path / "prometheus"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    chat_log_path = str(logs_dir / "chat-requests.jsonl")
+
+    monkeypatch.setenv("PROMETHEUS_MULTIPROC_DIR", str(metrics_dir))
+    monkeypatch.setenv("CHAT_LOG_PATH", chat_log_path)
+
+    sys.modules.pop("observability", None)
+    sys.modules.pop("app", None)
+
+    return {
+        "metrics_dir": metrics_dir,
+        "logs_dir": logs_dir,
+        "chat_log_path": chat_log_path,
+    }
+
+
+def _clean_observability_modules():
+    """Remove observability and app from sys.modules before fresh import."""
+    sys.modules.pop("observability", None)
+    sys.modules.pop("app", None)
+
+
+def load_observability_fixtures():
+    """Load the observability_cases.json fixture file."""
+    import json
+    fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "observability_cases.json")
+    with open(fixture_path) as f:
+        return json.load(f)
 
 
 def _stub_cos_sim(query_embedding, location_embeddings):
@@ -235,3 +272,36 @@ def make_bearer_token(secret="test-secret", payload=None):
 
     body = payload or {"sub": "test-user"}
     return jwt.encode(body, secret, algorithm="HS256")
+
+
+# ── Observability test fixtures ──────────────────────────────────
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture
+def obs_tmp_path(tmp_path):
+    """Temporary directory for observability test artifacts."""
+    return tmp_path
+
+
+@pytest.fixture
+def obs_env(monkeypatch, tmp_path):
+    """Set up observability env vars for unit tests (NO multiprocess).
+
+    Only sets CHAT_LOG_PATH. Does NOT set PROMETHEUS_MULTIPROC_DIR,
+    so Prometheus uses the default process-local registry (testable).
+    """
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    chat_log_path = str(logs_dir / "chat-requests.jsonl")
+    monkeypatch.setenv("CHAT_LOG_PATH", chat_log_path)
+    sys.modules.pop("observability", None)
+    sys.modules.pop("app", None)
+    return {"logs_dir": logs_dir, "chat_log_path": chat_log_path}
+
+
+@pytest.fixture
+def obs_cases():
+    """Load observability fixture cases."""
+    return load_observability_fixtures()["cases"]

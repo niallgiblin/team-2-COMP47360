@@ -1,0 +1,694 @@
+{
+  "description": "Deterministic observability fixture matrix for Phase 19 chat route tests. Cases 01-16 are route/service focused; 17-18 are integration/multiprocess.",
+  "generated": "2026-06-08",
+  "phase": "19",
+  "cases": {
+    "01": {
+      "scenario": "Valid general chat — no retrieval",
+      "request": {
+        "query": "Hello, how are you?",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "I'm doing well, thanks!",
+          "citations": [],
+          "metadata": {
+            "mode": "general_chat",
+            "retrieval_started": false,
+            "candidates": 0,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0,
+            "generation_elapsed_s": 1.5,
+            "error_stage": null,
+            "error_code": null
+          }
+        },
+        "search_calls": 0,
+        "hf_calls": 1,
+        "reformulation_calls": 0
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": false,
+        "mode": "general_chat",
+        "status": "success",
+        "candidates": 0,
+        "citations_count": 0,
+        "fallback_triggered": false,
+        "retrieval_started": false,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": null,
+        "metric_deltas": {
+          "chat_requests_total": {"general_chat": {"success": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": false,
+          "citations_per_response_observed": false
+        },
+        "privacy_canaries": ["query", "previous_questions", "previous_responses", "Bearer", "token"],
+        "forbidden_in_diagnostic": ["query", "Hello", "how are you"]
+      }
+    },
+    "02": {
+      "scenario": "Dense retrieval success with hybrid disabled",
+      "request": {
+        "query": "Best jazz club in Manhattan",
+        "previous_questions": ["Where is Blue Note?"],
+        "previous_responses": ["Blue Note is on W 3rd St."]
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "The best jazz clubs include [1] Blue Note Jazz Club.",
+          "citations": [{"venue_id": 1, "name": "Blue Note Jazz Club", "snippet": "Jazz club in Greenwich Village", "score": 0.95}],
+          "metadata": {
+            "mode": "dense",
+            "retrieval_started": true,
+            "candidates": 5,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0.25,
+            "generation_elapsed_s": 2.0,
+            "error_stage": null,
+            "error_code": null
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 2,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "dense",
+        "status": "success",
+        "candidates": 5,
+        "citations_count": 1,
+        "fallback_triggered": false,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": null,
+        "metric_deltas": {
+          "chat_requests_total": {"dense": {"success": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        },
+        "privacy_canaries": ["query", "jazz club", "Blue Note"]
+      }
+    },
+    "03": {
+      "scenario": "Hybrid retrieval success",
+      "request": {
+        "query": "cozy coffee shops near Washington Square Park",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Here are some cozy coffee shops: [1] Think Coffee.",
+          "citations": [{"venue_id": 42, "name": "Think Coffee", "snippet": "Cozy cafe near NYU", "score": 0.88}],
+          "metadata": {
+            "mode": "hybrid",
+            "retrieval_started": true,
+            "candidates": 8,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0.35,
+            "generation_elapsed_s": 1.8,
+            "error_stage": null,
+            "error_code": null
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "hybrid",
+        "status": "success",
+        "candidates": 8,
+        "citations_count": 1,
+        "fallback_triggered": false,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": null,
+        "metric_deltas": {
+          "chat_requests_total": {"hybrid": {"success": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "04": {
+      "scenario": "Hybrid expected but BM25 unavailable — dense fallback",
+      "request": {
+        "query": "find me a rooftop bar",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Here are some rooftop bars: [1] 230 Fifth.",
+          "citations": [{"venue_id": 99, "name": "230 Fifth Rooftop Bar", "snippet": "Popular rooftop bar", "score": 0.92}],
+          "metadata": {
+            "mode": "dense",
+            "retrieval_started": true,
+            "candidates": 3,
+            "fallback_triggered": true,
+            "retrieval_elapsed_s": 0.15,
+            "generation_elapsed_s": 2.2,
+            "error_stage": null,
+            "error_code": "dense_only_fallback"
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "dense",
+        "status": "fallback",
+        "candidates": 3,
+        "citations_count": 1,
+        "fallback_triggered": true,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": "dense_only_fallback",
+        "metric_deltas": {
+          "chat_requests_total": {"dense": {"fallback": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "05": {
+      "scenario": "Query expansion failure — fallback with original query",
+      "request": {
+        "query": "nice place for dinner",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Try these restaurants: [1] Gramercy Tavern.",
+          "citations": [{"venue_id": 55, "name": "Gramercy Tavern", "snippet": "American restaurant", "score": 0.85}],
+          "metadata": {
+            "mode": "hybrid",
+            "retrieval_started": true,
+            "candidates": 4,
+            "fallback_triggered": true,
+            "retrieval_elapsed_s": 0.5,
+            "generation_elapsed_s": 1.9,
+            "error_stage": null,
+            "error_code": "query_reformulation_failed"
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "hybrid",
+        "status": "fallback",
+        "candidates": 4,
+        "citations_count": 1,
+        "fallback_triggered": true,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": "query_reformulation_failed",
+        "metric_deltas": {
+          "chat_requests_total": {"hybrid": {"fallback": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "06": {
+      "scenario": "Conversational reformulation timeout — fallback, original query used",
+      "request": {
+        "query": "What about near Times Square?",
+        "previous_questions": ["Best jazz clubs?"],
+        "previous_responses": ["Blue Note is great."]
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Near Times Square you'll find: [1] Birdland Jazz Club.",
+          "citations": [{"venue_id": 200, "name": "Birdland Jazz Club", "snippet": "Jazz near Times Square", "score": 0.9}],
+          "metadata": {
+            "mode": "hybrid",
+            "retrieval_started": true,
+            "candidates": 6,
+            "fallback_triggered": true,
+            "retrieval_elapsed_s": 10.2,
+            "generation_elapsed_s": 1.7,
+            "error_stage": null,
+            "error_code": "query_reformulation_failed"
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 2,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "hybrid",
+        "status": "fallback",
+        "candidates": 6,
+        "citations_count": 1,
+        "fallback_triggered": true,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": "query_reformulation_failed",
+        "metric_deltas": {
+          "chat_requests_total": {"hybrid": {"fallback": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "07": {
+      "scenario": "Location-filter relaxation — unfiltered retry fallback",
+      "request": {
+        "query": "pizza places",
+        "previous_questions": [],
+        "location_filter": "Upper East Side"
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Found pizza in wider Manhattan: [1] Lombardi's.",
+          "citations": [{"venue_id": 77, "name": "Lombardi's Pizza", "snippet": "Historic pizzeria in Nolita", "score": 0.82}],
+          "metadata": {
+            "mode": "dense",
+            "retrieval_started": true,
+            "candidates": 4,
+            "fallback_triggered": true,
+            "retrieval_elapsed_s": 0.45,
+            "generation_elapsed_s": 2.1,
+            "error_stage": null,
+            "error_code": "location_filter_relaxed"
+          }
+        },
+        "search_calls": 2,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "dense",
+        "status": "fallback",
+        "candidates": 4,
+        "citations_count": 1,
+        "fallback_triggered": true,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": "location_filter_relaxed",
+        "metric_deltas": {
+          "chat_requests_total": {"dense": {"fallback": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "08": {
+      "scenario": "Retrieval exception — useful generation fallback",
+      "request": {
+        "query": "late night food",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "I found these late-night options: [1] Katz's Delicatessen.",
+          "citations": [{"venue_id": 101, "name": "Katz's Delicatessen", "snippet": "Famous deli", "score": 0.78}],
+          "metadata": {
+            "mode": "dense",
+            "retrieval_started": true,
+            "candidates": 0,
+            "fallback_triggered": true,
+            "retrieval_elapsed_s": 1.2,
+            "generation_elapsed_s": 2.5,
+            "error_stage": "retrieval",
+            "error_code": "retrieval_unavailable"
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "dense",
+        "status": "fallback",
+        "candidates": 0,
+        "citations_count": 1,
+        "fallback_triggered": true,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": "retrieval_unavailable",
+        "metric_deltas": {
+          "chat_requests_total": {"dense": {"fallback": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "09": {
+      "scenario": "HF generation failure with citations — citation fallback response",
+      "request": {
+        "query": "best brunch spots",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Based on what we know, you might enjoy: [1] Balthazar, [2] Clinton St. Baking Co.",
+          "citations": [
+            {"venue_id": 50, "name": "Balthazar", "snippet": "French bistro in SoHo", "score": 0.95},
+            {"venue_id": 51, "name": "Clinton St. Baking Co.", "snippet": "Pancake spot on LES", "score": 0.88}
+          ],
+          "metadata": {
+            "mode": "hybrid",
+            "retrieval_started": true,
+            "candidates": 7,
+            "fallback_triggered": true,
+            "retrieval_elapsed_s": 0.3,
+            "generation_elapsed_s": 15.0,
+            "error_stage": "generation",
+            "error_code": "hf_timeout"
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": true,
+        "mode": "hybrid",
+        "status": "fallback",
+        "candidates": 7,
+        "citations_count": 2,
+        "fallback_triggered": true,
+        "retrieval_started": true,
+        "error_type": null,
+        "error_stage": null,
+        "error_code": "hf_timeout",
+        "metric_deltas": {
+          "chat_requests_total": {"hybrid": {"fallback": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": true
+        }
+      }
+    },
+    "10": {
+      "scenario": "HF generation failure without citations — error despite HTTP 200",
+      "request": {
+        "query": "sushi omakase recommendations",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "I'm sorry, I encountered an issue processing your request. Please try again.",
+          "citations": [],
+          "metadata": {
+            "mode": "dense",
+            "retrieval_started": true,
+            "candidates": 0,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0.2,
+            "generation_elapsed_s": 15.1,
+            "error_stage": "generation",
+            "error_code": "hf_request_failed"
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": false,
+        "mode": "dense",
+        "status": "error",
+        "candidates": 0,
+        "citations_count": 0,
+        "fallback_triggered": false,
+        "retrieval_started": true,
+        "error_type": "generation_error",
+        "error_stage": "generation",
+        "error_code": "hf_request_failed",
+        "metric_deltas": {
+          "chat_requests_total": {"dense": {"error": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": true,
+          "citations_per_response_observed": false
+        }
+      }
+    },
+    "11": {
+      "scenario": "General chat HF generation failure",
+      "request": {
+        "query": "What's the weather like?",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "I'm sorry, I'm having trouble right now.",
+          "citations": [],
+          "metadata": {
+            "mode": "general_chat",
+            "retrieval_started": false,
+            "candidates": 0,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0,
+            "generation_elapsed_s": 15.0,
+            "error_stage": "generation",
+            "error_code": "hf_timeout"
+          }
+        },
+        "search_calls": 0,
+        "hf_calls": 1,
+        "reformulation_calls": 0
+      },
+      "expected": {
+        "http_status": 200,
+        "response_contains_citations": false,
+        "mode": "general_chat",
+        "status": "error",
+        "candidates": 0,
+        "citations_count": 0,
+        "fallback_triggered": false,
+        "retrieval_started": false,
+        "error_type": "generation_error",
+        "error_stage": "generation",
+        "error_code": "hf_timeout",
+        "metric_deltas": {
+          "chat_requests_total": {"general_chat": {"error": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": false,
+          "citations_per_response_observed": false
+        }
+      }
+    },
+    "12": {
+      "scenario": "Missing/invalid JWT — auth rejection",
+      "request": {
+        "auth_header": null,
+        "body": {"query": "hello", "previous_questions": []}
+      },
+      "stubs": null,
+      "expected": {
+        "http_status": 401,
+        "response_contains_citations": false,
+        "mode": "unknown",
+        "status": "error",
+        "candidates": 0,
+        "citations_count": 0,
+        "fallback_triggered": false,
+        "retrieval_started": false,
+        "error_type": "auth_error",
+        "error_stage": "auth",
+        "error_code": "auth_required",
+        "metric_deltas": {
+          "chat_requests_total": {"unknown": {"error": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": false,
+          "citations_per_response_observed": false
+        }
+      }
+    },
+    "13": {
+      "scenario": "Empty message — validation rejection",
+      "request": {
+        "body": {"query": "", "previous_questions": []}
+      },
+      "stubs": null,
+      "expected": {
+        "http_status": 400,
+        "response_contains_citations": false,
+        "mode": "unknown",
+        "status": "error",
+        "candidates": 0,
+        "citations_count": 0,
+        "fallback_triggered": false,
+        "retrieval_started": false,
+        "error_type": "validation_error",
+        "error_stage": "validation",
+        "error_code": "message_required",
+        "metric_deltas": {
+          "chat_requests_total": {"unknown": {"error": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": false,
+          "citations_per_response_observed": false
+        }
+      }
+    },
+    "14": {
+      "scenario": "Route/post-processing exception — terminal error",
+      "request": {
+        "query": "any query",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_raises": "RuntimeError",
+        "chat_service_message": "simulated internal failure"
+      },
+      "expected": {
+        "http_status": 500,
+        "response_contains_citations": false,
+        "mode": "unknown",
+        "status": "error",
+        "candidates": 0,
+        "citations_count": 0,
+        "fallback_triggered": false,
+        "retrieval_started": false,
+        "error_type": "response_error",
+        "error_stage": "response",
+        "error_code": "internal_error",
+        "metric_deltas": {
+          "chat_requests_total": {"unknown": {"error": 1}},
+          "chat_latency_seconds_observed": true,
+          "retrieval_latency_seconds_observed": false,
+          "citations_per_response_observed": false
+        }
+      }
+    },
+    "15": {
+      "scenario": "Privacy canary — query/history/tokens must never appear in canonical event",
+      "request": {
+        "query": "My social security is 123-45-6789 and I live at 42 Wall Street",
+        "previous_questions": ["Where is the nearest hospital for my condition?"],
+        "previous_responses": ["Mount Sinai is on Madison Ave."]
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "Here are venues near Wall Street: [1] Cipriani.",
+          "citations": [{"venue_id": 300, "name": "Cipriani", "snippet": "Italian restaurant", "score": 0.8}],
+          "metadata": {
+            "mode": "hybrid",
+            "retrieval_started": true,
+            "candidates": 3,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0.2,
+            "generation_elapsed_s": 1.5,
+            "error_stage": null,
+            "error_code": null
+          }
+        },
+        "search_calls": 1,
+        "hf_calls": 1,
+        "reformulation_calls": 1
+      },
+      "expected": {
+        "http_status": 200,
+        "mode": "hybrid",
+        "status": "success",
+        "privacy_canaries": [
+          "123-45-6789", "Wall Street", "social security", "hospital",
+          "Madison Ave", "Mount Sinai", "condition", "Bearer", "token",
+          "previous_responses", "previous_questions"
+        ],
+        "forbidden_in_canonical": true
+      }
+    },
+    "16": {
+      "scenario": "Concurrent requests — isolation and unique IDs",
+      "concurrent": true,
+      "num_requests": 3,
+      "request": {
+        "query": "test concurrency",
+        "previous_questions": []
+      },
+      "stubs": {
+        "chat_service_result": {
+          "text": "All good.",
+          "citations": [],
+          "metadata": {
+            "mode": "general_chat",
+            "retrieval_started": false,
+            "candidates": 0,
+            "fallback_triggered": false,
+            "retrieval_elapsed_s": 0,
+            "generation_elapsed_s": 1.0,
+            "error_stage": null,
+            "error_code": null
+          }
+        },
+        "search_calls": 0,
+        "hf_calls": 1,
+        "reformulation_calls": 0
+      },
+      "expected": {
+        "unique_request_ids": true,
+        "unique_headers": true,
+        "no_state_leakage": true,
+        "mode": "general_chat",
+        "status": "success"
+      }
+    },
+    "17": {
+      "scenario": "Two-worker multiprocess metric aggregation",
+      "integration": true,
+      "num_workers": 2,
+      "requests_per_worker": [{"mode": "dense", "status": "success"}, {"mode": "hybrid", "status": "success"}],
+      "expected": {
+        "aggregate_chat_requests_total": {"dense": {"success": 1}, "hybrid": {"success": 1}},
+        "aggregate_series_count": 12,
+        "no_request_specific_labels": true,
+        "stale_files_absent": true
+      }
+    },
+    "18": {
+      "scenario": "Concurrent writes with forced rotation and restart",
+      "integration": true,
+      "num_writers": 1,
+      "concurrent_events": 50,
+      "rotated": true,
+      "expected": {
+        "all_ids_present": true,
+        "exactly_once": true,
+        "valid_jsonl": true,
+        "max_backups": 3,
+        "production_max_bytes": 10485760,
+        "production_backup_count": 3
+      }
+    }
+  }
+}
