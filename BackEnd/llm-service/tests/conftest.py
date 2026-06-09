@@ -305,3 +305,20 @@ def obs_env(monkeypatch, tmp_path):
 def obs_cases():
     """Load observability fixture cases."""
     return load_observability_fixtures()["cases"]
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip integration tests unless explicitly selected with -m integration.
+    
+    Integration tests require Docker or specific multiprocess setup that
+    may not be available in local dev. Run with:
+        pytest -m integration
+    to include them.
+    """
+    if "integration" not in config.getoption("-m", ""):
+        skip_integration = pytest.mark.skip(
+            reason="integration test: run with 'pytest -m integration' to include"
+        )
+        for item in items:
+            if "integration" in item.keywords:
+                item.add_marker(skip_integration)

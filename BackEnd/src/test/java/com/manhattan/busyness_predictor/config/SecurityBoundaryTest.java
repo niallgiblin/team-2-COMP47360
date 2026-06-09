@@ -24,6 +24,7 @@ import com.manhattan.busyness_predictor.security.RateLimitService;
 import com.manhattan.busyness_predictor.security.RateLimitService.RateLimitResult;
 import com.manhattan.busyness_predictor.security.UserPrincipal;
 import com.manhattan.busyness_predictor.service.AuthService;
+import com.manhattan.busyness_predictor.service.GooglePlacesService;
 import com.manhattan.busyness_predictor.service.VibeService;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,9 @@ class SecurityBoundaryTest {
 
     @MockBean
     private RateLimitService rateLimitService;
+
+    @MockBean
+    private GooglePlacesService googlePlacesService;
 
     @BeforeEach
     void setUp() {

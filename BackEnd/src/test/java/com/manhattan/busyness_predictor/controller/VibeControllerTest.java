@@ -6,6 +6,7 @@ import com.manhattan.busyness_predictor.dto.SimilarLocationsResult;
 import com.manhattan.busyness_predictor.dto.VibeSearchRequest;
 import com.manhattan.busyness_predictor.dto.VibeSearchResponse;
 import com.manhattan.busyness_predictor.model.Location;
+import com.manhattan.busyness_predictor.service.GooglePlacesService;
 import com.manhattan.busyness_predictor.service.VibeService;
 import com.manhattan.busyness_predictor.security.RateLimitService;
 
@@ -57,6 +58,9 @@ class VibeControllerTest {
 
     @org.springframework.boot.test.mock.mockito.MockBean
     private RateLimitService rateLimitService;
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private GooglePlacesService googlePlacesService;
 
     @Autowired
     private ObjectMapper objectMapper;

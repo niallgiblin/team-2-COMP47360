@@ -41,7 +41,7 @@ Large binary files consumed at runtime. Mandatory SHA-256 checksums are document
 
 ### Model metadata and tokenizer files (source-owned, no mandatory checksum)
 
-Small configuration and tokenizer files under the sentence-transformers model directory. Versioned in Git (via Git LFS for consistency with the model bundle) but not treated as standalone runtime binaries for checksum enforcement.
+Small configuration and tokenizer files under the mpnet-base-v2 model directory. Versioned in Git (via Git LFS for consistency with the model bundle) but not treated as standalone runtime binaries for checksum enforcement.
 
 | Repository path | Purpose | Runtime consumer |
 |-----------------|---------|------------------|

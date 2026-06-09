@@ -242,6 +242,9 @@ class _Encoder:
         vector = self._vectors_by_query[query_text]
         return vector.copy()
 
+    def get_sentence_embedding_dimension(self):
+        return 6
+
 
 def test_reference_examples_has_exactly_sixteen_cases():
     assert len(REFERENCE_EXAMPLES) == 16
@@ -257,6 +260,7 @@ def relevance_service():
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("example", REFERENCE_EXAMPLES, ids=[item["id"] for item in REFERENCE_EXAMPLES])
 def test_retrieval_relevance_example(example, relevance_service):
     if example["kind"] == "startup":

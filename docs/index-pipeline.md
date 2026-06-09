@@ -39,6 +39,8 @@ python3 scripts/build_index.py --force --with-bm25
 | `MODEL_PATH` | `models/sentence-transformers` | Path to sentence-transformer model directory |
 | `CORPUS_VERSION` | `v1` | Corpus version directory under `corpus/` |
 
+**Note:** The checked-in `docker-compose.yml` overrides `MODEL_PATH` to `/app/models/mpnet-base-v2` (the deployed 768-dim MPNet model). When running the index builder inside Docker Compose, the generated metadata will reference the mpnet-base-v2 path rather than the `sentence-transformers` code default.
+
 The script reads `venues.csv` and `manifest.json` from `corpus/{CORPUS_VERSION}/`. Outputs go to `corpus/{CORPUS_VERSION}/index/`.
 
 ## Docker

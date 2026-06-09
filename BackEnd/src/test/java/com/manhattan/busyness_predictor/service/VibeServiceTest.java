@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import static org.mockito.Mockito.never;
@@ -378,6 +379,8 @@ public class VibeServiceTest {
     @Test
     public void whenGetMapData_withCachedData_thenReturnsCachedResults() {
         // Caffeine mapDataCache uses "full" key; repeat calls must not re-query getAllLocations.
+        // Busyness is live real-time data — it is refreshed on every getMapData() call even
+        // when locations are cached, so fetchBusynessReport() is called once per invocation.
         // D-15 evidence: full corpus N_full=1 in this fixture; bbox N_bbox=1 in tight-bbox tests above.
         List<Location> allLocations = Arrays.asList(testLocation1);
         when(locationService.getAllLocations()).thenReturn(allLocations);
@@ -386,13 +389,13 @@ public class VibeServiceTest {
         // First call populates mapDataCache with key "full"
         VibeSearchResponse firstResponse = vibeService.getMapData();
 
-        // Second call should hit Caffeine cache
+        // Second call should hit Caffeine cache for locations, but still refresh busyness
         VibeSearchResponse cachedResponse = vibeService.getMapData();
 
         assertEquals(firstResponse.getLocations().size(), cachedResponse.getLocations().size());
 
         verify(locationService, times(1)).getAllLocations();
-        verify(mlServiceClient, times(1)).fetchBusynessReport();
+        verify(mlServiceClient, atLeast(2)).fetchBusynessReport();
     }
 
     @Test

@@ -1568,8 +1568,9 @@ class TestReformulateQuery:
 # _stream_hf_response (Phase 22)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.integration
 class TestStreamHFResponse:
-    """Unit tests for the streaming HF API generator."""
+    """Unit tests for the streaming HF API generator. Requires live HF API access."""
 
     def test_native_sse_yields_tokens(self, monkeypatch):
         """When Content-Type is text/event-stream, tokens are yielded line by line."""

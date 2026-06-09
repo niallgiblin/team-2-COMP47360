@@ -4,6 +4,16 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+          'vendor-maps': ['leaflet', 'react-leaflet', '@turf/boolean-point-in-polygon', '@turf/helpers'],
+        },
+      },
+    },
+  },
   server: {
     host: true, // Allow connections from network
     port: 5173, // Default vite port
