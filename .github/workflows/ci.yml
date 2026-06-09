@@ -20,6 +20,8 @@ jobs:
         working-directory: BackEnd
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -53,6 +55,8 @@ jobs:
         working-directory: BackEnd/${{ matrix.service }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -81,6 +85,8 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -104,6 +110,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Verify ML artifacts
         run: bash scripts/verify-artifacts.sh
