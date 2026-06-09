@@ -1,0 +1,160 @@
+{
+  "total_questions": 5,
+  "ragas_scoring_failures": 5,
+  "retrieval": {
+    "aggregates": {
+      "recall": 0.23,
+      "ndcg": 0.2471,
+      "mrr": 0.45,
+      "precision": 0.2,
+      "hit_rate": 0.6
+    },
+    "categories": {
+      "retrieval": {
+        "recall_at_5": 0.23,
+        "ndcg_at_5": 0.2471,
+        "mrr": 0.45,
+        "precision_at_5": 0.2,
+        "hit_rate": 0.6,
+        "total": 5
+      }
+    }
+  },
+  "ragas": {
+    "aggregates": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null
+    },
+    "categories": {
+      "retrieval": {
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null,
+        "scored": 0,
+        "failed": 5,
+        "total": 5
+      }
+    },
+    "scored_total": 0,
+    "failed_total": 5
+  },
+  "questions": [
+    {
+      "id": "Q001",
+      "category": "retrieval",
+      "query": "jazz clubs with live music in NYC",
+      "answer": "",
+      "retrieved_ids": [
+        606,
+        880,
+        1288,
+        879,
+        1383
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.5585,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q002",
+      "category": "retrieval",
+      "query": "rooftop bars with great views of the skyline",
+      "answer": "",
+      "retrieved_ids": [
+        502,
+        2193,
+        203,
+        2153,
+        976
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.5087,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q003",
+      "category": "retrieval",
+      "query": "comedy clubs for a fun night out",
+      "answer": "",
+      "retrieved_ids": [
+        1507,
+        1560,
+        2254,
+        1552,
+        238
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q004",
+      "category": "retrieval",
+      "query": "hidden speakeasy bars with craft cocktails",
+      "answer": "",
+      "retrieved_ids": [
+        2172,
+        345,
+        2140,
+        199,
+        2205
+      ],
+      "retrieval_metrics": {
+        "recall": 0.25,
+        "ndcg": 0.1681,
+        "mrr": 0.25,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q005",
+      "category": "retrieval",
+      "query": "wine bars for a date night",
+      "answer": "",
+      "retrieved_ids": [
+        1051,
+        885,
+        951,
+        1442,
+        1289
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    }
+  ],
+  "benchmark_path": "/Users/ng/UCD-CS/Summer25/team-2-COMP47360/BackEnd/llm-service/data/benchmark.jsonl"
+}

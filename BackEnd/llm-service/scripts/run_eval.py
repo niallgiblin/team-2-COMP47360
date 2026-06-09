@@ -120,32 +120,55 @@ def compute_recall_at_k(expected_ids: list[int], retrieved_ids: list[int], k: in
     return len(expected & top_k) / len(expected)
 
 
-def compute_ndcg_at_k(expected_ids: list[int], retrieved_ids: list[int], k: int = 5) -> float:
-    """Return NDCG@k with binary relevance (rel=1 if doc in expected, else 0).
+def compute_ndcg_at_k(expected_ids: list[int], retrieved_ids: list[int], k: int = 5, relevance_grades: dict | None = None) -> float:
+    """Return NDCG@k with optional graded relevance.
+
+    When *relevance_grades* is provided, uses graded relevance (1-3 scale).
+    Otherwise falls back to binary relevance (rel=1 if doc in expected, else 0).
 
     DCG  = Σᵢ relᵢ / log₂(i+2)  for i = 0 .. k-1.
-    IDCG = ideal DCG (all relevant docs ranked first).
+    IDCG = ideal DCG (all relevant docs ranked first by descending grade).
 
     When *expected_ids* is empty or IDCG = 0 the function returns 1.0.
     """
     if not expected_ids:
         return 1.0
-    expected_set = set(expected_ids)
+
     top_k = retrieved_ids[:k]
 
-    dcg = 0.0
-    for i, doc_id in enumerate(top_k):
-        if doc_id in expected_set:
-            dcg += 1.0 / math.log2(i + 2)  # i+2 = position+1
+    if relevance_grades:
+        # Graded NDCG
+        dcg = 0.0
+        for i, doc_id in enumerate(top_k):
+            grade = relevance_grades.get(doc_id, 0)
+            if grade > 0:
+                dcg += grade / math.log2(i + 2)
 
-    num_rel = min(len(expected_set), k)
-    idcg = 0.0
-    for i in range(num_rel):
-        idcg += 1.0 / math.log2(i + 2)
+        # IDCG: sort grades descending, take top k
+        all_grades = sorted(relevance_grades.values(), reverse=True)[:k]
+        idcg = 0.0
+        for i, grade in enumerate(all_grades):
+            idcg += grade / math.log2(i + 2)
 
-    if idcg == 0.0:
-        return 1.0
-    return dcg / idcg
+        if idcg == 0.0:
+            return 1.0
+        return dcg / idcg
+    else:
+        # Binary NDCG (backward compatible)
+        expected_set = set(expected_ids)
+        dcg = 0.0
+        for i, doc_id in enumerate(top_k):
+            if doc_id in expected_set:
+                dcg += 1.0 / math.log2(i + 2)
+
+        num_rel = min(len(expected_set), k)
+        idcg = 0.0
+        for i in range(num_rel):
+            idcg += 1.0 / math.log2(i + 2)
+
+        if idcg == 0.0:
+            return 1.0
+        return dcg / idcg
 
 
 def compute_mrr(expected_ids: list[int], retrieved_ids: list[int]) -> float:
@@ -344,8 +367,9 @@ def _run_question(
         results = []
 
     retrieved_ids = [int(r["id"]) for r in results]
+    relevance_grades = entry.get("relevance_grades")
     recall = compute_recall_at_k(expected_ids, retrieved_ids, k=5)
-    ndcg = compute_ndcg_at_k(expected_ids, retrieved_ids, k=5)
+    ndcg = compute_ndcg_at_k(expected_ids, retrieved_ids, k=5, relevance_grades=relevance_grades)
     mrr = compute_mrr(expected_ids, retrieved_ids)
     precision = compute_precision_at_k(expected_ids, retrieved_ids, k=5)
     hit_rate = compute_hit_rate(expected_ids, retrieved_ids, k=5)
@@ -478,7 +502,7 @@ def _category_report(
         threshold = threshold_recall
         prefix = (
             f"  recall@5: {avg_recall:.4f} (threshold: {threshold})\n"
-            f"  NDCG@5: {avg_ndcg:.4f}\n"
+            f"  Graded NDCG@5: {avg_ndcg:.4f}\n"
             f"  MRR: {avg_mrr:.4f}\n"
             f"  Precision@5: {avg_precision:.4f}\n"
             f"  Hit Rate: {avg_hit_rate:.4f}"
@@ -596,7 +620,7 @@ def _run_all_questions(entries, search_service, args, baseline_mode=False):
 
 _METRIC_DISPLAY = [
     ("Recall@5",      "recall_sum"),
-    ("NDCG@5",        "ndcg_sum"),
+    ("Graded NDCG@5", "ndcg_sum"),
     ("MRR",           "mrr_sum"),
     ("Precision@5",   "precision_sum"),
     ("Hit Rate",      "hit_rate_sum"),
@@ -777,7 +801,7 @@ def main(argv: list[str] | None = None) -> None:
     agg_hit_rate = sum(qr["hit_rate"] for qr in non_abst) / len(non_abst) if non_abst else 0.0
 
     print(f"\nAggregate recall@5 (non-abstention): {agg_recall:.4f}")
-    print(f"Aggregate NDCG@5 (non-abstention): {agg_ndcg:.4f}")
+    print(f"Aggregate Graded NDCG@5 (non-abstention): {agg_ndcg:.4f}")
     print(f"Aggregate MRR (non-abstention): {agg_mrr:.4f}")
     print(f"Aggregate Precision@5 (non-abstention): {agg_precision:.4f}")
     print(f"Aggregate Hit Rate (non-abstention): {agg_hit_rate:.4f}")

@@ -365,13 +365,10 @@ def main(argv: list[str] | None = None) -> None:
 
     # Resolve HF call (mock or real)
     if args.mock_judge:
-        logger.info("Using MOCK judge — synthetic scores, no API calls")
-        from eval_service import score_with_ragas
+        logger.info("Using MOCK mode — synthetic judge AND generation (no HF API calls)")
 
-        # We need to inject the mock at the eval_service level.
-        # The simplest approach: monkey-patch the _call_judge function.
+        # Monkey-patch _call_judge in eval_service
         import eval_service as es
-
         original_call_judge = es._call_judge
 
         def _mock_call_judge(question, context, answer, hf_call=None):
@@ -393,6 +390,37 @@ def main(argv: list[str] | None = None) -> None:
 
         es._call_judge = _mock_call_judge
 
+        # Also mock the HF chat generation API to avoid HF_TOKEN requirement
+        import chat_service as cs
+        original_hf_call = cs.huggingface_chat_api_call
+
+        _MOCK_ANSWER_IDX = 0
+        _MOCK_ANSWERS = [
+            "Based on the available venues, I recommend checking out {name}. It has great reviews and matches your criteria well.",
+            "Here are some options: {name} is a popular choice in that area with the atmosphere you're looking for.",
+            "I found {name} which fits your requirements. It's known for excellent service and ambiance.",
+            "For your query, {name} stands out as a top recommendation with its unique character and strong reviews.",
+            "Let me suggest {name} — it's well-regarded and aligns with what you're searching for.",
+        ]
+
+        def _mock_chat_call(messages, max_tokens=512, timeout=30):
+            nonlocal _MOCK_ANSWER_IDX
+            _MOCK_ANSWER_IDX += 1
+            answer = _MOCK_ANSWERS[_MOCK_ANSWER_IDX % len(_MOCK_ANSWERS)]
+            # Try to use a real venue name from context for realism
+            try:
+                user_content = messages[-1]["content"] if messages else ""
+            except (IndexError, KeyError):
+                user_content = ""
+            answer = answer.replace("{name}", "the recommended venue")
+            return {
+                "choices": [{
+                    "message": {"content": answer}
+                }]
+            }
+
+        cs.huggingface_chat_api_call = _mock_chat_call
+
     # ---- Full RAGAS pass --------------------------------------------------
     from eval_service import run_ragas_eval
 
@@ -410,11 +438,12 @@ def main(argv: list[str] | None = None) -> None:
     elapsed = time.time() - start_time
     logger.info("RAGAS eval completed in %.1fs (%d questions)", elapsed, len(full_results))
 
-    # Restore original judge if mocked
+    # Restore original judge AND chat if mocked
     if args.mock_judge:
         import eval_service as es
-
+        import chat_service as cs
         es._call_judge = original_call_judge
+        cs.huggingface_chat_api_call = original_hf_call
 
     # ---- Baseline pass (optional) -----------------------------------------
     baseline_results = None

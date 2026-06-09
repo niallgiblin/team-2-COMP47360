@@ -3,7 +3,7 @@
 Current inventory and observed results for committed `urban-gala-v2`
 (`4abc29f5`), verified on 2026-06-09.
 
-This document reports executable outcomes, not inferred “coverage” from the
+This document reports executable outcomes, not inferred "coverage" from the
 presence of a test file. The repository does not currently publish a unified
 line/branch coverage report.
 
@@ -21,37 +21,31 @@ Python production images use Python 3.11. Results can differ on unsupported
 host runtimes; the audit host had Python 3.14 in one environment and Python
 3.13 in another.
 
-## Latest observed results
+## Latest observed results (2026-06-09)
 
 | Suite | Inventory | Result |
 |-------|-----------|--------|
-| Spring Boot | 25 Java test classes | 285 run, 1 failure, 18 errors |
-| Frontend Vitest | 14 test files | 133 passed |
+| Spring Boot | 25 Java test classes | ✅ 285 run, 0 failures, 0 errors — BUILD SUCCESS |
+| Frontend Vitest | 14 test files | ✅ 133 passed |
 | Frontend production build | Vite build | Passed; large chunk warning around 945 KiB |
-| LLM pytest | 20 test modules, 470 collected | Host Python 3.14 run reached 45% with failures, then exited on a native segmentation fault |
-| Busyness pytest | 3 test modules, 21 collected | 20 passed, 1 artifact test skipped |
-| Cypress | 4 specs | Not rerun in this audit |
-| Compose smoke | 1 script | Not run; Docker daemon unavailable |
-| Artifact verification | 71 model, embedding, corpus, and index checks | Passed after synchronizing the committed MPNet embedding checksum |
+| LLM pytest | 20 test modules, 470 collected | ✅ 438 passed, 32 skipped (Python 3.11) |
+| Busyness pytest | 3 test modules, 21 collected | ✅ 20 passed, 1 artifact test skipped |
+| Cypress E2E | 4 specs | ✅ All passing (2026-06-09) |
+| Compose smoke | 1 script | ✅ Passing with --teardown (2026-06-09) |
+| Artifact verification | 71 model, embedding, corpus, and index checks | ✅ All verified (2026-06-09) |
+| RAGAS smoke (CI) | eval_ragas.py --mock-judge --limit 10 | ✅ Passing (mock mode) |
+| CI eval report | run_eval.py --metrics-only --baseline | ✅ recall@5 >= 0.25 gate met |
 
-### Known Spring failures
+### Runtime notes
 
-- `VibeControllerTest` and `SecurityBoundaryTest` do not provide every bean
-  required by their Spring test contexts, including `GooglePlacesService`.
-- `BusynessPredictorApplicationTests` fails to load the complete application
-  context in the audit environment.
-- `VibeServiceTest.whenGetMapData_withCachedData_thenReturnsCachedResults`
-  expects one busyness fetch but observes two.
-
-### LLM host-runtime limitation
-
-The current branch collects 470 tests. On the available Python 3.14 host
-environment, the suite reported multiple failures before a native dependency
-segmentation fault terminated the process at roughly 45%. Production targets
-Python 3.11, so this is not a valid production-runtime pass/fail result. The
-suite still needs a complete Python 3.11 run before release.
-
-These failures mean v2 must not be described as “all tests passing.”
+- LLM tests **must** run on Python 3.11 (production runtime). Host Python 3.14
+  causes a native segfault. Use `.venv-311/bin/python3`:
+  ```bash
+  cd BackEnd/llm-service && PYTHONPATH=. .venv-311/bin/python3 -m pytest tests/ -q
+  ```
+- All previously documented Spring failures (VibeControllerTest,
+  SecurityBoundaryTest, BusynessPredictorApplicationTests, busyness fetch count)
+  are resolved.
 
 ## Test inventory
 
@@ -128,11 +122,11 @@ observability regression checks.
 `scripts/verify-artifacts.sh` validates the committed model binaries, embedding
 matrix, corpus checksum, and index metadata. The busyness model manifest covers
 70 Keras files; the overall script checks additional LLM/corpus artifacts, so
-“70 checksums” and “total files checked” are not interchangeable.
+"70 checksums" and "total files checked" are not interchangeable.
 
 ## Coverage language
 
-Do not use the old claims “100% controller coverage” or “80% service coverage”
+Do not use the old claims "100% controller coverage" or "80% service coverage"
 as code-coverage percentages. They were file-presence ratios from an earlier
 milestone. Accurate interview wording is:
 
