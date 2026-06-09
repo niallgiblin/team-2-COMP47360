@@ -376,7 +376,7 @@ def run_ragas_eval(
     for i, entry in enumerate(entries):
         qid = entry["id"]
         cat = entry["category"]
-        query = entry["query"]
+        query = entry.get("standalone_query") or entry["query"]
         expected_ids = entry.get("expected_venue_ids", [])
         filters = entry.get("filters") or {}
 

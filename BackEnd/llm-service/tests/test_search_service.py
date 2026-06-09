@@ -349,31 +349,36 @@ def _build_bm25_for_venues(rows):
 
 
 def test_rrf_fuse_math_correctness():
-    """RRF formula: RRF_score(d) = Σ 1/(k + rank_r(d)), ranks start at 1."""
+    """SW-RRF formula: score / (k + rank), ranks start at 1.
+
+    With normalized scores passed in, SW-RRF weights by confidence.
+    The test passes raw scores to verify the formula directly.
+    """
     from search_service import _rrf_fuse
 
-    # BM25 results: doc 0 at rank 1, doc 2 at rank 2
+    # BM25 results: doc 0 at rank 1 (score=5.0), doc 2 at rank 2 (score=3.0)
     bm25 = [(0, 5.0), (2, 3.0)]
-    # Dense results: doc 1 at rank 1, doc 0 at rank 2
+    # Dense results: doc 1 at rank 1 (score=0.95), doc 0 at rank 2 (score=0.85)
     dense = [(1, 0.95), (0, 0.85)]
 
     fused = _rrf_fuse(bm25, dense, k=60)
 
-    # doc 0: 1/(60+1) + 1/(60+2) = 1/61 + 1/62 ≈ 0.01639 + 0.01613 = 0.03252
-    # doc 1: 1/(60+1) = 1/61 ≈ 0.01639
-    # doc 2: 1/(60+2) = 1/62 ≈ 0.01613
-    expected_d0 = 1.0 / 61 + 1.0 / 62
-    expected_d1 = 1.0 / 61
-    expected_d2 = 1.0 / 62
+    # SW-RRF: score/(k+rank)
+    # doc 0: 5.0/(60+1) + 0.85/(60+2) = 5.0/61 + 0.85/62
+    # doc 1: 0.95/(60+1) = 0.95/61
+    # doc 2: 3.0/(60+2) = 3.0/62
+    expected_d0 = 5.0 / 61 + 0.85 / 62
+    expected_d1 = 0.95 / 61
+    expected_d2 = 3.0 / 62
 
     assert len(fused) == 3
-    # Sorted by score descending: doc 0 should be first
+    # Sorted by score descending: doc 0 first, then doc 2 (3.0/62 > 0.95/61)
     assert fused[0][0] == 0
     assert fused[0][1] == pytest.approx(expected_d0, rel=1e-6)
-    # doc 1 and doc 2 tie — stable ordering not guaranteed, just check scores
-    scores_by_doc = {doc_idx: score for doc_idx, score in fused}
-    assert scores_by_doc[1] == pytest.approx(expected_d1, rel=1e-6)
-    assert scores_by_doc[2] == pytest.approx(expected_d2, rel=1e-6)
+    assert fused[1][0] == 2
+    assert fused[1][1] == pytest.approx(expected_d2, rel=1e-6)
+    assert fused[2][0] == 1
+    assert fused[2][1] == pytest.approx(expected_d1, rel=1e-6)
 
 
 def test_rrf_fuse_single_ranker_handling():
@@ -385,11 +390,11 @@ def test_rrf_fuse_single_ranker_handling():
 
     fused = _rrf_fuse(bm25, dense, k=60)
 
-    # doc 0: 1/(60+1) = 1/61 ; doc 1: 1/(60+1) = 1/61
+    # SW-RRF: doc 0 gets 5.0/(60+1), doc 1 gets 0.9/(60+1)
     assert len(fused) == 2
     scores = {doc_idx: score for doc_idx, score in fused}
-    assert scores[0] == pytest.approx(1.0 / 61, rel=1e-6)
-    assert scores[1] == pytest.approx(1.0 / 61, rel=1e-6)
+    assert scores[0] == pytest.approx(5.0 / 61, rel=1e-6)
+    assert scores[1] == pytest.approx(0.9 / 61, rel=1e-6)
 
 
 def test_rrf_fuse_empty_inputs():

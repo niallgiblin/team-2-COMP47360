@@ -339,7 +339,9 @@ def _run_question(
     """
     qid: str = entry["id"]
     cat: str = entry["category"]
-    query: str = entry["query"]
+    # Use standalone_query for search when available (conversational queries
+    # need self-contained versions since the benchmark can't supply chat context).
+    query: str = entry.get("standalone_query") or entry["query"]
     expected_ids: list[int] = entry.get("expected_venue_ids", [])
     filters: dict = entry.get("filters") or {}
 

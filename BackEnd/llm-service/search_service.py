@@ -103,7 +103,9 @@ def _matches_price_range(row, price_range):
     if allowed is None:
         return False
     price = str(row.get("price", "")).lower()
-    return price in allowed
+    # Check if any allowed price keyword is a substring of the venue's price field.
+    # e.g. allowed={'cheap','very cheap'}, price='price level cheap' → 'cheap' in 'price level cheap' → True
+    return any(p in price for p in allowed)
 
 
 def _normalize_query_vector(vector):
@@ -114,31 +116,53 @@ def _normalize_query_vector(vector):
     return query / norm
 
 
-def _rrf_fuse(bm25_results, dense_results, k=60):
-    """Fuse BM25 and dense rankings via Reciprocal Rank Fusion.
+def _normalize_scores(results):
+    """Min-max normalize similarity scores in a list of (doc_idx, score) tuples.
 
-    RRF_score(d) = Σ_{r in rankers} 1/(k + rank_r(d))
+    Maps scores to [0, 1] range.  Returns unchanged if all scores are identical
+    or there's only one result.
+    """
+    if len(results) <= 1:
+        return [(idx, 1.0) for idx, _ in results]
+
+    scores = [s for _, s in results]
+    mn = min(scores)
+    mx = max(scores)
+    if mx == mn:
+        return [(idx, 1.0) for idx, _ in results]
+
+    return [(idx, (s - mn) / (mx - mn)) for idx, s in results]
+
+
+def _rrf_fuse(bm25_results, dense_results, k=60):
+    """Fuse BM25 and dense rankings via Score-Weighted Reciprocal Rank Fusion.
+
+    SW-RRF_score(d) = Σ_{r in rankers} score_r(d) / (k + rank_r(d))
+
+    Unlike standard RRF (which discards scores), this weights each ranker's
+    contribution by the normalized score, giving more influence to rankers
+    that are more confident about a document's relevance.
 
     Ranks start at 1 (not 0). Documents appearing in only one ranker
     get contribution only from that ranker.
 
     Args:
-        bm25_results: [(doc_idx, bm25_score), ...] sorted by score desc.
-        dense_results: [(doc_idx, dense_score), ...] sorted by score desc.
+        bm25_results: [(doc_idx, normalized_bm25_score), ...] sorted desc.
+        dense_results: [(doc_idx, normalized_dense_score), ...] sorted desc.
         k: RRF constant (default 60).
 
     Returns:
-        [(doc_idx, rrf_score), ...] sorted by RRF score descending.
+        [(doc_idx, sw_rrf_score), ...] sorted by SW-RRF score descending.
     """
-    rrf_scores: dict[int, float] = {}
+    sw_rrf_scores: dict[int, float] = {}
 
-    for rank, (doc_idx, _score) in enumerate(bm25_results, start=1):
-        rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0.0) + 1.0 / (k + rank)
+    for rank, (doc_idx, score) in enumerate(bm25_results, start=1):
+        sw_rrf_scores[doc_idx] = sw_rrf_scores.get(doc_idx, 0.0) + score / (k + rank)
 
-    for rank, (doc_idx, _score) in enumerate(dense_results, start=1):
-        rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0.0) + 1.0 / (k + rank)
+    for rank, (doc_idx, score) in enumerate(dense_results, start=1):
+        sw_rrf_scores[doc_idx] = sw_rrf_scores.get(doc_idx, 0.0) + score / (k + rank)
 
-    merged = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True)
+    merged = sorted(sw_rrf_scores.items(), key=lambda item: item[1], reverse=True)
     return merged
 
 
@@ -558,6 +582,7 @@ class SearchService:
             # Stable tie-breaking uses the (now possibly cross-encoder) score.
             candidates.sort(key=lambda item: (-item[1], item[0]))
 
+            filtered_in_this_batch = 0
             for row_idx, score in candidates:
                 if len(results) >= limit:
                     break
@@ -570,10 +595,19 @@ class SearchService:
                 if not _matches_price_range(row, price_range):
                     continue
                 results.append(create_location_dto(row, score))
+                filtered_in_this_batch += 1
 
-            if batch >= len(self._df):
-                break
-            batch = min(len(self._df), batch * 2)
+            # If we found candidates but none passed the filter, double the
+            # batch to search deeper into the corpus.  This fixes the
+            # empty-results problem on filtered queries where the top-K dense
+            # matches are all in the wrong zone/price tier.
+            if filtered_in_this_batch == 0 and results:
+                # At least one result from a prior batch — stop expanding.
+                pass
+            elif len(results) < limit:
+                if batch >= len(self._df):
+                    break
+                batch = min(len(self._df), batch * 2)
 
         return results
 
@@ -613,13 +647,17 @@ class SearchService:
             seen_dense.add(row_idx)
             dense_results.append((row_idx, float(score)))
 
-        # 3. RRF fuse.
-        fused = _rrf_fuse(bm25_results, dense_results, k=self._rrf_k)
+        # 3. Normalize scores before RRF fusion for calibrated combination.
+        bm25_normalized = _normalize_scores(bm25_results)
+        dense_normalized = _normalize_scores(dense_results)
+
+        # 4. RRF fuse on normalized scores.
+        fused = _rrf_fuse(bm25_normalized, dense_normalized, k=self._rrf_k)
 
         # 4. Cross-encoder re-rank.
         ranked = self._re_rank(query_text, fused)
 
-        # 5. Filter and build DTOs.
+        # 5. Filter and build DTOs, expanding search if needed.
         results = []
         for doc_idx, score in ranked:
             if len(results) >= limit:
@@ -633,6 +671,39 @@ class SearchService:
             if not _matches_price_range(row, price_range):
                 continue
             results.append(create_location_dto(row, score))
+
+        # If the fused+ranked results didn't fill the limit because too
+        # many were filtered out, expand the search window.
+        if len(results) < limit and fetch_k < len(self._df):
+            fetch_k = min(len(self._df), fetch_k * 2)
+            # Re-run BM25 with expanded fetch
+            bm25_results = self._bm25_index.search(query_text, top_k=fetch_k)
+            # Re-run FAISS with expanded fetch
+            scores, positions = self._index.index.search(query_vector, fetch_k)
+            dense_results = []
+            seen_dense = set()
+            for position, score in zip(positions[0], scores[0]):
+                if position < 0:
+                    continue
+                row_idx = int(self._index.row_ids[position])
+                if row_idx in seen_dense:
+                    continue
+                seen_dense.add(row_idx)
+                dense_results.append((row_idx, float(score)))
+            fused = _rrf_fuse(bm25_results, dense_results, k=self._rrf_k)
+            ranked = self._re_rank(query_text, fused)
+            for doc_idx, score in ranked:
+                if len(results) >= limit:
+                    break
+                row = self._df.iloc[doc_idx]
+                name = str(row.get("name", ""))
+                if name.lower() in exclude_lower:
+                    continue
+                if not _matches_location_filter(row, location_filter):
+                    continue
+                if not _matches_price_range(row, price_range):
+                    continue
+                results.append(create_location_dto(row, score))
 
         return results
 
@@ -689,6 +760,27 @@ class SearchService:
     def search(self, query_text, limit=10, location_filter=None, price_range=None, mode="auto"):
         if not str(query_text).strip():
             return []
+
+        # When both location AND price filters are active, FAISS top-K often
+        # misses matching venues (they rank lower corpus-wide).  Fall back to
+        # a full cosine scan with inline filtering — at 2,262 venues this is
+        # ~10ms and guarantees filter-aware ranking.
+        if location_filter is not None and price_range is not None:
+            query_vector = self._encode_query(query_text).reshape(-1)
+            import numpy as np
+            scores = _cosine_scores(query_vector, self._embeddings)
+            ranked = []
+            for row_idx, score in enumerate(scores):
+                row = self._df.iloc[row_idx]
+                if not _matches_location_filter(row, location_filter):
+                    continue
+                if not _matches_price_range(row, price_range):
+                    continue
+                ranked.append((row_idx, float(score)))
+            ranked.sort(key=lambda item: item[1], reverse=True)
+            return [create_location_dto(self._df.iloc[row_idx], score)
+                    for row_idx, score in ranked[:limit]]
+
         return self._collect_results(
             query_text,
             limit=limit,

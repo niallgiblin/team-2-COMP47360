@@ -1,0 +1,1507 @@
+{
+  "benchmark_path": "/Users/ng/UCD-CS/Summer25/team-2-COMP47360/BackEnd/llm-service/data/benchmark.jsonl",
+  "total_questions": 96,
+  "threshold_recall": 0.25,
+  "threshold_abstention": 0.7,
+  "aggregate_recall": 0.4325,
+  "aggregate_ndcg": 0.0897,
+  "aggregate_mrr": 0.5327,
+  "aggregate_precision": 0.2462,
+  "aggregate_hit_rate": 0.6282,
+  "categories": {
+    "abstention": {
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "mrr": 1.0,
+      "precision_at_5": 1.0,
+      "hit_rate": 1.0,
+      "pass_rate": 0.8333,
+      "pass_count": 15,
+      "fail_count": 3,
+      "total": 18
+    },
+    "adversarial": {
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 0.2222,
+      "mrr": 0.9583,
+      "precision_at_5": 0.3889,
+      "hit_rate": 1.0,
+      "pass_rate": 0.9444,
+      "pass_count": 17,
+      "fail_count": 1,
+      "total": 18
+    },
+    "conversational": {
+      "recall_at_5": 0.2361,
+      "ndcg_at_5": 0.1667,
+      "mrr": 0.3148,
+      "precision_at_5": 0.2222,
+      "hit_rate": 0.3889,
+      "pass_rate": 0.3889,
+      "pass_count": 7,
+      "fail_count": 11,
+      "total": 18
+    },
+    "filtered": {
+      "recall_at_5": 0.44,
+      "ndcg_at_5": 0.0,
+      "mrr": 0.6017,
+      "precision_at_5": 0.29,
+      "hit_rate": 0.7,
+      "pass_rate": 0.45,
+      "pass_count": 9,
+      "fail_count": 11,
+      "total": 20
+    },
+    "retrieval": {
+      "recall_at_5": 0.122,
+      "ndcg_at_5": 0.0,
+      "mrr": 0.3,
+      "precision_at_5": 0.1091,
+      "hit_rate": 0.4545,
+      "pass_rate": 0.2727,
+      "pass_count": 6,
+      "fail_count": 16,
+      "total": 22
+    }
+  },
+  "failures": [
+    {
+      "id": "Q003",
+      "category": "retrieval",
+      "query": "comedy clubs for a fun night out",
+      "expected_ids": [
+        1496,
+        1499,
+        1503,
+        1504,
+        361
+      ],
+      "retrieved_ids": [
+        1560,
+        2254,
+        1583,
+        1552,
+        2243
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        2.5803,
+        0.7883,
+        -0.2396,
+        -0.5669,
+        -0.8155
+      ]
+    },
+    {
+      "id": "Q005",
+      "category": "retrieval",
+      "query": "wine bars for a date night",
+      "expected_ids": [
+        157,
+        173,
+        207,
+        277,
+        278
+      ],
+      "retrieved_ids": [
+        157,
+        1185,
+        757,
+        1376,
+        884
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -0.9712,
+        -4.4601,
+        -4.5051,
+        -4.9095,
+        -4.9764
+      ]
+    },
+    {
+      "id": "Q007",
+      "category": "retrieval",
+      "query": "museums and art galleries worth visiting",
+      "expected_ids": [
+        10,
+        18,
+        76,
+        0,
+        13
+      ],
+      "retrieved_ids": [
+        76,
+        11,
+        43,
+        98,
+        1670
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -0.6335,
+        -2.1877,
+        -2.7807,
+        -2.8372,
+        -2.9258
+      ]
+    },
+    {
+      "id": "Q008",
+      "category": "retrieval",
+      "query": "craft cocktail bars with creative drinks",
+      "expected_ids": [
+        162,
+        191,
+        199,
+        172,
+        202
+      ],
+      "retrieved_ids": [
+        934,
+        1442,
+        718,
+        1311,
+        476
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        3.598,
+        3.4207,
+        3.21,
+        2.8602,
+        2.8377
+      ]
+    },
+    {
+      "id": "Q009",
+      "category": "retrieval",
+      "query": "Italian restaurants for a romantic dinner",
+      "expected_ids": [
+        161,
+        198,
+        230
+      ],
+      "retrieved_ids": [
+        608,
+        277,
+        815,
+        2110,
+        259
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -3.3187,
+        -3.6143,
+        -3.7997,
+        -3.8613,
+        -3.9221
+      ]
+    },
+    {
+      "id": "Q010",
+      "category": "filtered",
+      "query": "bars and nightlife in East Village",
+      "expected_ids": [
+        273,
+        275,
+        277,
+        278,
+        346
+      ],
+      "retrieved_ids": [
+        258,
+        315,
+        273,
+        229,
+        347
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 0.3333,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        6.2861,
+        5.7633,
+        4.5746,
+        4.5084,
+        3.8645
+      ]
+    },
+    {
+      "id": "Q012",
+      "category": "filtered",
+      "query": "cheap eats and affordable food in Chinatown",
+      "expected_ids": [
+        1959,
+        1960,
+        1961,
+        1963,
+        1965
+      ],
+      "retrieved_ids": [
+        1973,
+        1970,
+        1966,
+        1972,
+        1967
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "Q013",
+      "category": "filtered",
+      "query": "luxury fine dining restaurants in Midtown",
+      "expected_ids": [
+        432,
+        436,
+        469,
+        522,
+        614
+      ],
+      "retrieved_ids": [
+        621,
+        620,
+        669,
+        557,
+        720
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "Q016",
+      "category": "filtered",
+      "query": "affordable bars with good vibes",
+      "expected_ids": [
+        12,
+        34,
+        157,
+        160,
+        162
+      ],
+      "retrieved_ids": [
+        162,
+        2129,
+        1344,
+        1249,
+        1925
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        3.9927,
+        3.9564,
+        -0.1556,
+        -2.6404,
+        -3.89
+      ]
+    },
+    {
+      "id": "Q018",
+      "category": "conversational",
+      "query": "what about cheaper options?",
+      "expected_ids": [
+        157,
+        162,
+        169,
+        345
+      ],
+      "retrieved_ids": [
+        1177,
+        979,
+        1492,
+        1481,
+        1323
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -6.609,
+        -6.697,
+        -6.8351,
+        -6.8783,
+        -6.9621
+      ]
+    },
+    {
+      "id": "Q019",
+      "category": "conversational",
+      "query": "anything in East Village instead?",
+      "expected_ids": [
+        273,
+        275,
+        277,
+        278,
+        345
+      ],
+      "retrieved_ids": [
+        315,
+        350,
+        1511,
+        269,
+        347
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -1.9678,
+        -2.0144,
+        -2.0546,
+        -2.1158,
+        -2.1186
+      ]
+    },
+    {
+      "id": "Q022",
+      "category": "conversational",
+      "query": "I meant something more upscale",
+      "expected_ids": [
+        180,
+        205,
+        222,
+        273,
+        306
+      ],
+      "retrieved_ids": [
+        398,
+        621,
+        1342,
+        342,
+        1617
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -7.7829,
+        -7.8429,
+        -7.982,
+        -8.1011,
+        -8.1331
+      ]
+    },
+    {
+      "id": "Q023",
+      "category": "conversational",
+      "query": "actually skip the bars, what restaurants are nearby?",
+      "expected_ids": [
+        198,
+        161,
+        230
+      ],
+      "retrieved_ids": [
+        1122,
+        1034,
+        1582,
+        735,
+        1501
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -5.1058,
+        -5.1281,
+        -5.5656,
+        -6.0114,
+        -6.0653
+      ]
+    },
+    {
+      "id": "Q025",
+      "category": "conversational",
+      "query": "is there anything open late around here?",
+      "expected_ids": [
+        275,
+        346,
+        180,
+        274
+      ],
+      "retrieved_ids": [
+        1528,
+        1002,
+        1415,
+        307,
+        292
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -2.6406,
+        -8.2017,
+        -8.8052,
+        -9.0051,
+        -9.346
+      ]
+    },
+    {
+      "id": "Q042",
+      "category": "retrieval",
+      "query": "stand-up comedy shows in the East Village tonight",
+      "expected_ids": [
+        361,
+        1496,
+        1499,
+        1502,
+        1503
+      ],
+      "retrieved_ids": [
+        1511,
+        1503,
+        1510,
+        1548,
+        1507
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 0.5,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        4.9932,
+        4.3503,
+        3.8601,
+        3.094,
+        2.8729
+      ]
+    },
+    {
+      "id": "Q044",
+      "category": "retrieval",
+      "query": "contemporary art galleries with rotating exhibits",
+      "expected_ids": [
+        2,
+        5,
+        6,
+        7,
+        13
+      ],
+      "retrieved_ids": [
+        28,
+        84,
+        1716,
+        1635,
+        1632
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        6.3629,
+        6.0564,
+        5.5966,
+        5.5434,
+        4.2651
+      ]
+    },
+    {
+      "id": "Q045",
+      "category": "retrieval",
+      "query": "authentic Italian restaurants for a family dinner",
+      "expected_ids": [
+        173,
+        185,
+        255,
+        259,
+        263
+      ],
+      "retrieved_ids": [
+        2224,
+        408,
+        381,
+        608,
+        679
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        1.9772,
+        1.7512,
+        1.7335,
+        1.471,
+        0.0982
+      ]
+    },
+    {
+      "id": "Q046",
+      "category": "retrieval",
+      "query": "upscale cocktail bars with creative mixology",
+      "expected_ids": [
+        180,
+        199,
+        222,
+        230,
+        273
+      ],
+      "retrieved_ids": [
+        261,
+        934,
+        1040,
+        1311,
+        2161
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        1.9235,
+        1.0601,
+        0.6308,
+        0.501,
+        0.3619
+      ]
+    },
+    {
+      "id": "Q047",
+      "category": "retrieval",
+      "query": "best ramen and Japanese food in the city",
+      "expected_ids": [
+        41,
+        65,
+        206,
+        211,
+        217
+      ],
+      "retrieved_ids": [
+        326,
+        1170,
+        1909,
+        1000,
+        710
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        3.4499,
+        2.801,
+        2.4437,
+        2.0112,
+        1.8206
+      ]
+    },
+    {
+      "id": "Q049",
+      "category": "retrieval",
+      "query": "best brunch spots with pancakes and mimosas",
+      "expected_ids": [
+        221,
+        235,
+        302,
+        325,
+        421
+      ],
+      "retrieved_ids": [
+        221,
+        440,
+        671,
+        1340,
+        1362
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        1.1604,
+        -3.7906,
+        -5.4014,
+        -5.4695,
+        -5.8136
+      ]
+    },
+    {
+      "id": "Q050",
+      "category": "retrieval",
+      "query": "fine dining restaurants for a special anniversary dinner",
+      "expected_ids": [
+        259,
+        355,
+        395,
+        401,
+        522
+      ],
+      "retrieved_ids": [
+        729,
+        896,
+        620,
+        235,
+        2004
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -3.9094,
+        -4.3413,
+        -4.7034,
+        -4.7126,
+        -4.8535
+      ]
+    },
+    {
+      "id": "Q051",
+      "category": "retrieval",
+      "query": "cozy and intimate bars for a quiet drink",
+      "expected_ids": [
+        179,
+        206,
+        211,
+        216,
+        229
+      ],
+      "retrieved_ids": [
+        1582,
+        1034,
+        934,
+        409,
+        832
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        1.6809,
+        1.5045,
+        -0.9344,
+        -1.6013,
+        -1.917
+      ]
+    },
+    {
+      "id": "Q052",
+      "category": "retrieval",
+      "query": "trendy nightlife spots for a night out with friends",
+      "expected_ids": [
+        36,
+        157,
+        165,
+        166,
+        225
+      ],
+      "retrieved_ids": [
+        2095,
+        2141,
+        1536,
+        1501,
+        1524
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        0.6193,
+        0.096,
+        -1.1428,
+        -1.3656,
+        -1.6627
+      ]
+    },
+    {
+      "id": "Q053",
+      "category": "retrieval",
+      "query": "authentic French bistros and brasseries",
+      "expected_ids": [
+        96,
+        446,
+        522,
+        561,
+        574
+      ],
+      "retrieved_ids": [
+        648,
+        803,
+        801,
+        669,
+        2093
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        4.6134,
+        3.0298,
+        1.6963,
+        0.3985,
+        0.0729
+      ]
+    },
+    {
+      "id": "Q054",
+      "category": "retrieval",
+      "query": "Mexican restaurants with great tacos and margaritas",
+      "expected_ids": [
+        163,
+        236,
+        261,
+        294,
+        456
+      ],
+      "retrieved_ids": [
+        942,
+        1095,
+        1041,
+        956,
+        1382
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        6.5135,
+        6.2276,
+        6.1937,
+        6.0247,
+        4.6382
+      ]
+    },
+    {
+      "id": "Q055",
+      "category": "filtered",
+      "query": "cheap eats and affordable food in East Village",
+      "expected_ids": [
+        229,
+        257,
+        265,
+        298,
+        299
+      ],
+      "retrieved_ids": [
+        330,
+        307,
+        309,
+        347,
+        229
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 0.2,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "Q057",
+      "category": "filtered",
+      "query": "moderate priced restaurants in Midtown",
+      "expected_ids": [
+        433,
+        435,
+        441,
+        559,
+        562
+      ],
+      "retrieved_ids": [
+        564,
+        714,
+        668,
+        727,
+        793
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "Q059",
+      "category": "filtered",
+      "query": "restaurants and bars in Upper West Side",
+      "expected_ids": [
+        931,
+        954,
+        955,
+        956,
+        957
+      ],
+      "retrieved_ids": [
+        1034,
+        1012,
+        1122,
+        971,
+        1126
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        8.385,
+        7.946,
+        7.7338,
+        7.7197,
+        7.6235
+      ]
+    },
+    {
+      "id": "Q060",
+      "category": "filtered",
+      "query": "affordable cocktail bars with good vibes",
+      "expected_ids": [
+        12,
+        34,
+        157,
+        160,
+        162
+      ],
+      "retrieved_ids": [
+        162,
+        2129,
+        257,
+        291,
+        1344
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        4.7894,
+        3.2962,
+        2.5065,
+        2.4438,
+        2.1871
+      ]
+    },
+    {
+      "id": "Q062",
+      "category": "filtered",
+      "query": "art galleries in Chelsea",
+      "expected_ids": [
+        1785,
+        1798,
+        1851,
+        1853,
+        1855
+      ],
+      "retrieved_ids": [
+        1798,
+        1852,
+        1830,
+        1817,
+        1834
+      ],
+      "recall": 0.2,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        7.1207,
+        6.6922,
+        6.4654,
+        6.3902,
+        6.3713
+      ]
+    },
+    {
+      "id": "Q063",
+      "category": "filtered",
+      "query": "cheap eats and food in Chinatown",
+      "expected_ids": [
+        1959,
+        1960,
+        1961,
+        1963,
+        1965
+      ],
+      "retrieved_ids": [
+        1973,
+        1970,
+        1966,
+        1972,
+        1967
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "Q064",
+      "category": "filtered",
+      "query": "bars and pubs in Greenwich Village",
+      "expected_ids": [
+        2039,
+        2081,
+        2083,
+        2084,
+        2086
+      ],
+      "retrieved_ids": [
+        329,
+        2091,
+        2249,
+        2246,
+        2251
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        6.2816,
+        4.7924,
+        4.4955,
+        4.4955,
+        3.5848
+      ]
+    },
+    {
+      "id": "Q067",
+      "category": "conversational",
+      "query": "what about places in a different neighborhood?",
+      "expected_ids": [
+        162,
+        172,
+        180,
+        191
+      ],
+      "retrieved_ids": [
+        1153,
+        1483,
+        424,
+        2234,
+        1843
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -8.0777,
+        -8.1662,
+        -8.7842,
+        -8.7935,
+        -8.8961
+      ]
+    },
+    {
+      "id": "Q068",
+      "category": "conversational",
+      "query": "anything cheaper nearby?",
+      "expected_ids": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "retrieved_ids": [
+        636,
+        905,
+        1189,
+        1480,
+        600
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -6.9853,
+        -7.0671,
+        -7.285,
+        -7.3539,
+        -8.358
+      ]
+    },
+    {
+      "id": "Q070",
+      "category": "conversational",
+      "query": "show me places with outdoor seating",
+      "expected_ids": [
+        153,
+        154,
+        156,
+        158
+      ],
+      "retrieved_ids": [
+        394,
+        2200,
+        903,
+        1206,
+        1133
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -4.3112,
+        -4.9836,
+        -6.9541,
+        -7.0373,
+        -7.7571
+      ]
+    },
+    {
+      "id": "Q071",
+      "category": "conversational",
+      "query": "just the ones that are open late",
+      "expected_ids": [
+        36,
+        157,
+        160,
+        162
+      ],
+      "retrieved_ids": [
+        1528,
+        1002,
+        1415,
+        307,
+        292
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -1.5489,
+        -8.6863,
+        -9.1032,
+        -9.1862,
+        -9.5761
+      ]
+    },
+    {
+      "id": "Q074",
+      "category": "conversational",
+      "query": "pick the ones with the best atmosphere",
+      "expected_ids": [
+        259,
+        305,
+        395,
+        402
+      ],
+      "retrieved_ids": [
+        268,
+        1938,
+        965,
+        1328,
+        1005
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -10.0794,
+        -10.3263,
+        -10.5995,
+        -11.0491,
+        -11.1323
+      ]
+    },
+    {
+      "id": "Q076",
+      "category": "conversational",
+      "query": "actually, I'd rather go dancing",
+      "expected_ids": [
+        12,
+        34,
+        155,
+        157
+      ],
+      "retrieved_ids": [
+        180,
+        776,
+        275,
+        105,
+        1974
+      ],
+      "recall": 0.0,
+      "ndcg": 0.0,
+      "mrr": 0.0,
+      "precision": 0.0,
+      "hit_rate": 0.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        -10.4951,
+        -10.7908,
+        -11.1645,
+        -11.1989,
+        -11.2601
+      ]
+    },
+    {
+      "id": "Q079",
+      "category": "adversarial",
+      "query": "what is the capacity of the Tenement Museum?",
+      "expected_ids": [
+        10
+      ],
+      "retrieved_ids": [
+        10,
+        1795,
+        18,
+        22,
+        0
+      ],
+      "recall": 1.0,
+      "ndcg": 0.0,
+      "mrr": 1.0,
+      "precision": 0.2,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": false,
+      "citation_detail": "citation 4: missing/zero venue_id",
+      "num_results": 5,
+      "scores": [
+        0.0074,
+        -10.1971,
+        -10.7463,
+        -10.9149,
+        -10.9157
+      ]
+    },
+    {
+      "id": "Q088",
+      "category": "abstention",
+      "query": "bars in Brooklyn with live music",
+      "expected_ids": [],
+      "retrieved_ids": [
+        817,
+        2170,
+        315,
+        1288,
+        238
+      ],
+      "recall": 1.0,
+      "ndcg": 1.0,
+      "mrr": 1.0,
+      "precision": 1.0,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        2.9407,
+        2.2065,
+        2.0357,
+        1.7256,
+        1.2883
+      ]
+    },
+    {
+      "id": "Q095",
+      "category": "abstention",
+      "query": "pet-friendly restaurants with dog menus",
+      "expected_ids": [],
+      "retrieved_ids": [
+        1009,
+        701,
+        660,
+        2152,
+        2090
+      ],
+      "recall": 1.0,
+      "ndcg": 1.0,
+      "mrr": 1.0,
+      "precision": 1.0,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        5.6338,
+        2.7809,
+        0.8617,
+        -0.2951,
+        -1.2225
+      ]
+    },
+    {
+      "id": "Q096",
+      "category": "abstention",
+      "query": "karaoke bars with private rooms for 20 people",
+      "expected_ids": [],
+      "retrieved_ids": [
+        1529,
+        1533,
+        1497,
+        540,
+        1566
+      ],
+      "recall": 1.0,
+      "ndcg": 1.0,
+      "mrr": 1.0,
+      "precision": 1.0,
+      "hit_rate": 1.0,
+      "passed": false,
+      "citation_ok": true,
+      "citation_detail": "all citations valid",
+      "num_results": 5,
+      "scores": [
+        2.6429,
+        2.5016,
+        2.2806,
+        2.1975,
+        2.1909
+      ]
+    }
+  ],
+  "verdict": "FAIL"
+}

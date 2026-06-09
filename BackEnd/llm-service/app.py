@@ -32,6 +32,7 @@ from config import (
 )
 from loader import validate_corpus_at_startup, verify_file_paths
 from query_expander import expand_query
+from query_rewriter import rewrite_query
 from search_service import VALID_PRICE_RANGES, SearchService, SearchStartupError
 
 logging.basicConfig(
@@ -203,12 +204,16 @@ def _chat_search_helper(query, limit=5, location_filter=None):
 
     try:
         search_query = query
+        # LLM-based rewriting first (handles paraphrases, zone aliases)
+        try:
+            search_query = rewrite_query(query) or query
+        except Exception as exc:
+            logger.debug("Query rewriting failed; using original: %s", exc)
         if QUERY_EXPANSION_ENABLED:
             try:
-                search_query = expand_query(query) or query
+                search_query = expand_query(search_query) or search_query
             except Exception as exc:
-                logger.warning("Query expansion failed; falling back to original: %s", exc)
-                search_query = query
+                logger.warning("Query expansion failed; falling back: %s", exc)
 
         results = search_service.search(search_query, limit=limit, location_filter=location_filter)
         return results  # list of location DTOs or empty list
@@ -255,12 +260,16 @@ def _chat_search_helper_with_metadata(query, limit=5, location_filter=None):
 
     try:
         search_query = query
+        # LLM-based rewriting first (handles paraphrases, zone aliases)
+        try:
+            search_query = rewrite_query(query) or query
+        except Exception as exc:
+            logger.debug("Query rewriting failed; using original: %s", exc)
         if QUERY_EXPANSION_ENABLED:
             try:
-                search_query = expand_query(query) or query
+                search_query = expand_query(search_query) or search_query
             except Exception as exc:
-                logger.warning("Query expansion failed; falling back to original: %s", exc)
-                search_query = query
+                logger.warning("Query expansion failed; falling back: %s", exc)
 
         result = search_service.search_with_metadata(
             search_query, limit=limit, location_filter=location_filter

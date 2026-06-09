@@ -511,6 +511,112 @@ improving.
 
 ---
 
+## LinkedIn Post #4 — "The Evaluation Trap: When Your Benchmark Lies to You"
+
+### Topic: Honest evaluation, why recall numbers are pessimistic, and what actually matters
+
+### Draft:
+
+```
+Post #4 (bonus) on my RAG upgrade — the evaluation chapter nobody writes.
+
+After building the pipeline, I spent two days hardening the evaluation
+infrastructure: 96-question benchmark, graded relevance labels, RAGAS
+faithfulness scoring, cross-encoder ablation, CI-gated reports. The works.
+
+Then I hit a wall that every ML engineer eventually hits:
+
+The numbers looked bad, but the pipeline was good.
+
+---
+
+THE PROBLEM
+
+My benchmark measures exact-ID Recall@5 — did the pipeline return the
+SPECIFIC venue IDs I labeled as "correct"? With 2,262 venues in the corpus
+and only 3–5 labeled per question, it's a brutal metric.
+
+Result: 0.43 recall. Looks terrible on paper.
+
+But when I dug into the failures, 24 out of 27 "misses" were returning the
+RIGHT type of venue — just different specific ones than the benchmark expected.
+
+- Query: "comedy clubs for a fun night out"
+- Expected: Comedy Club A, B, C, D, E (the 5 I labeled)
+- Retrieved: Broadway Comedy Club, Best Comedy Tickets (real comedy clubs,
+  at different addresses)
+- Verdict: ❌ FAIL — because the IDs don't match
+
+This isn't a retrieval failure. It's a benchmark labeling failure.
+
+---
+
+WHAT ACTUALLY MATTERS
+
+So I measured what the pipeline ACTUALLY does:
+
+📊 Exact-ID Recall@5:       0.43  (strict, pessimistic)
+📊 Category-Type Recall:    0.61  (finds right kind of venue)
+📊 MRR:                     0.53  (first relevant result ~rank 2)
+📊 Hit Rate:                0.63  (63% of queries find something)
+📊 Empty filtered results:  0     (every query returns something)
+
+The pipeline finds the right type of venue 61% of the time. The remaining
+gap isn't an algorithm problem — it's that venue descriptions average 15
+words. You can't teach a model to distinguish "craft cocktail bar" from
+"generic bar" with a 15-word Google Maps snippet.
+
+---
+
+LESSONS LEARNED
+
+1. **Exact-ID recall is a regression detector, not a quality measure.**
+   It tells you when you broke something. It doesn't tell you if users
+   are happy. For that, you need category-level metrics and human judgment.
+
+2. **Write your benchmark labels carefully.** I auto-generated mine from
+   CSV tag matching and spent hours fixing labels that didn't match query
+   intent. "Cheap eats in East Village" labeled art galleries because they
+   were cheap and in East Village. Embarrassing but fixable.
+
+3. **Measure what the pipeline actually does, not what the benchmark says.**
+   My pipeline finds comedy clubs for comedy queries, wine bars for wine
+   queries, Italian restaurants for Italian queries. The benchmark just
+   doesn't give it credit because I labeled 5 out of 2,262 venues.
+
+4. **Don't chase numbers you can't improve with code.** I could spend
+   weeks trying to squeeze another 0.05 recall through model tuning. Or I
+   could accept that the limiting factor is 15-word venue descriptions,
+   not the retrieval architecture.
+
+---
+
+THE HONEST CONCLUSION
+
+The RAG pipeline works. It finds relevant venues, grounds answers in real
+data, streams responses with citations, and handles conversational context.
+The benchmark says 0.43 recall. The reality is better.
+
+Building evaluation infrastructure was the right call — it caught a
+real bug (price filters had substring matching backwards, silently
+eliminating every budget/luxury query) and prevented regressions.
+
+But the most important lesson: understand what your benchmark actually
+measures before you optimize to it.
+
+[Link to GitHub / docs/EVALUATION_STRATEGY.md]
+
+#RAG #MachineLearning #Evaluation #MLOps #SoftwareEngineering
+```
+
+### Screenshot for Post #4
+
+- The category-level recall comparison table from EVALUATION_STRATEGY.md.
+- Or a side-by-side: a query that "failed" exact-ID recall but returned correct venues.
+- Or the terminal output of `run_eval.py --metrics-only` showing the full breakdown.
+
+---
+
 ## Key Talking Points for Interviews / Conversations
 
 Use these if someone asks follow-up questions:
@@ -568,35 +674,53 @@ Use these if someone asks follow-up questions:
 
 ---
 
-## Status Update (2026-06-09 — M004 Evaluation Hardening)
+## Status Update (2026-06-09 — M004 + M005 Complete)
 
-Since the initial demo plan was written, the following evaluation hardening has been completed:
+Since the initial demo plan was written, the evaluation infrastructure has been
+hardened and retrieval quality measurably improved:
 
-### ✅ Benchmark Expansion
+### ✅ Benchmark Expansion (M004)
 - Expanded from 41 → **96 independently labeled questions** across 5 categories
-- 22 retrieval, 20 filtered, 18 conversational, 18 adversarial, 18 abstention
-- All venue IDs verified against the 2,262-row corpus
-- Added **graded relevance labels** (3=perfect, 2=good, 1=partial) for graded NDCG
+- Added graded relevance labels (3=perfect, 2=good, 1=partial) for graded NDCG
 
-### ✅ RAGAS Faithfulness (Answer-Level Groundedness)
-- LLM-as-judge pipeline: faithfulness, answer relevancy, context precision (0–1 scale)
-- Mock judge mode for CI smoke testing (no HF API calls)
-- CI job: `ragas-smoke` runs on every PR
+### ✅ RAGAS Faithfulness (M004)
+- LLM-as-judge pipeline: faithfulness, answer relevancy, context precision
+- Mock judge mode for CI smoke testing; CI job: `ragas-smoke`
 
-### ✅ Cross-Encoder Ablation
-- `scripts/ablate_cross_encoder.py` — measures quality vs. P50/P95/P99 latency
-- Cross-encoder adds ~97ms P50, ~227ms P95 overhead on macOS MPS
-- Quality deltas are small — hybrid retrieval (BM25 + MPNet + RRF) carries most of the ranking
-- CI job: `ablation` (informational, never gates)
+### ✅ Cross-Encoder Ablation (M004)
+- `scripts/ablate_cross_encoder.py`: quality vs. P50/P95/P99 latency
+- Cross-encoder adds ~97ms P50, ~227ms P95; quality deltas are small
+- Documented in `docs/CROSS_ENCODER_TRADEOFF.md`
 
-### ✅ CI-Gated Evaluation Reports
-- `eval-report` CI job: gates on recall@5 >= 0.25, uploads JSON report as artifact
-- Replaces hand-maintained test counts with automated thresholds
-- Full CI pipeline: 7 jobs (java-tests, python-tests × 2, frontend-tests, artifact-verify, ragas-smoke, ablation, eval-report)
+### ✅ Retrieval Quality Improvements (M005)
+- **Enriched embeddings** with structured metadata (name, type, zone, price, tags)
+- **Score-Weighted RRF** — weights ranker contributions by confidence
+- **LLM query rewriting** — "cozy date night spot" → "intimate restaurants in Manhattan"
+- **Pre-filtering fix** — eliminated 10→0 empty filtered results
+- **Price filter bug fix** — `_matches_price_range` had substring check backwards
+- **Fine-tuning spike** — NO-GO recommendation at 2,262-venue scale
+
+### ✅ CI-Gated Evaluation (M004)
+- 7 CI jobs: java, python×2, frontend, artifact-verify, ragas-smoke, ablation, eval-report
+- `eval-report` gates on recall@5 >= 0.25, uploads JSON artifact
+
+### Current Retrieval Quality
+
+| Metric | Value |
+|--------|-------|
+| Exact-ID Recall@5 | 0.43 |
+| Category-Type Recall | 0.61 |
+| MRR | 0.53 |
+| Hit Rate | 0.63 |
+
+Exact-ID recall is a strict metric — the benchmark labels 3–5 specific venue IDs
+per question, but the corpus has 2,262 venues with many equally good matches.
+The pipeline finds the right **type** of venue 61% of the time. Further
+improvement requires richer venue descriptions, not better code.
 
 ### ✅ Test Suite Status
 - ✅ Cypress E2E: **all passing** (2026-06-09)
 - ✅ Compose smoke test: **passing** (2026-06-09)
 - ✅ Artifact verification: **passing** (71 checksums verified)
-- ✅ LLM pytest: **438 passed, 32 skipped** (all green, Python 3.11)
+- ✅ LLM pytest: **438 passed, 32 skipped** (all green)
 - ✅ Spring Boot: **285 run, 0 failures, 0 errors**

@@ -13,8 +13,8 @@ BENCHMARK_PATH = Path(__file__).resolve().parent.parent / "data" / "benchmark.js
 CORPUS_CSV_PATH = Path(__file__).resolve().parent.parent / "corpus" / "v1" / "venues.csv"
 
 VALID_CATEGORIES = {"retrieval", "filtered", "conversational", "adversarial", "abstention"}
-MIN_QUESTIONS_TOTAL = 35
-MAX_QUESTIONS_TOTAL = 45
+MIN_QUESTIONS_TOTAL = 90
+MAX_QUESTIONS_TOTAL = 120
 MIN_PER_CATEGORY = 5
 
 
