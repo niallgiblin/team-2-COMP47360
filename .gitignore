@@ -60,6 +60,7 @@ lpt[1-9].*
 build/
 *.pyc
 .venv/
+.venv-*/
 venv/
 target/
 vendor/
