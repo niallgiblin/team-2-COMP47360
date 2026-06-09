@@ -1,7 +1,7 @@
 # Testing
 
 Current inventory and observed results for committed `urban-gala-v2`
-(`0fce7dba`), verified on 2026-06-09.
+(`4abc29f5`), verified on 2026-06-09.
 
 This document reports executable outcomes, not inferred “coverage” from the
 presence of a test file. The repository does not currently publish a unified
@@ -28,11 +28,11 @@ host runtimes; the audit host had Python 3.14 in one environment and Python
 | Spring Boot | 25 Java test classes | 285 run, 1 failure, 18 errors |
 | Frontend Vitest | 14 test files | 133 passed |
 | Frontend production build | Vite build | Passed; large chunk warning around 945 KiB |
-| LLM pytest | 20 test modules, 464 collected | 456 passed, 7 failed, 1 skipped with cross-encoder disabled |
+| LLM pytest | 20 test modules, 470 collected | Host Python 3.14 run reached 45% with failures, then exited on a native segmentation fault |
 | Busyness pytest | 3 test modules, 21 collected | 20 passed, 1 artifact test skipped |
 | Cypress | 4 specs | Not rerun in this audit |
 | Compose smoke | 1 script | Not run; Docker daemon unavailable |
-| Artifact verification | models, embeddings, corpus, index metadata | Current worktree fails only the embedding checksum because of uncommitted model work |
+| Artifact verification | 71 model, embedding, corpus, and index checks | Passed after synchronizing the committed MPNet embedding checksum |
 
 ### Known Spring failures
 
@@ -43,13 +43,13 @@ host runtimes; the audit host had Python 3.14 in one environment and Python
 - `VibeServiceTest.whenGetMapData_withCachedData_thenReturnsCachedResults`
   expects one busyness fetch but observes two.
 
-### Known LLM failures
+### LLM host-runtime limitation
 
-- Observability integration tests contain generated-code name errors.
-- Observability writer tests pass UUID objects where the strict event schema
-  expects strings.
-- A prompt-loader assertion expects prompt v1.4 while the shipped prompt is
-  v1.5.
+The current branch collects 470 tests. On the available Python 3.14 host
+environment, the suite reported multiple failures before a native dependency
+segmentation fault terminated the process at roughly 45%. Production targets
+Python 3.11, so this is not a valid production-runtime pass/fail result. The
+suite still needs a complete Python 3.11 run before release.
 
 These failures mean v2 must not be described as “all tests passing.”
 
@@ -152,4 +152,3 @@ Before calling a v2 release candidate green:
 5. Run `scripts/compose-smoke.sh --teardown` with Docker.
 6. Preserve command output as a dated report rather than copying counts into
    prose that will drift.
-

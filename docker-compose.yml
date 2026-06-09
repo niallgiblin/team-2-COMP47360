@@ -115,6 +115,8 @@ services:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/mpnet-base-v2
       - EMBEDDING_MODEL_NAME=all-mpnet-base-v2
+      # CPU re-ranking added too much interactive latency for its observed
+      # benefit. See docs/CROSS_ENCODER_TRADEOFF.md.
       - CROSS_ENCODER_ENABLED=false
       - CROSS_ENCODER_MODEL_NAME=/app/models/cross-encoder
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
@@ -142,7 +144,7 @@ services:
       resources:
         limits:
           memory: 3G  # Increased from 2G for sentence transformers
-          cpus: '4.0'  # Cross-encoder re-ranking on CPU needs ≥4 cores for <3s batches
+          cpus: '4.0'  # Shared budget for retrieval, chat, and concurrent workers
         reservations:
           memory: 2G  # Guaranteed memory for model loading
           cpus: '2.0'  # Guaranteed CPU for responsiveness

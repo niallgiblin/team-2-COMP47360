@@ -59,6 +59,9 @@ flowchart LR
 The cross-encoder implementation is optional. Python defaults it on, but the
 checked-in Compose stack sets `CROSS_ENCODER_ENABLED=false`; the normal Compose
 deployment therefore uses hybrid retrieval without cross-encoder re-ranking.
+Interactive testing found that its CPU inference cost added too much retrieval
+and first-token latency for the limited observed benefit. See
+[Cross-Encoder Re-Ranking Trade-off](CROSS_ENCODER_TRADEOFF.md).
 
 The generative LLM runs through the Hugging Face chat-completions API. It is not
 hosted locally by this repository.
@@ -83,6 +86,7 @@ and caveats.
 | [Testing](TESTING.md) | Current test inventory and the latest observed results |
 | [Security](SECURITY.md) | Implemented controls, operator responsibilities, and explicit non-capabilities |
 | [Evaluation Strategy](EVALUATION_STRATEGY.md) | Retrieval benchmark, metrics, interpretation, and remaining evaluation work |
+| [Cross-Encoder Trade-off](CROSS_ENCODER_TRADEOFF.md) | Why optional re-ranking is disabled in the standard deployment |
 | [Artifact Policy](artifacts.md) | Git LFS ownership, checksums, corpus and model artifacts |
 | [Index Pipeline](index-pipeline.md) | Building and validating FAISS/BM25 indexes |
 | [LLM Runtime](llm-runtime.md) | Gunicorn, memory, index loading, metrics, and operator commands |
@@ -178,7 +182,6 @@ suite. Exact results and failure classes are recorded in
   rate limiting are not implemented in this repository.
 - The Nginx production bundle emits a large-chunk warning; code splitting is a
   remaining optimization.
-- Prometheus-compatible metrics are exposed by the LLM service, but a committed
-  Prometheus/Grafana deployment is not part of v2.
+- Prometheus metrics and a provisioned Grafana dashboard are included in the
+  current v2 Compose configuration.
 - Plans are shared with selected users, not through public shareable links.
-

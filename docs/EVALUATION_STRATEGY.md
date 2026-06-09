@@ -54,6 +54,9 @@ miss.
 - The aggregate Recall@5 of 0.2874 is still low in absolute terms.
 - The improved configuration can include optional cross-encoder behavior, but
   checked-in Compose sets `CROSS_ENCODER_ENABLED=false`.
+- This is not a cross-encoder-only ablation. BM25/RRF, query expansion, and
+  other changes are also present, so no metric delta can be attributed to
+  re-ranking alone.
 - Retrieval metrics do not measure the factuality, usefulness, style, latency,
   or cost of the final generated answer.
 - The Hugging Face model is external and may change behavior independently of
@@ -102,12 +105,12 @@ dated executable results.
 2. Expand the retrieval set and have labels reviewed independently.
 3. Add graded relevance rather than only expected-ID membership.
 4. Measure confidence intervals and per-segment regressions.
-5. Benchmark quality, p50/p95 latency, memory, and cost with the cross-encoder
-   enabled and disabled.
+5. Run a controlled cross-encoder-only ablation covering quality,
+   p50/p95/p99 retrieval latency, time to first token, throughput, CPU, and
+   memory. See [CROSS_ENCODER_TRADEOFF.md](CROSS_ENCODER_TRADEOFF.md).
 6. Add answer-level groundedness and faithfulness evaluation without allowing
    an evaluator model to become the sole source of truth.
 7. Publish busyness holdout metrics, temporal splits, calibration, and drift
    monitoring tied to the exact shipped artifacts.
 8. Gate releases in CI with versioned reports rather than hand-maintained test
    counts.
-

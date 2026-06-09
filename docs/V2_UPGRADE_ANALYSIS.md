@@ -1,13 +1,13 @@
 # Urban Gala v2 Upgrade Analysis
 
-Verified against `main` (`ec7dd3b6`) and local `urban-gala-v2`
-(`0fce7dba`) on 2026-06-09.
+Verified against `main` (`ec7dd3b6`) and `urban-gala-v2`
+(`4abc29f5`) on 2026-06-09.
 
 ## Scope and truth rules
 
 This document is the canonical interview-oriented comparison for v2.
 
-- **Committed v2** means code reachable from `urban-gala-v2` at `0fce7dba`.
+- **Committed v2** means code reachable from `urban-gala-v2` at `4abc29f5`.
 - **Enabled in Compose** means the checked-in `docker-compose.yml` turns the
   feature on in the normal container stack.
 - **Externally configured** means the code exists but requires credentials,
@@ -18,8 +18,8 @@ This document is the canonical interview-oriented comparison for v2.
   snapshots in `docs/baseline-verification.md` explain how the project evolved;
   they are not current capability specifications.
 
-The branch contains 215 commits beyond `main` and changes 212 files
-(36,472 insertions and 8,730 deletions).
+The branch contains 216 commits beyond `main` and changes 252 files
+(41,610 insertions and 10,068 deletions).
 
 ## Executive comparison
 
@@ -76,6 +76,18 @@ Therefore:
 - It is not accurate to say the standard Compose deployment **uses** it.
 - Benchmark results involving the full improved pipeline must be described as
   offline evaluation configuration, not proof of the default deployed path.
+- Interactive testing found that CPU re-ranking added too much retrieval and
+  first-token latency while MPNet + BM25/RRF remained useful without it.
+- The benchmark is not a cross-encoder-only ablation, so its quality gains
+  cannot be attributed to re-ranking alone.
+
+The implementation over-fetches candidates and runs every query-document pair
+through `CrossEncoder.predict()` before filtering and generation. A request for
+10 results can score roughly 30 pairs with the default multiplier. This work is
+CPU-bound and blocks the first streamed chat token.
+
+See [CROSS_ENCODER_TRADEOFF.md](CROSS_ENCODER_TRADEOFF.md) for the full decision
+record and criteria for reconsidering the feature.
 
 ### Chat grounding
 
@@ -166,9 +178,8 @@ Committed v2 includes request IDs, structured search/chat events, bounded
 Prometheus metrics, a `/metrics` endpoint, JSONL event persistence, and
 Gunicorn lifecycle hooks.
 
-The repository does not commit a complete Prometheus/Grafana deployment in
-v2. Local untracked files currently explore that stack, but it is work in
-progress.
+The latest v2 commit includes Prometheus and Grafana Compose configuration,
+provisioned dashboards, RAGAS-style evaluation, and SSE chat streaming.
 
 ## Security truth
 
@@ -197,37 +208,30 @@ Not implemented or not demonstrated by this repository:
 
 ## Verification snapshot
 
-Commands were run on 2026-06-09 against committed v2 where a clean archive was
-needed to avoid mixing in local work.
+Commands were run on 2026-06-09 against committed v2 at `4abc29f5`.
 
 | Gate | Result |
 |------|--------|
 | Frontend Vitest | 14 files, 133 tests passed |
 | Frontend production build | Passed; emitted a chunk-size warning around 945 KiB |
 | Busyness pytest | 20 passed, 1 artifact test skipped |
-| LLM pytest | 456 passed, 7 failed, 1 skipped with cross-encoder disabled |
+| LLM pytest | 470 collected; Python 3.14 host run reached 45% with failures, then segfaulted in native dependencies |
 | Spring Maven tests | 285 run, 1 failure, 18 errors |
-| Artifact verification in current worktree | 70 model checks passed; embedding checksum failed because of uncommitted model work |
+| Artifact verification | 71 checks passed after synchronizing the committed MPNet embedding checksum |
 | Docker Compose smoke | Not run; Docker daemon was unavailable |
 
-The LLM failures are in observability test code, UUID/string validation, and a
-prompt-version expectation. The Spring failures include missing test beans in
-security/controller contexts, an application-context startup error, and one
-cache expectation mismatch.
+The LLM suite requires a complete Python 3.11 run; the available Python 3.14
+environment is unsupported and terminated inside native dependencies. The
+Spring failures include missing test beans in security/controller contexts, an
+application-context startup error, and one cache expectation mismatch.
 
 Do not say “all tests pass” for this v2 commit.
 
-## Uncommitted work that is not v2
+## Latest committed additions
 
-The current worktree contains local changes for:
-
-- An MPNet model/embedding refresh and changed embedding checksum.
-- RAGAS-style evaluation experiments.
-- Server-Sent Events chat streaming and frontend fallback behavior.
-- Prometheus/Grafana Compose configuration and dashboards.
-
-These are promising next upgrades, but they are not part of committed
-`urban-gala-v2` and must not be presented as shipped.
+Commit `4abc29f5` adds the MPNet embedding refresh, RAGAS-style evaluation,
+SSE chat streaming with frontend fallback behavior, and provisioned
+Prometheus/Grafana configuration. These are committed v2 capabilities.
 
 ## Interview narrative
 
@@ -262,7 +266,9 @@ add operational complexity before scale requires them.
 Bi-encoders retrieve efficiently but score query and document independently.
 A cross-encoder jointly reads each candidate with the query and can improve
 ordering, at higher latency and memory cost. That cost is why it is optional
-and disabled in the default Compose stack.
+and disabled in the default Compose stack. Hybrid retrieval was already useful,
+while CPU re-ranking delayed the first visible chat output. The implementation
+was retained for controlled experiments rather than applied to every request.
 
 **How did you prevent hallucinations?**  
 The system grounds prompts in retrieved venues, returns structured citations,

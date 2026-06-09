@@ -55,6 +55,20 @@ The committed encoder bundle produces 768-dimensional MPNet-family embeddings.
 The MiniLM name used elsewhere refers to the optional cross-encoder, not the
 dense embedding model.
 
+## Cross-encoder latency decision
+
+The standard Compose deployment deliberately sets
+`CROSS_ENCODER_ENABLED=false`. When enabled, retrieval over-fetches candidates
+and runs a transformer forward pass for every query-document pair on CPU before
+filtering, citation construction, or generation can finish. With the default
+multiplier, a request for 10 results can score roughly 30 pairs.
+
+Interactive testing found that MPNet + BM25/RRF gave useful results without
+this blocking stage, while re-ranking noticeably delayed responses and chat
+time to first token. No controlled A/B latency report is committed, so an exact
+delta is not claimed. See
+[CROSS_ENCODER_TRADEOFF.md](CROSS_ENCODER_TRADEOFF.md).
+
 ## Operator Commands
 
 ### Build and start

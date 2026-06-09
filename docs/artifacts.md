@@ -45,16 +45,16 @@ Small configuration and tokenizer files under the sentence-transformers model di
 
 | Repository path | Purpose | Runtime consumer |
 |-----------------|---------|------------------|
-| `BackEnd/llm-service/models/sentence-transformers/config.json` | Model config | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/config_sentence_transformers.json` | ST config | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/modules.json` | Module layout | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/sentence_bert_config.json` | SBERT config | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/special_tokens_map.json` | Tokenizer specials | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/tokenizer.json` | Tokenizer | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/tokenizer_config.json` | Tokenizer config | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/vocab.txt` | Vocabulary | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/1_Pooling/config.json` | Pooling config | LLM service |
-| `BackEnd/llm-service/models/sentence-transformers/README.md` | Model documentation | Human reference |
+| `BackEnd/llm-service/models/mpnet-base-v2/config.json` | Model config | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/config_sentence_transformers.json` | ST config | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/modules.json` | Module layout | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/sentence_bert_config.json` | SBERT config | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/special_tokens_map.json` | Tokenizer specials | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/tokenizer.json` | Tokenizer | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/tokenizer_config.json` | Tokenizer config | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/vocab.txt` | Vocabulary | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/1_Pooling/config.json` | Pooling config | LLM service |
+| `BackEnd/llm-service/models/mpnet-base-v2/README.md` | Model documentation | Human reference |
 
 The dense model bundle is MPNet-family and produces 768-dimensional
 embeddings. `models/cross-encoder/` is a separate optional re-ranking model.
@@ -112,7 +112,7 @@ Services load artifacts from container paths. Repository paths above are bind-mo
 
 | Variable | Default runtime path | Repository source | Consumer |
 |----------|---------------------|-------------------|----------|
-| `MODEL_PATH` | `/app/models/sentence-transformers` | `BackEnd/llm-service/models/sentence-transformers/` | `load_model()`, `verify_file_paths()` |
+| `MODEL_PATH` | `/app/models/mpnet-base-v2` in Compose | `BackEnd/llm-service/models/mpnet-base-v2/` | `load_model()`, `verify_file_paths()` |
 | `CORPUS_VERSION` | `v1` | `BackEnd/llm-service/corpus/v1/` directory name | Resolves `DATA_PATH` / `MANIFEST_PATH` defaults |
 | `DATA_PATH` | `/app/corpus/v1/venues.csv` | `BackEnd/llm-service/corpus/v1/venues.csv` | `load_data()`, `verify_file_paths()`, `validate_corpus_at_startup()` (must resolve to `corpus/{CORPUS_VERSION}/venues.csv`) |
 | `MANIFEST_PATH` | `/app/corpus/v1/manifest.json` | `BackEnd/llm-service/corpus/v1/manifest.json` | `verify_file_paths()`, `validate_corpus_at_startup()` (must resolve to `corpus/{CORPUS_VERSION}/manifest.json`) |
@@ -299,8 +299,8 @@ shasum -a 256 <path-to-file>
 | `BackEnd/busyness-service/models/DNNs/88 NET.keras` | `5f99c24cb1d2964ef2ec1b13d44be04e122528d0b064a5b6f48a0ca9d40d3aa7` |
 | `BackEnd/busyness-service/models/DNNs/90 NET.keras` | `8671bca905c7edf11c211c6a8e590a258042e104d078118db029e45bd4bf147f` |
 | `BackEnd/busyness-service/models/LSTMs/Fin.keras` | `d3edc9b7b0300ad6a52f269c94433415afaf90ea892831ede18ad2755171e9cb` |
-| `BackEnd/llm-service/data/location_embeddings.npy` | `e668b3c74ad55cac2a0991bf81b10d3023261b464080f4c42f4b5a9558ba06af` |
-| `BackEnd/llm-service/models/sentence-transformers/model.safetensors` | `0b3c8c717335c801abb15983036a6f1df4b6943fd6b93717969efd96d22eeec6` |
+| `BackEnd/llm-service/data/location_embeddings.npy` | `98e159fd237a415323f2db565442b6e3d5ae07cb319cda287ddf7e27cf145533` |
+| `BackEnd/llm-service/models/mpnet-base-v2/model.safetensors` | `0b3c8c717335c801abb15983036a6f1df4b6943fd6b93717969efd96d22eeec6` |
 
 CSV, JSON, TXT, and tokenizer metadata files are documented separately and do
 not all have mandatory rows in the runtime-binary checksum table.
