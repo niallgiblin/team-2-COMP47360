@@ -6,7 +6,13 @@ Operator runbook for rebuilding the FAISS index from the versioned venue corpus.
 
 `scripts/build_index.py` reads the versioned corpus (`corpus/v1/venues.csv`), composes document text per venue via `compose_document_text`, encodes all documents with the sentence-transformer model, builds a FAISS IndexFlatIP over L2-normalized vectors, and writes the index + build metadata to `corpus/v1/index/`.
 
-This replaces the previous manual `.npy` regeneration workflow. The index is **not committed** to Git — it is rebuilt in each environment (or baked into the Docker image at build time if desired).
+This replaces the previous startup-only FAISS construction workflow. The
+pipeline writes a persisted FAISS index and optional BM25 index. It does not
+rewrite `data/location_embeddings.npy`.
+
+Generated index files are not committed to Git. Runtime prefers a valid
+persisted index and falls back to building FAISS in memory from the committed
+embedding matrix when the persisted index is absent or invalid.
 
 ## Quick Start
 
@@ -21,6 +27,9 @@ python3 scripts/build_index.py --force
 
 # Build from a different corpus version
 python3 scripts/build_index.py --corpus-version v2
+
+# Build dense and BM25 artifacts together
+python3 scripts/build_index.py --force --with-bm25
 ```
 
 ## Environment Variables
@@ -59,7 +68,7 @@ docker compose run --rm \
   "build_timestamp": "2026-05-29T15:30:00Z",
   "corpus_checksum": "9ad28a62...",
   "row_count": 2262,
-  "embedding_model_id": "sentence-transformers/4.1.0",
+  "embedding_model_id": "/app/models/sentence-transformers",
   "dimensions": 768,
   "index_type": "faiss.IndexFlatIP",
   "normalization": "L2",
@@ -101,15 +110,22 @@ assert m['index_type'] == 'faiss.IndexFlatIP'
 print('Metadata valid')
 "
 
-# Verify checksums via the standard artifact script
+# Verify checksums via the standard artifact script (from repository root)
+cd ../../
 bash scripts/verify-artifacts.sh
 ```
 
 ## Relationship to Runtime
 
-The current runtime (`app.py` → `search_service.py`) builds a FAISS index **in memory at startup** from `location_embeddings.npy`. The index build pipeline is a **maintainer tool** for regenerating that `.npy` file (or for future direct index loading).
+Persisted index loading is already integrated. At startup,
+`app.py`/`search_service.py` validates `faiss.index` and `metadata.json`
+against the corpus and expected shape. A valid persisted index is loaded
+directly. Otherwise the service normalizes `location_embeddings.npy` and
+builds `IndexFlatIP` in memory.
 
-The index artifacts at `corpus/vN/index/` are the output of this pipeline. Phase 13 (Unified Retrieval Layer) will integrate persisted index loading into the runtime startup flow.
+With hybrid retrieval enabled, the service also loads the BM25 artifact from
+`corpus/vN/index/bm25/`. Missing or unusable optional artifacts degrade to the
+available retrieval mode rather than changing the canonical corpus.
 
 ## Version Bump Checklist
 

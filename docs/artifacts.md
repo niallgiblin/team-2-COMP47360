@@ -1,6 +1,8 @@
 # Runtime Artifact Policy
 
-This document is the durable artifact policy for Phase 1 and downstream remediation work. It classifies repository artifacts by ownership, delivery mechanism, runtime consumer, and path expectations without changing service behavior.
+This document is the durable artifact policy for the current repository. It
+classifies repository artifacts by ownership, delivery mechanism, runtime
+consumer, and path expectations.
 
 For the tiered baseline verification matrix and requirement traceability record, see [baseline-verification.md](baseline-verification.md) (created in Phase 1 plan 01-03).
 
@@ -8,7 +10,7 @@ For the tiered baseline verification matrix and requirement traceability record,
 
 Urban Gala uses a **hybrid artifact policy**:
 
-| Category | Delivery | Phase 1 behavior |
+| Category | Delivery | Current behavior |
 |----------|----------|------------------|
 | Source-owned metadata and small data | Ordinary Git | Committed in the repository |
 | Required local runtime model artifacts | **Git LFS** | Current delivery mechanism for model weights, embedding arrays, and related binaries |
@@ -17,7 +19,9 @@ Urban Gala uses a **hybrid artifact policy**:
 
 **Git LFS** is the current delivery mechanism for required local runtime model artifacts. After clone, run `git lfs install` and `git lfs pull` if large files are missing (see [README.md](README.md)).
 
-**Release/object storage** (GitHub Releases, S3, or similar) is a documented future migration path. Phase 1 does **not** implement automatic downloads, provisioning scripts, or startup fetches from external storage.
+**Release/object storage** (GitHub Releases, S3, or similar) is a documented
+future migration path. v2 does **not** implement automatic downloads,
+provisioning scripts, or startup fetches from external storage.
 
 Services treat runtime binaries as **trusted artifacts**. Manual SHA-256 verification is available before deployment. The busyness service also enforces its own startup checksum manifest at `BackEnd/busyness-service/models/checksums.sha256`.
 
@@ -52,6 +56,11 @@ Small configuration and tokenizer files under the sentence-transformers model di
 | `BackEnd/llm-service/models/sentence-transformers/1_Pooling/config.json` | Pooling config | LLM service |
 | `BackEnd/llm-service/models/sentence-transformers/README.md` | Model documentation | Human reference |
 
+The dense model bundle is MPNet-family and produces 768-dimensional
+embeddings. `models/cross-encoder/` is a separate optional re-ranking model.
+The checked-in Compose stack disables cross-encoder execution even though the
+artifact and code are present.
+
 ### CSV and data inputs (documented, no mandatory checksum)
 
 | Repository path | Purpose | Runtime consumer | Delivery |
@@ -67,7 +76,7 @@ Each corpus version lives under `BackEnd/llm-service/corpus/vN/` with machine-re
 | `BackEnd/llm-service/corpus/vN/venues.csv` | Versioned venue catalog for semantic search and RAG | LLM service (`DATA_PATH`) | Git |
 | `BackEnd/llm-service/corpus/vN/manifest.json` | SHA-256, schema version, row count, field mapping | LLM service startup validation (`MANIFEST_PATH`) | Git |
 | `BackEnd/llm-service/corpus/vN/SCHEMA.md` | Human-readable field and document model docs | Maintainers | Git |
-| `BackEnd/llm-service/corpus/vN/index/` | Generated FAISS/index artifacts (Phase 12+) | LLM service index build | **Not committed** (gitignored) |
+| `BackEnd/llm-service/corpus/vN/index/` | Generated FAISS and BM25 artifacts | LLM service index build/runtime | **Not committed** (gitignored) |
 
 **Version bump policy (D-03):** When venue data changes materially, create a new directory (`corpus/v2/`, etc.), update `CORPUS_VERSION` / Compose env, regenerate manifest checksums, and sync Spring `locations.csv` in the same commit. Do not auto-bump on every CSV edit.
 
@@ -115,17 +124,22 @@ For Gunicorn worker count, preload behavior, memory measurement commands, and Py
 
 ### LLM service runtime and FAISS index
 
-The LLM service builds a **FAISS vector index in memory at startup** from the committed `location_embeddings.npy` artifact and the versioned venue catalog under `corpus/vN/`. This index enables cosine-similarity search without recomputing embeddings per request.
+The LLM service prefers a valid persisted FAISS index under
+`corpus/vN/index/`. If one is unavailable or invalid, it builds the index in
+memory at startup from the committed `location_embeddings.npy` artifact and
+versioned venue catalog. This enables cosine-equivalent similarity search
+without recomputing document embeddings per request.
 
 | Artifact | Committed? | Notes |
 |----------|------------|-------|
 | `BackEnd/llm-service/data/location_embeddings.npy` | Yes (Git LFS) | Precomputed embedding matrix consumed at startup |
 | `BackEnd/llm-service/corpus/vN/venues.csv` | Yes (Git) | Versioned location catalog (`DATA_PATH`) |
 | `BackEnd/llm-service/corpus/vN/manifest.json` | Yes (Git) | Corpus checksum and schema metadata |
-| `BackEnd/llm-service/corpus/vN/index/` | **No** | Generated index artifacts (Phase 12+); gitignored |
-| FAISS index files (`.faiss`, `.index`, generated `.npy`) | **No** | Built in-process; do not commit generated vector-index artifacts |
+| `BackEnd/llm-service/corpus/vN/index/` | **No** | Generated dense/BM25 index artifacts; gitignored |
+| FAISS index files (`.faiss`, `.index`) | **No** | Generated by the index pipeline; do not commit |
 
-Operators and CI should verify `git status` stays clean after LLM service startup — no new `.faiss`, `.index`, or generated `.npy` files should appear for commit.
+Operators and CI should verify `git status` stays clean after index builds and
+LLM startup.
 
 ### Busyness service (`BackEnd/busyness-service/predictor/busyness.py`)
 
@@ -148,7 +162,12 @@ shasum -a 256 models/DNNs/*.keras models/DNNs/*.h5 models/LSTMs/Fin.keras > mode
 
 Linux users may use `sha256sum` with the same relative paths.
 
-The busyness `/busyness` live and forecast caches are process-local, bounded, TTL-based, and request-triggered. Phase 6 does not add Redis, Memcached, a distributed cache, or scheduled forecast precompute. Tune the local process cache with `BUSYNESS_LIVE_CACHE_TTL_SECONDS`, `BUSYNESS_FORECAST_CACHE_TTL_SECONDS`, and `BUSYNESS_CACHE_MAX_ENTRIES`.
+The busyness `/busyness` live and forecast caches are process-local, bounded,
+TTL-based, and request-triggered. v2 has no Redis, Memcached, distributed
+cache, or scheduled forecast precompute. Tune the local process cache with
+`BUSYNESS_LIVE_CACHE_TTL_SECONDS`,
+`BUSYNESS_FORECAST_CACHE_TTL_SECONDS`, and
+`BUSYNESS_CACHE_MAX_ENTRIES`.
 
 Optional real-artifact verification can be run locally:
 
@@ -173,7 +192,8 @@ Required runtime artifacts must be present before ML services initialize success
 1. **Clone setup:** Install Git LFS (`git lfs install`), clone the repository, and run `git lfs pull` if model files are pointer stubs or missing.
 2. **LLM service:** `verify_file_paths()` checks `MODEL_PATH`, `DATA_PATH`, `MANIFEST_PATH`, and `EMBEDDINGS_PATH`; `validate_corpus_at_startup()` validates the corpus tree under `corpus/{CORPUS_VERSION}/`, requires `DATA_PATH` and `MANIFEST_PATH` to match that tree's `venues.csv` and `manifest.json`, and checks manifest schema and row count (checksum mismatch logs a warning). Initialization fails with env var names only when required files are absent or paths disagree. The service does not auto-download artifacts.
 3. **Busyness service:** `verify_file_paths()` checks DNN path, LSTM path, and `MODEL_CHECKSUMS_PATH`; missing or mismatched checksums keep `/health` unhealthy and `initialize_busyness_models()` returns `False` before loading models.
-4. **No automatic downloads:** Phase 1 does not add startup fetches from Hugging Face, GitHub Releases, or object storage for production model artifacts (note: the LLM service retains an existing Hugging Face fallback for the sentence-transformer model only when local load fails — that is legacy runtime behavior, not Phase 1 provisioning).
+4. **No automatic downloads:** The services do not fetch missing production
+   model artifacts from Hugging Face, GitHub Releases, or object storage.
 
 If artifacts are missing, fix the working tree with Git LFS and refer to [README.md](README.md) setup steps. Do not expect services to self-heal by downloading weights.
 
@@ -181,7 +201,7 @@ If artifacts are missing, fix the working tree with Git LFS and refer to [README
 
 When the team moves off Git LFS for runtime binaries, preferred options include:
 
-| Target | Use case | Phase 1 status |
+| Target | Use case | Current status |
 |--------|----------|----------------|
 | GitHub Releases | Versioned model bundles with downloadable assets and optional digests | Documented only |
 | Object storage (S3, GCS, etc.) | Scalable artifact hosting for CI/CD and production | Documented only |
@@ -193,7 +213,8 @@ A future migration should:
 2. Introduce explicit provisioning (download script or init container) — not silent startup downloads.
 3. Update `MODEL_PATH`, `DATA_PATH`, `MANIFEST_PATH`, `CORPUS_VERSION`, `EMBEDDINGS_PATH`, and busyness model paths together with deployment docs.
 
-Phase 1 intentionally preserves Git LFS availability so remediation phases do not break local runtime setup.
+Git LFS remains the active delivery mechanism for the committed runtime model
+artifacts.
 
 ## Runtime Binary Checksums
 
@@ -281,4 +302,5 @@ shasum -a 256 <path-to-file>
 | `BackEnd/llm-service/data/location_embeddings.npy` | `e668b3c74ad55cac2a0991bf81b10d3023261b464080f4c42f4b5a9558ba06af` |
 | `BackEnd/llm-service/models/sentence-transformers/model.safetensors` | `0b3c8c717335c801abb15983036a6f1df4b6943fd6b93717969efd96d22eeec6` |
 
-CSV, JSON, TXT, and tokenizer metadata files are documented in the manifest but do not require mandatory checksum rows in Phase 1.
+CSV, JSON, TXT, and tokenizer metadata files are documented separately and do
+not all have mandatory rows in the runtime-binary checksum table.

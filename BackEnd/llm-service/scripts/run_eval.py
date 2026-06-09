@@ -88,6 +88,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Print metrics but always exit 0 (skip threshold enforcement)",
     )
+    parser.add_argument(
+        "--ragas",
+        action="store_true",
+        help="Chain RAGAS generation-quality eval after retrieval eval",
+    )
+    parser.add_argument(
+        "--ragas-delay",
+        type=float,
+        default=2.0,
+        help="Seconds between RAGAS questions to avoid HF rate limits (default: 2.0)",
+    )
     return parser.parse_args(argv)
 
 
@@ -294,8 +305,15 @@ def _run_question(
     search_service,
     threshold_recall: float,
     baseline_mode: bool = False,
+    run_ragas: bool = False,
+    ragas_delay: float = 0.0,
 ) -> dict:
-    """Execute one benchmark question and return a result record."""
+    """Execute one benchmark question and return a result record.
+
+    When *run_ragas* is True, extends the result with ``ragas_scores``,
+    ``ragas_error``, and ``answer`` fields by running generation + judge
+    scoring after retrieval.
+    """
     qid: str = entry["id"]
     cat: str = entry["category"]
     query: str = entry["query"]
@@ -336,19 +354,16 @@ def _run_question(
 
     # -- pass/fail logic ----------------------------------------------------
     if cat == "abstention":
-        # Abstention passes when 0 results are returned OR all scores < 0.3.
         if len(results) == 0:
             passed = True
         else:
             passed = all(float(r.get("similarity", 0)) < 0.3 for r in results)
     elif cat == "adversarial":
-        # Adversarial passes if citation accuracy holds (no fabricated attributes).
         passed = citation_ok
     else:
-        # Retrieval, filtered, conversational → recall@5 threshold.
         passed = recall >= threshold_recall
 
-    return {
+    result: dict = {
         "id": qid,
         "category": cat,
         "query": query,
@@ -365,6 +380,78 @@ def _run_question(
         "num_results": len(results),
         "scores": [round(float(r.get("similarity", 0)), 4) for r in results],
     }
+
+    # -- RAGAS scoring (optional) -------------------------------------------
+    if run_ragas:
+        result["ragas_scores"] = None
+        result["ragas_error"] = None
+        result["answer"] = ""
+
+        if not results:
+            result["ragas_error"] = "no_retrieval_results"
+        else:
+            try:
+                from chat_service import (
+                    build_busyness_context,
+                    build_chat_messages,
+                    format_retrieval_context,
+                    huggingface_chat_api_call,
+                )
+                from eval_service import score_with_ragas
+
+                # Build retrieval context and call generation
+                retrieval_context_str, _citations = format_retrieval_context(results)
+                busyness_str = build_busyness_context()
+
+                messages, _ = build_chat_messages(
+                    query=query,
+                    previous_questions=[],
+                    previous_responses=[],
+                    retrieval_context=retrieval_context_str,
+                    search_helper=None,
+                    busyness_context=busyness_str,
+                )
+
+                response = huggingface_chat_api_call(messages)
+                answer = response["choices"][0]["message"]["content"]
+                result["answer"] = answer
+
+                # Build context strings for the judge
+                contexts = []
+                for r in results[:5]:
+                    name = r.get("name", "Unknown")
+                    zone = r.get("zone", "")
+                    vtype = r.get("type", "")
+                    rating = r.get("rating", 0)
+                    desc = r.get("description", "") or r.get("summary", "") or ""
+                    meta = []
+                    if zone:
+                        meta.append(zone)
+                    if vtype:
+                        meta.append(vtype)
+                    if rating:
+                        meta.append(f"{rating:.1f}/5")
+                    ctx = name
+                    if meta:
+                        ctx += f" ({', '.join(meta)})"
+                    if desc:
+                        ctx += f" — {desc[:150]}"
+                    contexts.append(ctx)
+
+                ragas_scores = score_with_ragas(
+                    query=query, answer=answer, contexts=contexts,
+                )
+
+                if ragas_scores.get("faithfulness") is None:
+                    result["ragas_error"] = "judge_failed"
+                else:
+                    result["ragas_scores"] = ragas_scores
+
+            except Exception as exc:
+                logger.warning("RAGAS scoring failed for %s: %s", qid, exc)
+                result["ragas_error"] = "ragas_error"
+
+    return result
 
 
 def _category_report(
@@ -399,9 +486,25 @@ def _category_report(
 
     verdict = "PASS" if metric >= threshold else "FAIL"
 
+    # RAGAS metrics (if available)
+    ragas_lines = ""
+    ragas_scored = stats.get("ragas_scored", 0)
+    ragas_failed = stats.get("ragas_failed", 0)
+    if ragas_scored > 0 or ragas_failed > 0:
+        avg_faith = stats.get("ragas_faith_sum", 0) / ragas_scored if ragas_scored else 0.0
+        avg_relev = stats.get("ragas_relev_sum", 0) / ragas_scored if ragas_scored else 0.0
+        avg_prec = stats.get("ragas_prec_sum", 0) / ragas_scored if ragas_scored else 0.0
+        ragas_lines = (
+            f"\n  RAGAS faithfulness: {avg_faith:.4f}\n"
+            f"  RAGAS answer relevancy: {avg_relev:.4f}\n"
+            f"  RAGAS context precision: {avg_prec:.4f}\n"
+            f"  RAGAS scored: {ragas_scored}/{total} (failed: {ragas_failed})"
+        )
+
     return (
         f"\n{cat}:\n"
-        f"{prefix}\n"
+        f"{prefix}"
+        f"{ragas_lines}\n"
         f"  pass rate: {pass_rate:.4f} ({stats['pass_count']}/{total} passed, "
         f"{stats['fail_count']} failed)\n"
         f"  verdict: {verdict}"
@@ -425,9 +528,13 @@ def _run_all_questions(entries, search_service, args, baseline_mode=False):
         categories: dict[str, dict] = {}
         question_results: list[dict] = []
 
-        for entry in entries:
+        run_ragas = getattr(args, "ragas", False)
+        ragas_delay = getattr(args, "ragas_delay", 0.0)
+
+        for i, entry in enumerate(entries):
             qr = _run_question(entry, search_service, args.threshold_recall,
-                               baseline_mode=baseline_mode)
+                               baseline_mode=baseline_mode,
+                               run_ragas=run_ragas)
             question_results.append(qr)
 
             cat = qr["category"]
@@ -441,6 +548,12 @@ def _run_all_questions(entries, search_service, args, baseline_mode=False):
                     "pass_count": 0,
                     "fail_count": 0,
                     "total": 0,
+                    # RAGAS
+                    "ragas_faith_sum": 0.0,
+                    "ragas_relev_sum": 0.0,
+                    "ragas_prec_sum": 0.0,
+                    "ragas_scored": 0,
+                    "ragas_failed": 0,
                 }
             categories[cat]["recall_sum"] += qr["recall"]
             categories[cat]["ndcg_sum"] += qr["ndcg"]
@@ -450,6 +563,23 @@ def _run_all_questions(entries, search_service, args, baseline_mode=False):
             categories[cat]["pass_count"] += int(qr["passed"])
             categories[cat]["fail_count"] += int(not qr["passed"])
             categories[cat]["total"] += 1
+
+            # RAGAS aggregation
+            if run_ragas:
+                rs = qr.get("ragas_scores")
+                re = qr.get("ragas_error")
+                if rs and re is None:
+                    categories[cat]["ragas_faith_sum"] += rs.get("faithfulness") or 0
+                    categories[cat]["ragas_relev_sum"] += rs.get("answer_relevancy") or 0
+                    categories[cat]["ragas_prec_sum"] += rs.get("context_precision") or 0
+                    categories[cat]["ragas_scored"] += 1
+                elif re:
+                    categories[cat]["ragas_failed"] += 1
+
+            # Rate-limit delay between RAGAS questions
+            if run_ragas and ragas_delay > 0 and i < len(entries) - 1:
+                import time as _time
+                _time.sleep(ragas_delay)
 
             if not qr["passed"]:
                 print(
@@ -651,6 +781,45 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Aggregate MRR (non-abstention): {agg_mrr:.4f}")
     print(f"Aggregate Precision@5 (non-abstention): {agg_precision:.4f}")
     print(f"Aggregate Hit Rate (non-abstention): {agg_hit_rate:.4f}")
+
+    # RAGAS aggregates (if --ragas flag is active)
+    if getattr(args, "ragas", False):
+        ragas_scored = sum(
+            1 for qr in question_results
+            if qr.get("ragas_scores") and not qr.get("ragas_error")
+        )
+        ragas_failed = sum(
+            1 for qr in question_results
+            if qr.get("ragas_error")
+        )
+        if ragas_scored > 0:
+            faith_sum = sum(
+                qr["ragas_scores"].get("faithfulness", 0) or 0
+                for qr in question_results
+                if qr.get("ragas_scores")
+            )
+            relev_sum = sum(
+                qr["ragas_scores"].get("answer_relevancy", 0) or 0
+                for qr in question_results
+                if qr.get("ragas_scores")
+            )
+            prec_sum = sum(
+                qr["ragas_scores"].get("context_precision", 0) or 0
+                for qr in question_results
+                if qr.get("ragas_scores")
+            )
+            agg_faith = faith_sum / ragas_scored
+            agg_relev = relev_sum / ragas_scored
+            agg_prec_ragas = prec_sum / ragas_scored
+            print(f"\nAggregate RAGAS faithfulness: {agg_faith:.4f}")
+            print(f"Aggregate RAGAS answer relevancy: {agg_relev:.4f}")
+            print(f"Aggregate RAGAS context precision: {agg_prec_ragas:.4f}")
+            print(f"RAGAS scoring: {ragas_scored}/{len(question_results)} scored"
+                  f" (failed: {ragas_failed})")
+        else:
+            print(f"\nRAGAS scoring: 0/{len(question_results)} scored"
+                  f" (all failed: {ragas_failed})")
+
     print(f"Total questions evaluated: {len(entries)}")
 
     failures = [qr for qr in question_results if not qr["passed"]]
@@ -702,6 +871,40 @@ def main(argv: list[str] | None = None) -> None:
                 "pass_count": stats["pass_count"],
                 "fail_count": stats["fail_count"],
                 "total": total,
+            }
+
+        # RAGAS data in JSON report
+        if getattr(args, "ragas", False):
+            ragas_categories: dict[str, dict] = {}
+            for category_name in sorted(categories):
+                stats = categories[category_name]
+                rs = stats.get("ragas_scored", 0)
+                ragas_categories[category_name] = {
+                    "faithfulness": round(stats.get("ragas_faith_sum", 0) / rs, 4) if rs else None,
+                    "answer_relevancy": round(stats.get("ragas_relev_sum", 0) / rs, 4) if rs else None,
+                    "context_precision": round(stats.get("ragas_prec_sum", 0) / rs, 4) if rs else None,
+                    "scored": rs,
+                    "failed": stats.get("ragas_failed", 0),
+                    "total": stats["total"],
+                }
+            # RAGAS questions detail (strip verbose answer text from JSON for size)
+            ragas_questions = []
+            for qr in question_results:
+                rq = {
+                    "id": qr["id"],
+                    "category": qr["category"],
+                }
+                if qr.get("ragas_scores"):
+                    rq["ragas_scores"] = qr["ragas_scores"]
+                if qr.get("ragas_error"):
+                    rq["ragas_error"] = qr["ragas_error"]
+                if qr.get("answer"):
+                    rq["answer"] = qr["answer"]
+                ragas_questions.append(rq)
+
+            payload["ragas"] = {
+                "categories": ragas_categories,
+                "questions": ragas_questions,
             }
 
         # ---- baseline comparison in JSON -----------------------------------

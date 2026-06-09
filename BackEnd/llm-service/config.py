@@ -31,6 +31,7 @@ def _env_int(name, default):
 
 
 MODEL_PATH = os.getenv("MODEL_PATH", str(_LLM_SERVICE_DIR / "models" / "sentence-transformers"))
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-mpnet-base-v2")
 DATA_PATH = os.getenv("DATA_PATH", str(_CORPUS_ROOT / "venues.csv"))
 MANIFEST_PATH = os.getenv("MANIFEST_PATH", str(_CORPUS_ROOT / "manifest.json"))
 EMBEDDINGS_PATH = os.getenv(

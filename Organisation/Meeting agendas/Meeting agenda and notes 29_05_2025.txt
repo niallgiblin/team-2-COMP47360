@@ -1,0 +1,84 @@
+Team 2
+MEETING 29/05
+
+29 MAY 2025 / 11:00 AM / Zoom (Info in Whatsapp) 
+ATTENDEES
+Sharon Randhawa, John Huggard, Gregory Nikolopoulos, Niall Giblin, Ruiqi Guo, Grace Hayden. 
+AGENDA
+Project Scope & Direction
+	•	Clarify target audience: Commuters vs. Arts/Entertainment/Gigs Crowd
+	•	Identify core features vs nice to haves
+	•	UI talk
+
+Reflections from Other Teams Presentations
+	•	Review any ideas from other presentations
+
+Backend Responsibilities & Coordination
+	•	Clarify backend’s role ensuring redundancy with frontend is avoided
+	•	Discuss planned endpoints and data points
+
+Development Process
+	•	Unit and integration testing 
+	•	Coding and commenting 
+Stress Testing
+	•	What does stress testing our plan look like in Sprint 1
+
+Faculty Meeting Preparation
+	•	Begin identifying key points to cover 
+
+Sprint 2 Planning
+	•	Confirm goals and main tasks for Sprint 2
+	•	Break down into weekly and subteam tasks on trello
+
+
+NOTES
+Project Scope & Direction
+	•	Locations to different restaurants and events etc
+	•	Aimed towards people in the city they want to know where they can eat, what gigs are on and if there are any promotions. 
+	•	If we have time we could build on the backend for people who own these companies etc. 
+	•	Times and bookings, safer locations, promotions and reviews 
+	•	UI we can put in api
+	•	Core features:
+	•	Route planner 
+	•	When we click a place on the map it will say how busy it is (in the form of a pop-up/sidebar) - using this as an indicator of how good it is
+	•	From there we can create what’s hot features 
+	•	Filter type of places you want to go (could be our big feature - using llm and filter places based on 
+Reflections from Other Teams Presentations
+	•	Everywhere is busy all the time due to no specific reason so we need to deal with this but if anything could make ours better. 
+Backend Responsibilities & Coordination
+	•	John is going to look at creating a chat search and link back next week.
+Development Process
+	•	Unit tests should be done from now until the end
+	•	Make sure all functions have comments - they will look at this and also important for unit testing
+	•	We are going to use Alessio’s standard of commenting 
+
+Stress Testing
+	•	Goal of this Sprint 1 is to stress test
+	•	Ensure our technologies make sense when integrating with each other 
+	•	Ensuring that back-end will work with front-end 
+	•	Testing the basic functionalities of what is happening 
+	•	RDS database we can still use this - need to ensure they are not both set up with the irish server. We will research more before we set it up. 
+
+Faculty Meeting Preparation
+	•	Need to have user stories finished 
+	•	Have the time frames of exactly what we want to do and when we want to do it.
+	•	Backlog and sprint log - have a board for each sprint 
+Sprint 2 Planning
+	•	Design UI 
+	•	Coding 
+	•	Convert features into visually appeal
+	•	Documentation for lit review - Grace
+	•	Figure out how do to build an api in java or spring boot
+	•	At the moment using react leaflet for the map in frontend - works well with open street map comparison table of all types found in front end google doc.
+APis
+	•	Everyone is going to need a list of api keys they need to get. 
+	•	We can arrange it so that the keys are in a file ignored by github and it is private to us. 
+	•	Document - what api, what version, what is enabled in the api this may be in the readme
+ACTION ITEMS
+	•	Backlog and sprint log needed for faculty meeting 04/06
+	•	Chat search creation - John
+	•	User Stories - Gregory
+NEXT WEEK’S AGENDA
+9:30AM in person meeting 
+
+

@@ -1,0 +1,35 @@
+Team 2
+MEETING 03/06
+
+03 June 2025 / 9:30 AM / In-person 
+ATTENDEES
+Sharon Randhawa, John Huggard, Gregory Nikolopoulos, Niall Giblin, Ruiqi Guo, Grace Hayden. 
+AGENDA
+Front end
+	•	Approve UIs 
+	•	Check video 
+	•	What endpoints are the backend going to expose - allows front end to link up and continue development
+Backend 
+	•	User cases file would be useful including how each page is triggered, what data is needed to be passed to the front end and what needs to establish API.
+	•	What data is needed for each feature
+	•	Some of the other groups have sample data so even if sample data could be made available that would allow the backend to start more parts of their work. 
+
+Data 
+	•	Confirmation of what each group wants to get done in Sprint 2.
+	•	Data analytics - anyway that coordination lead could do some of the data part no preference on which part just that upon talking to other teams fatemah is going to be strict on marking our interview where we all have to say what we completed in the project. NOTE: We are not allowed to answer questions directed to other members of the team so this has me a bit concerned about not doing any of the data part.
+
+Faculty meeting
+	•	Other groups are creating an agenda to propose to the lecturer - i think we should do the same - anybody have anything they want added to the agenda to be clarified by the lecturer or just to discuss something with them?
+
+
+NOTES
+
+
+ACTION ITEMS
+	•	Faculty meeting tomorrow! 
+	•	
+	•	 
+NEXT WEEK’S AGENDA
+
+
+

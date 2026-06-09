@@ -1,0 +1,15 @@
+# Grafana dashboard provider — loads pre-provisioned dashboards from config
+apiVersion: 1
+
+providers:
+  - name: "RAG Observability"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

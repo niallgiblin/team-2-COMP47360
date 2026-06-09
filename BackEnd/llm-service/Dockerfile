@@ -29,7 +29,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application modules into the container
-COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py query_expander.py bm25_index.py observability.py ./
+COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py query_expander.py bm25_index.py observability.py eval_service.py ./
 COPY retrieval/ ./retrieval/
 COPY venue_corpus/ ./venue_corpus/
 COPY prompts/ ./prompts/

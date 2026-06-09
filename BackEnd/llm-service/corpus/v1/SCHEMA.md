@@ -1,6 +1,6 @@
 # Corpus v1 Schema
 
-Versioned venue catalog for v0.2 RAG (RAG-01). Source of truth for embedding text,
+Versioned venue catalog for the v2 RAG path. Source of truth for embedding text,
 retrieval keys, and Spring Boot location import alignment.
 
 ## Column reference
@@ -20,7 +20,7 @@ retrieval keys, and Spring Boot location import alignment.
 | `price` | string | **Embed** + structured filter column |
 | `zone` | string | **Embed** + structured filter column |
 | `Info` | string | **Embed** — static venue summary text |
-| `summary` | string | **Embed** — static busyness summary (no live join) |
+| `summary` | string | **Embed** — static venue summary |
 | `tags` | string | **Embed** |
 
 ## Embed fields
@@ -55,7 +55,7 @@ Excluded from labeled-line embed text (per D-06):
 ## Retrieval key (D-10)
 
 Corpus `id` is the retrieval key. It is **not** embedded as a labeled line. Values must
-match MySQL `Location.id` for Phase 14 citations and Phase 15 eval gold labels. Alignment
+match MySQL `Location.id` for citations and evaluation gold labels. Alignment
 is maintained via D-11 same-commit sync of
 `BackEnd/src/main/resources/data/locations.csv`.
 
@@ -76,8 +76,9 @@ Price: price level moderate
 Type: Museum
 ```
 
-Static busyness context comes only from `summary` and `Info` columns (D-08). There is
-**no live busyness join** at corpus-build time.
+`summary` and `Info` are static catalog text. There is **no live busyness join**
+at corpus-build time; current-time busyness enrichment happens at request time
+where available.
 
 ## DTO gap note
 
@@ -92,8 +93,9 @@ columns, or catalog semantics change materially.
 
 ## Row order warning
 
-Do **not** reorder rows without a Phase 12 FAISS index rebuild. Current embeddings
-use row-index (`iloc`) alignment with `venues.csv` order.
+Do **not** reorder rows without regenerating the embedding matrix and rebuilding
+the FAISS/BM25 artifacts. Runtime result mapping uses row-index (`iloc`)
+alignment with `venues.csv` order.
 
 ## Maintainer checklist (D-11)
 
@@ -103,3 +105,8 @@ When editing `venues.csv`:
 2. Recompute manifest SHA-256 (`shasum -a 256 corpus/v1/venues.csv`) and update
    `manifest.json` → `venues_csv.sha256` and `row_count`
 3. Material catalog changes → new `corpus/vN/` per D-03, not in-place breaking edits
+4. Regenerate `data/location_embeddings.npy` with the same encoder used at
+   query time
+5. Rebuild persisted indexes with `scripts/build_index.py --force --with-bm25`
+6. Update the documented embedding checksum and run
+   `scripts/verify-artifacts.sh` from the repository root

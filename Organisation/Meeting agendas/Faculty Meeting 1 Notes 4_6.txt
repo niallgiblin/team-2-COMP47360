@@ -1,0 +1,18 @@
+Faculty Meeting 1 Notes 
+We can only scrape 500 posts per month on X  
+Unofficial api client uses twitter internal api which does question whether you are violating terms of service, not considered illegal but you can be banned.  
+Recommended to try it -> still our responsibility  
+This is considered stress testing  
+ 
+How are you going to connect the open form  
+Taking data from nearby places api from google. Characterise restaurants and bars from this. Using categories from nearby places api.  
+ 
+Decide whether we are going to use by category or by work for the matching.  
+P thinks need to make it clear how we are going to do this matching and also stress test these ideas.  
+Takehome  
+Have a clear idea how we are going to have user input with the places 
+Does not have to be complex 
+Need datasets that we n-know for sure we can use as it takes a long time to collect data 
+Need to know exactly how we are going to use datasets -> examples of places and how we are going to build it is what he would like to see.  
+ 
+

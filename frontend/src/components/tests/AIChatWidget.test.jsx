@@ -8,6 +8,7 @@ import AIChatWidget from '../AIChatWidget';
 // Mock the API service
 const mockChatAPI = vi.hoisted(() => ({
   sendMessage: vi.fn(),
+  sendMessageStream: vi.fn().mockRejectedValue(new Error('stream unavailable')),
 }));
 
 const mockLocationAPI = vi.hoisted(() => ({

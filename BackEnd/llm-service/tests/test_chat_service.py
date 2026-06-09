@@ -1562,3 +1562,197 @@ class TestReformulateQuery:
         assert "previous_questions" in param_names
         assert "previous_responses" in param_names
         assert "hf_call" in param_names
+
+
+# ---------------------------------------------------------------------------
+# _stream_hf_response (Phase 22)
+# ---------------------------------------------------------------------------
+
+class TestStreamHFResponse:
+    """Unit tests for the streaming HF API generator."""
+
+    def test_native_sse_yields_tokens(self, monkeypatch):
+        """When Content-Type is text/event-stream, tokens are yielded line by line."""
+        import types
+        from chat_service import _stream_hf_response
+
+        # Simulate SSE response lines.
+        sse_lines = [
+            b'data: {"choices":[{"delta":{"content":"Hello"},"index":0,"finish_reason":null}]}\n\n',
+            b'data: {"choices":[{"delta":{"content":" there"},"index":0,"finish_reason":null}]}\n\n',
+            b'data: {"choices":[{"delta":{"content":"!"},"index":0,"finish_reason":"stop"}]}\n\n',
+        ]
+
+        class FakeResponse:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def iter_lines(self, decode_unicode=True):
+                for line in sse_lines:
+                    yield line.decode("utf-8") if decode_unicode else line
+
+            def raise_for_status(self):
+                pass
+
+        import requests
+
+        class FakeRequests:
+            @staticmethod
+            def post(*args, **kwargs):
+                return FakeResponse()
+
+            exceptions = types.SimpleNamespace(
+                Timeout=requests.exceptions.Timeout,
+                RequestException=requests.exceptions.RequestException,
+            )
+            exceptions.Timeout = requests.exceptions.Timeout
+            exceptions.RequestException = requests.exceptions.RequestException
+
+        tokens = list(_stream_hf_response(
+            [{"role": "user", "content": "hi"}],
+            requests_module=FakeRequests,
+        ))
+        assert tokens == ["Hello", " there", "!"]
+
+    def test_non_sse_fallback_token_splits(self, monkeypatch):
+        """When response is not SSE, tokens are split on whitespace boundaries."""
+        import requests
+        from chat_service import _stream_hf_response
+
+        class FakeResponse:
+            headers = {"Content-Type": "application/json"}
+
+            def json(self):
+                return {"choices": [{"message": {"content": "one two three"}}]}
+
+            def raise_for_status(self):
+                pass
+
+        class FakeRequests:
+            @staticmethod
+            def post(*args, **kwargs):
+                return FakeResponse()
+
+            exceptions = type("exceptions", (), {
+                "Timeout": requests.exceptions.Timeout,
+                "RequestException": requests.exceptions.RequestException,
+            })
+
+        tokens = list(_stream_hf_response(
+            [{"role": "user", "content": "hi"}],
+            requests_module=FakeRequests,
+        ))
+        # "one two three" → ["one", " ", "two", " ", "three"]
+        assert "one" in tokens
+        assert "two" in tokens
+        assert "three" in tokens
+
+    def test_empty_response_yields_nothing(self, monkeypatch):
+        """Empty choice content yields nothing."""
+        import requests
+        from chat_service import _stream_hf_response
+
+        class FakeResponse:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def iter_lines(self, decode_unicode=True):
+                yield 'data: {"choices":[{"delta":{"content":""},"index":0,"finish_reason":"stop"}]}'
+
+            def raise_for_status(self):
+                pass
+
+        class FakeRequests:
+            @staticmethod
+            def post(*args, **kwargs):
+                return FakeResponse()
+
+            exceptions = type("exceptions", (), {
+                "Timeout": requests.exceptions.Timeout,
+                "RequestException": requests.exceptions.RequestException,
+            })
+
+        tokens = list(_stream_hf_response(
+            [{"role": "user", "content": "hi"}],
+            requests_module=FakeRequests,
+        ))
+        assert tokens == []
+
+
+# ---------------------------------------------------------------------------
+# stream_chat_response (Phase 22)
+# ---------------------------------------------------------------------------
+
+class TestStreamChatResponse:
+    """Integration-style tests for the SSE streaming generator."""
+
+    def test_general_chat_yields_events(self, monkeypatch):
+        """General chat query yields token + done events with no citations."""
+        from chat_service import stream_chat_response
+
+        def fake_hf(messages, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "Hello! How can I help?"}}]}
+
+        events = list(stream_chat_response(
+            query="hello",
+            previous_questions=[],
+            previous_responses=[],
+            hf_call=fake_hf,
+        ))
+        assert len(events) > 1
+        # First events should be token events.
+        assert "event: token" in events[0]
+        # Last event should be done.
+        assert "event: done" in events[-1]
+        # Done event should have empty citations.
+        assert '"citations"' in events[-1]
+        assert '"content"' in events[-1]
+
+    def test_done_event_has_citations_and_content(self, monkeypatch):
+        """Done event includes content and citations keys."""
+        from chat_service import stream_chat_response
+
+        def fake_search(query, limit=5, location_filter=None):
+            return [{
+                "id": 1, "name": "Test Bar", "zone": "midtown", "type": "Bar",
+                "price": "$", "rating": 4.0, "description": "A test bar",
+                "summary": "test vibe", "tags": "test", "num_reviews": 10,
+                "reviews": "Great place",
+            }]
+
+        def fake_stream(messages, max_tokens=400, timeout=90):
+            yield "Here"
+            yield " "
+            yield "goes"
+
+        monkeypatch.setattr("chat_service._stream_hf_response", fake_stream)
+
+        events = list(stream_chat_response(
+            query="best bars in midtown",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=fake_search,
+        ))
+        # Last event should be "done".
+        assert "event: done" in events[-1]
+        assert '"citations"' in events[-1]
+        assert '"content"' in events[-1]
+
+    def test_error_event_on_generation_failure_without_citations(self, monkeypatch):
+        """When generation fails and there are no citations, yield error event."""
+        from chat_service import stream_chat_response
+
+        def fake_search(query, limit=5, location_filter=None):
+            return []  # no results → no citations
+
+        def fake_stream_fail(messages, max_tokens=400, timeout=90):
+            raise Exception("HF API down")
+
+        monkeypatch.setattr("chat_service._stream_hf_response", fake_stream_fail)
+
+        events = list(stream_chat_response(
+            query="xyzzy no results",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=fake_search,
+        ))
+        assert len(events) > 0
+        assert "event: error" in events[-1]

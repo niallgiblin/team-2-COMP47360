@@ -220,6 +220,156 @@ export const chatAPI = {
     }
     return response.json();
   },
+
+  /**
+   * Stream a chat message via SSE (Server-Sent Events).
+   *
+   * Calls ``/api/chat/stream`` with the same payload as ``sendMessage``
+   * and reads the response as a text/event-stream.  ``onToken`` is called
+   * for each incremental ``token`` event; ``onDone`` is called when the
+   * stream completes with the full processed response and citations array.
+   * ``onError`` is called on transport or parse failures.
+   *
+   * Returns the AbortController so the caller can cancel mid-stream.
+   */
+  sendMessageStream: async (message, history, { onToken, onDone, onError }) => {
+    const previous_questions = [];
+    const previous_responses = [];
+    let pendingQuestion = null;
+
+    (history || []).forEach((m) => {
+      if (m.sender === 'user' && m.text) {
+        pendingQuestion = m.text;
+        previous_questions.push(m.text);
+      } else if (m.sender === 'bot' && m.text && pendingQuestion) {
+        previous_responses.push(m.text);
+        pendingQuestion = null;
+      }
+    });
+
+    const token = getAuthToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(resolveLlmApiUrl() + '/stream', {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          message,
+          previous_questions: previous_questions.slice(-3),
+          previous_responses: previous_responses.slice(-3),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const parseSSEChunk = (text) => {
+        // text may contain one or more complete SSE events.
+        // We split on double-newline and parse each event block.
+        const events = text.split(/\n\n/);
+
+        // Return parsed events and the leftover (incomplete) buffer.
+        const parsed = [];
+        for (const block of events) {
+          if (!block.trim()) continue;
+          const lines = block.split('\n');
+          let eventType = '';
+          let dataStr = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              dataStr = line.slice(6);
+            } else if (line.startsWith('data:')) {
+              dataStr = line.slice(5);
+            }
+          }
+          if (eventType && dataStr) {
+            try {
+              parsed.push({ event: eventType, data: JSON.parse(dataStr) });
+            } catch {
+              // Malformed JSON — skip this event.
+            }
+          }
+        }
+        return parsed;
+      };
+
+      // Read loop.
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Extract complete events from the buffer.
+        const lastDoubleNewline = buffer.lastIndexOf('\n\n');
+        if (lastDoubleNewline === -1) continue;
+
+        const complete = buffer.slice(0, lastDoubleNewline + 2);
+        buffer = buffer.slice(lastDoubleNewline + 2);
+
+        const parsedEvents = parseSSEChunk(complete);
+        for (const evt of parsedEvents) {
+          if (evt.event === 'token') {
+            onToken?.(evt.data.content || '');
+          } else if (evt.event === 'done') {
+            onDone?.({
+              content: evt.data.content || '',
+              citations: evt.data.citations || [],
+            });
+            return;
+          } else if (evt.event === 'error') {
+            onError?.(evt.data.message || 'Unknown error');
+            return;
+          }
+        }
+      }
+
+      // Process any remaining buffer after the loop.
+      if (buffer.trim()) {
+        const remainder = parseSSEChunk(buffer + '\n\n');
+        for (const evt of remainder) {
+          if (evt.event === 'token') {
+            onToken?.(evt.data.content || '');
+          } else if (evt.event === 'done') {
+            onDone?.({
+              content: evt.data.content || '',
+              citations: evt.data.citations || [],
+            });
+            return;
+          } else if (evt.event === 'error') {
+            onError?.(evt.data.message || 'Unknown error');
+            return;
+          }
+        }
+      }
+
+      // If we got here without a done/error event, treat as error.
+      onError?.('Stream ended unexpectedly');
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // Caller aborted — not an error.
+        return;
+      }
+      onError?.(error.message || 'Connection failed');
+    }
+
+    return controller;
+  },
 };
 
 // Generic API service utilities

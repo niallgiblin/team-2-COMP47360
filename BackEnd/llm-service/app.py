@@ -245,10 +245,13 @@ def _get_ai_response_with_metadata(query, previous_questions, previous_responses
 
 
 def _chat_search_helper_with_metadata(query, limit=5, location_filter=None):
-    """Search helper returning SearchExecutionResult with effective mode."""
+    """Search helper returning list of location dicts.
+
+    Wraps search_with_metadata() but unwraps the SearchExecutionResult
+    to return a plain list — build_retrieval_context() expects iterable results.
+    """
     if not initialized or search_service is None:
-        from observability import SearchExecutionResult
-        return SearchExecutionResult([], effective_mode="dense", degradation="retrieval_unavailable")
+        return []
 
     try:
         search_query = query
@@ -262,11 +265,10 @@ def _chat_search_helper_with_metadata(query, limit=5, location_filter=None):
         result = search_service.search_with_metadata(
             search_query, limit=limit, location_filter=location_filter
         )
-        return result
+        return result.results
     except Exception as exc:
         logger.error("Error in chat search helper: %s", exc)
-        from observability import SearchExecutionResult
-        return SearchExecutionResult([], effective_mode="dense", degradation="retrieval_unavailable")
+        return []
 
 
 if os.environ.get("FLASK_ENV") == "development":
@@ -658,6 +660,136 @@ def chat_auth_error():
             "code": "AUTHENTICATION_REQUIRED",
         }
     ), 401
+
+
+@app.route("/api/chat/stream", methods=["POST"])
+def chat_stream_endpoint():
+    """SSE streaming chat endpoint.
+
+    Returns ``text/event-stream`` with incremental ``token`` events
+    followed by a final ``done`` event containing the full processed
+    response and citations array.
+    """
+    import time as _time
+    from observability import (
+        ChatRequestState,
+        finalize_chat_request,
+        hash_query,
+        _queue_event,
+        uuid4,
+    )
+
+    request_id = uuid4()
+    state = ChatRequestState(request_id=request_id)
+
+    # ---- Auth gate -------------------------------------------------------
+    auth_error = validate_chat_jwt()
+    if auth_error is not None:
+        state.mode = "unknown"
+        state.status = "error"
+        state.error_type = "auth_error"
+        state.error_stage = "auth"
+        state.error_code = "auth_required"
+        state.finish_after_response_construction()
+        auth_body, auth_status = auth_error
+        auth_body.headers["X-Request-ID"] = request_id
+        finalize_chat_request(state, queue_sink=_queue_event)
+        return auth_body, auth_status
+
+    # ---- Content-type validation -----------------------------------------
+    if not request.is_json:
+        state.mode = "unknown"
+        state.status = "error"
+        state.error_type = "validation_error"
+        state.error_stage = "validation"
+        state.error_code = "invalid_payload"
+        state.finish_after_response_construction()
+        resp = jsonify({"error": "Content-Type must be application/json"})
+        resp.status_code = 415
+        resp.headers["X-Request-ID"] = request_id
+        finalize_chat_request(state, queue_sink=_queue_event)
+        return resp
+
+    try:
+        data = request.get_json()
+        query = data.get("message", "").strip()
+        previous_questions = data.get("previous_questions", [])
+        if not isinstance(previous_questions, list):
+            previous_questions = []
+        previous_questions = [str(q) for q in previous_questions if q][-3:]
+
+        previous_responses = data.get("previous_responses", [])
+        if not isinstance(previous_responses, list):
+            previous_responses = []
+        previous_responses = [str(r) for r in previous_responses if r][-3:]
+
+        if not query:
+            state.mode = "unknown"
+            state.status = "error"
+            state.error_type = "validation_error"
+            state.error_stage = "validation"
+            state.error_code = "message_required"
+            state.finish_after_response_construction()
+            resp = jsonify({"error": "Message is required"})
+            resp.status_code = 400
+            resp.headers["X-Request-ID"] = request_id
+            finalize_chat_request(state, queue_sink=_queue_event)
+            return resp
+
+        state.query_hash = hash_query(query)
+
+        # Resolve location filter.
+        from chat_service import extract_location_from_query
+
+        location_filter = (data.get("location") or "").strip() or None
+        if not location_filter:
+            location_filter = extract_location_from_query(query)
+
+        # Build the SSE generator.
+        from chat_service import stream_chat_response
+
+        generator = stream_chat_response(
+            query,
+            previous_questions,
+            previous_responses=previous_responses,
+            search_helper=_chat_search_helper_with_metadata,
+            location_filter=location_filter,
+        )
+
+        state.mode = "dense"
+        state.status = "success"
+        state.retrieval_started = True
+        state.finish_after_response_construction()
+        finalize_chat_request(state, queue_sink=_queue_event)
+
+        from flask import Response
+        from flask import stream_with_context
+
+        response = Response(
+            stream_with_context(generator),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "X-Request-ID": request_id,
+            },
+        )
+        return response
+
+    except Exception as exc:
+        logger.error("Error in stream chat endpoint: %s", exc)
+        state.mode = state.mode if state.mode != "unknown" else "unknown"
+        state.status = "error"
+        state.error_stage = state.error_stage or "response"
+        state.error_code = state.error_code or "internal_error"
+        state.error_type = "response_error"
+        state.finish_after_response_construction()
+        finalize_chat_request(state, queue_sink=_queue_event)
+        resp = jsonify({"error": "Internal server error"})
+        resp.status_code = 500
+        resp.headers["X-Request-ID"] = request_id
+        return resp
 
 
 if __name__ == "__main__":

@@ -1,5 +1,11 @@
 # Baseline Verification Matrix
 
+> **Historical record:** This file preserves phase-by-phase evidence from the
+> v0.1 remediation milestone. Outcomes such as missing tests and old failure
+> counts describe the date shown in each section, not current v2 status. Use
+> [TESTING.md](TESTING.md) and
+> [V2_UPGRADE_ANALYSIS.md](V2_UPGRADE_ANALYSIS.md) for current claims.
+
 Tiered verification record for Phase 1 and downstream remediation. Required-pass checks are limited to metadata and artifact policy gates expected to pass after plans 01-01 and 01-02. Application tests, Docker runtime smoke, and Python service smoke are documented as known gaps, manual tiers, or missing placeholders — not Phase 1 required gates.
 
 Related policy: [artifacts.md](artifacts.md). GSD planning artifacts under `.planning/` are local-only and must not be committed.
@@ -191,4 +197,3 @@ Phase 10 plan executors **must** record in `*-SUMMARY.md`:
 | Plan | Deliverable | Requirement IDs |
 |------|-------------|-----------------|
 | `10-05` | `scripts/compose-smoke.sh`, `docs/cache-inventory.md`, Phase 10 baseline tier | TEST-05, MAINT-05, PERF-05 |
-

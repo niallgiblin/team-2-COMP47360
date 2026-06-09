@@ -1,0 +1,34 @@
+
+Team 2
+MEETING 01/07
+
+1 July 2025 / 12:00 PM / Online
+ATTENDEES
+Sharon Randhawa, John Huggard, Gregory Nikolopoulos, Niall Giblin, Ruiqi Guo, Grace Hayden. 
+AGENDA
+Back-end and Front-end
+	•	 What is working now?
+	•	What do we need to do to get the most important features working
+Progress so far
+	•	Faculty meeting tomorrow at 11:30 what do we want to discuss
+NOTES
+	•	Plan feature - pretty much working 
+	•	Adding friends - nearly working 
+	•	Adding user reviews - we have not done this yet could pull in from other places 
+	•	Favourite venues - not working yet
+	•	Find your vibe not working 
+	•	Chatbot
+	•	Busyness predictions (code mostly written but needs to be integrated with new data files)
+
+
+
+
+
+ACTION ITEMS
+	•	
+NEXT WEEK’S AGENDA
+
+
+
+
+

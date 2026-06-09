@@ -1,0 +1,33 @@
+Team 2
+MEETING 26/06
+
+26 June 2025 / 1:00 PM / In person 
+ATTENDEES
+Sharon Randhawa, John Huggard, Gregory Nikolopoulos, Niall Giblin, Ruiqi Guo, Grace Hayden. 
+AGENDA
+Back-end and Front-end
+	•	 How would we like the “Plan My Night” functionality to work?
+	•	Presentation
+	•	Are we happy we know what extra features we are going to implement? Is there anything we are still unsure about?
+Progress so far
+	•	How are we progressing in Sprint 3, will everything be finished by Sprint 4?
+	•	
+
+
+
+
+
+NOTES
+
+
+
+
+
+ACTION ITEMS
+	•	
+NEXT WEEK’S AGENDA
+
+
+
+
+

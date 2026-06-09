@@ -1,0 +1,29 @@
+
+Team 2
+MEETING 02/07
+
+2 July 2025 / 11:30 AM 
+ATTENDEES
+Sharon Randhawa, John Huggard, Gregory Nikolopoulos, Niall Giblin, Ruiqi Guo, Grace Hayden. 
+NOTES
+	•	Look at rubric - demo will work where they watch the video and each member is brought in 1 by 1 to explain how they contributed to the project.
+
+	•	Main thing we need to ensure we have is enough testing done:
+	•	We need testing for backend where we test methods etc and have this clearly in the report
+	•	Front end testing should be done in the form of a user survey (look up questions online there are standard ones) and show the results in the report. 
+	•	This week we need to try and have everything running as much as possible so we have time for testing. 
+
+
+
+
+
+
+
+ACTION ITEMS
+	•	
+NEXT WEEK’S AGENDA
+
+
+
+
+

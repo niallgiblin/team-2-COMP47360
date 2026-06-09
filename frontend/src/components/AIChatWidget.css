@@ -476,6 +476,26 @@
   }
 }
 
+/* --- Streaming cursor --- */
+.streaming-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.streaming-cursor {
+  display: inline;
+  color: #3ABEFF;
+  font-weight: 400;
+  animation: cursorBlink 0.8s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* --- Composer --- */
 .input-container {
   padding: 16px;

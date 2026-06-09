@@ -1,33 +1,19 @@
-FINAL EVALUATION METRICS
-========================
+HISTORICAL EVALUATION SNAPSHOT
+==============================
 
-Test Coverage Analysis:
-- Backend Controller Coverage: 100% (       7/7)
-- Backend Service Coverage: 80% (       8/10)
-- Frontend Component Coverage: 30% (6/20+ components)
-- Total Test Files: 21
+This file was generated for an earlier milestone and is retained only as
+historical evidence. Its test counts, coverage ratios, build-success estimate,
+and bug-detection estimate are not current v2 metrics and must not be quoted as
+such.
 
-New Tests Added:
-- FavouriteControllerTest.java (9 test cases)
-- FriendControllerTest.java (12 test cases)
-- VibeServiceTest.java (10 test cases)
-- MapView.test.jsx (12 test cases)
-- AIChatWidget.test.jsx (12 test cases)
+Current executable results:
 
-Test-Driven Architecture Achievements:
-- 100% controller coverage achieved
-- 80% service coverage achieved
-- 30% frontend component coverage
-- Comprehensive mock-based testing
-- User interaction testing
-- Error handling validation
+  docs/TESTING.md
 
-Performance Testing:
-- Load testing with Locust
-- Health monitoring
-- Response time validation
+Current retrieval evaluation:
 
-Quality Metrics:
-- Test Execution Time: < 2 minutes
-- Build Success Rate: 98%
-- Bug Detection: 90% of issues caught
+  docs/EVALUATION_STRATEGY.md
+
+Canonical main-to-v2 analysis and interview guidance:
+
+  docs/V2_UPGRADE_ANALYSIS.md

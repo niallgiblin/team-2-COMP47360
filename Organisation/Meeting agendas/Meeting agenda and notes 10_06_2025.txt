@@ -1,0 +1,60 @@
+Team 2
+MEETING 10/06
+
+10 June 2025 / 4:00 PM / Online 
+ATTENDEES
+Sharon Randhawa, John Huggard, Gregory Nikolopoulos, Niall Giblin, Ruiqi Guo, Grace Hayden. 
+AGENDA
+Front-end
+	•	About us section- how does everybody feel having a headshot and a sentence relating yourself either to New York or a big city - see doc for example.
+Back-end
+	•	JWT for authentication stuff any other ideas for auth/security?
+Progress so far
+	•	Recap on what we have completed in this Sprint so far
+	•	What needs to be done to finish this sprint?
+	•	Is there anything that will not be finished on time?
+Minimum Viable Product
+	•	What exactly do we want for the MVP? Exact features and functionalities?
+	•	What features do we want to build after we have a functioning product?
+
+Faculty meeting
+	•	Plan questions for Wednesday’s faculty meeting (could ask about how final demo works) 
+
+
+
+
+NOTES
+Most parts completed separately for Sprint 2 
+Sharon tried to link up backend and front end today but would not work we will deal with tomorrow after meeting it is not docker just something else. 
+John - file for api’s seem to have every section done but need to confirm that everything is working some of it may not be working 
+Sprint 2 - things that may not get finished 
+	•	Gregory a bit behind on the layout of find my vibe 
+
+Minimum Viable Product:
+Find my vibe with llm 
+All points on the map, ml that shows points on the map and also have the ml call
+
+
+
+Extra add ons if we have time:
+Map with jigsaw 
+Friend interaction 
+Plan my night 
+Mobile version - maybe we could speak in and convert to text but we may not be able to get a free api to do that
+
+Faculty meeting:
+	•	Ask about main demo grading and roles like how will questions be asked 
+	•	Next round of presentations 
+Maintenance - do they need to go into further detail than gregory’s presentation - like in depth on tech and how we are using it and why we are using it in certain ways. 
+	•	Clarification on when we have to stop coding and when we have to submit (seems to be Friday week 10) 
+
+ACTION ITEMS
+	•	Faculty meeting tomorrow @11:30am! 
+	•	Sort out linking back and front end tomorrow after meeting
+	•	Discuss the map tomorrow of Manhattan 
+NEXT WEEK’S AGENDA
+
+
+
+
+

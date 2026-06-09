@@ -1,3 +1,7 @@
+HISTORICAL SNAPSHOT ONLY
+This report describes a 2025 test run before the v2 suites were added.
+It is not current v2 status. See docs/TESTING.md.
+
 ================================================================================
                     URBAN GALA COMPREHENSIVE TEST METRICS REPORT
 ================================================================================

@@ -20,7 +20,8 @@ Desktop.ini
 *.pem
 
 # Generated outputs (build artifacts and test metrics)
-test-reports/
+test-reports/*
+!test-reports/README.md
 docs/controller-coverage.txt
 docs/service-coverage.txt
 docs/frontend-tests.txt

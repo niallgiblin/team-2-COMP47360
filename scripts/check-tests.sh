@@ -1,50 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "🔍 Checking Test Files..."
-echo "========================"
+count_files() {
+    find "$1" "${@:2}" 2>/dev/null | wc -l | tr -d ' '
+}
 
-# Check if we're in the right directory
-echo "Current directory: $(pwd)"
-echo ""
+backend_tests=$(count_files BackEnd/src/test -name '*Test*.java')
+controller_tests=$(count_files BackEnd/src/test -name '*ControllerTest.java')
+service_tests=$(count_files BackEnd/src/test -name '*ServiceTest.java')
+frontend_tests=$(
+    find frontend/src frontend/services -type f \( -name '*.test.js' -o -name '*.test.jsx' \) 2>/dev/null
+    find frontend -maxdepth 1 -type f \( -name '*.test.js' -o -name '*.test.jsx' \) 2>/dev/null
+)
+frontend_tests=$(printf '%s\n' "$frontend_tests" | sed '/^$/d' | wc -l | tr -d ' ')
+cypress_specs=$(count_files frontend/cypress/e2e -name '*.cy.js')
+llm_tests=$(count_files BackEnd/llm-service/tests -name 'test_*.py')
+busyness_tests=$(count_files BackEnd/busyness-service/tests -name 'test_*.py')
 
-# Count test files
-echo "📊 Test File Counts:"
-echo "Backend Test Files:"
-if [ -d "BackEnd/src/test" ]; then
-    echo "  - Total: $(find BackEnd/src/test -name "*Test.java" 2>/dev/null | wc -l)"
-    echo "  - Controllers: $(find BackEnd/src/test -name "*ControllerTest.java" 2>/dev/null | wc -l)"
-    echo "  - Services: $(find BackEnd/src/test -name "*ServiceTest.java" 2>/dev/null | wc -l)"
-else
-    echo "  - BackEnd test directory not found"
-fi
+cat <<EOF
+Test file inventory
+===================
+Spring Java test classes: ${backend_tests}
+  Controller test classes: ${controller_tests}
+  Service test classes: ${service_tests}
+Frontend Vitest files: ${frontend_tests}
+Cypress specifications: ${cypress_specs}
+LLM pytest modules: ${llm_tests}
+Busyness pytest modules: ${busyness_tests}
 
-echo ""
-echo "Frontend Test Files:"
-if [ -d "frontend/src" ]; then
-    echo "  - Total: $(find frontend/src -name "*.test.*" 2>/dev/null | wc -l)"
-    echo "  - Components: $(find frontend/src -path "*/tests/*" -name "*.test.*" 2>/dev/null | wc -l)"
-else
-    echo "  - Frontend src directory not found"
-fi
-
-echo ""
-echo "📁 Directory Structure:"
-echo "BackEnd test directory exists: $([ -d "BackEnd/src/test" ] && echo "Yes" || echo "No")"
-echo "Frontend src directory exists: $([ -d "frontend/src" ] && echo "Yes" || echo "No")"
-
-# List specific test files
-echo ""
-echo "🔍 Backend Controller Tests:"
-if [ -d "BackEnd/src/test/java/com/manhattan/busyness_predictor/controller" ]; then
-    ls -la BackEnd/src/test/java/com/manhattan/busyness_predictor/controller/*Test.java 2>/dev/null || echo "No controller test files found"
-else
-    echo "Controller test directory not found"
-fi
-
-echo ""
-echo "🔍 Frontend Component Tests:"
-if [ -d "frontend/src/components/tests" ]; then
-    ls -la frontend/src/components/tests/*.test.* 2>/dev/null || echo "No component test files found"
-else
-    echo "Component tests directory not found"
-fi 
+These are file counts, not line or branch coverage percentages.
+Run the suites and read docs/TESTING.md before making pass/fail claims.
+EOF

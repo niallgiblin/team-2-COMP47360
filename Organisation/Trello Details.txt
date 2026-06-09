@@ -1,0 +1,8 @@
+Trello Details
+
+For project management we used Trello boards. This allowed us to clearly lay out work that needed to be done for each Sprint and assign it to individuals. It also allowed us to easily redistribute tasks among members. 
+
+You can find our Trello boards here: https://trello.com/b/FOkvWYTu/team-2-comp47360
+
+Please note that these boards may look a bit unorganised, but contain our task breakdown for each Sprint.
+

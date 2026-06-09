@@ -61,10 +61,10 @@ class TestMultiprocessAggregation:
             sys.path.insert(0, {os.path.join(os.path.dirname(__file__), os.pardir)!r})
             import observability
             # Each child increments different metrics
-            observability.CHAT_REQUESTS_TOTAL.labels(mode="{mode}", status="{status}").inc()
-            observability.CHAT_LATENCY_SECONDS.labels(mode="{mode}").observe({latency})
-            with observability.RETRIEVAL_LATENCY_SECONDS.labels(mode="{mode}")._lock:
-                observability.RETRIEVAL_LATENCY_SECONDS.labels(mode="{mode}").observe({retrieval})
+            observability.CHAT_REQUESTS_TOTAL.labels(mode="{{mode}}", status="{{status}}").inc()
+            observability.CHAT_LATENCY_SECONDS.labels(mode="{{mode}}").observe({{latency}})
+            with observability.RETRIEVAL_LATENCY_SECONDS.labels(mode="{{mode}}")._lock:
+                observability.RETRIEVAL_LATENCY_SECONDS.labels(mode="{{mode}}").observe({{retrieval}})
         """)
 
         # Worker 1: dense/success
@@ -194,7 +194,7 @@ class TestMultiprocessAggregation:
             # Simulate child_exit
             pid = os.getpid()
             multiprocess.mark_process_dead(pid)
-            print(f"marked pid {pid} as dead")
+            print(f"marked pid {{pid}} as dead")
 
             # Now scrape should still work
             from prometheus_client import CollectorRegistry, generate_latest
@@ -248,7 +248,7 @@ class TestSingleWriterRotation:
                     state.total_elapsed_s = 1.0 + i * 0.1
                     # Render the event
                     event = observability.ChatRequestEvent(
-                        request_id=state.request_id,
+                        request_id=str(state.request_id),
                         query_hash=None,
                         mode=state.mode,
                         status=state.status,
@@ -320,7 +320,7 @@ class TestSingleWriterRotation:
                     state.mode = mode
                     state.status = "success"
                     event = observability.ChatRequestEvent(
-                        request_id=state.request_id,
+                        request_id=str(state.request_id),
                         query_hash=None,
                         mode=state.mode,
                         status="success",
@@ -397,7 +397,7 @@ class TestSingleWriterRotation:
                 state.status = "success"
                 state.total_elapsed_s = 1.0 + i * 0.1
                 event = observability.ChatRequestEvent(
-                    request_id=state.request_id,
+                    request_id=str(state.request_id),
                     query_hash=None,
                     mode=state.mode,
                     status="success",
@@ -451,7 +451,7 @@ class TestSingleWriterRotation:
                 state.mode = "dense"
                 state.status = "success"
                 event = observability.ChatRequestEvent(
-                    request_id=state.request_id,
+                    request_id=str(state.request_id),
                     query_hash=None,
                     mode=state.mode,
                     status="success",
@@ -500,7 +500,7 @@ class TestSingleWriterRotation:
                 state.mode = "general_chat"
                 state.status = "success"
                 event = observability.ChatRequestEvent(
-                    request_id=state.request_id,
+                    request_id=str(state.request_id),
                     query_hash=None,
                     mode="general_chat",
                     status="success",

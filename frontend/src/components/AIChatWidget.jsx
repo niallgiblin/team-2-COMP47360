@@ -462,14 +462,100 @@ const AIChatWidget = () => {
     setIsLoading(true);
 
     try {
-      const data = await chatAPI.sendMessage(trimmedInput, messages);
-      const botMessage = { text: data.response, sender: 'bot', citations: data.citations || [] };
-      setMessages(prev => [...prev, botMessage]);
+      // Try streaming first.
+      await chatAPI.sendMessageStream(trimmedInput, messages, {
+        onToken: (token) => {
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last._streaming) {
+              // Append token to existing streaming message.
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...last,
+                text: last.text + token,
+              };
+              return updated;
+            }
+            // First token — create the streaming placeholder message.
+            return [...prev, { text: token, sender: 'bot', citations: [], _streaming: true }];
+          });
+        },
+        onDone: ({ content, citations }) => {
+          setMessages(prev => {
+            const updated = [...prev];
+            // Replace the streaming message (or append if none).
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx]._streaming) {
+              updated[lastIdx] = {
+                text: content,
+                sender: 'bot',
+                citations: citations || [],
+                _streaming: false,
+              };
+            } else {
+              updated.push({
+                text: content,
+                sender: 'bot',
+                citations: citations || [],
+              });
+            }
+            return updated;
+          });
+          setIsLoading(false);
+        },
+        onError: async (errorMessage) => {
+          console.warn('Streaming failed, falling back to non-streaming:', errorMessage);
+          // Fall back to non-streaming API.
+          try {
+            const data = await chatAPI.sendMessage(trimmedInput, messages);
+            setMessages(prev => {
+              const updated = [...prev];
+              // Remove any partial streaming message.
+              if (updated.length > 0 && updated[updated.length - 1]._streaming) {
+                updated.pop();
+              }
+              updated.push({
+                text: data.response,
+                sender: 'bot',
+                citations: data.citations || [],
+              });
+              return updated;
+            });
+          } catch (fallbackError) {
+            console.error('Fallback also failed:', fallbackError);
+            setMessages(prev => {
+              const updated = [...prev];
+              if (updated.length > 0 && updated[updated.length - 1]._streaming) {
+                updated.pop();
+              }
+              updated.push({
+                text: "Sorry, I'm having trouble connecting. Please try again.",
+                sender: 'bot',
+              });
+              return updated;
+            });
+          } finally {
+            setIsLoading(false);
+          }
+        },
+      });
     } catch (error) {
-      console.error("Error fetching from backend:", error);
-      const errorMessage = { text: "Sorry, I'm having trouble connecting. Please try again.", sender: 'bot' };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
+      console.error("Error in streaming setup:", error);
+      // Complete failure — try non-streaming.
+      try {
+        const data = await chatAPI.sendMessage(trimmedInput, messages);
+        setMessages(prev => [...prev, {
+          text: data.response,
+          sender: 'bot',
+          citations: data.citations || [],
+        }]);
+      } catch (_fallbackError) {
+        console.error('Non-streaming fallback also failed:', _fallbackError);
+        setMessages(prev => [...prev, {
+          text: "Sorry, I'm having trouble connecting. Please try again.",
+          sender: 'bot',
+        }]);
+      }
       setIsLoading(false);
     }
   };
@@ -516,10 +602,19 @@ const AIChatWidget = () => {
               <div className="message-bubble">
                 <div className="message-content">
                   <div className="message-text">
-                    {splitReadableParagraphs(msg.text).map((paragraph, paragraphIndex) => (
-                      <p key={paragraphIndex}>{paragraph}</p>
-                    ))}
-                    {msg.sender === 'bot' && getDisplayCitations(msg.text, msg.citations).length > 0 && (
+                    {msg._streaming ? (
+                      <p className="streaming-text">
+                        {stripInlineCitationMarkers(stripSourcesBlock(msg.text))}
+                        <span className="streaming-cursor" aria-hidden="true">|</span>
+                      </p>
+                    ) : (
+                      <>
+                        {splitReadableParagraphs(msg.text).map((paragraph, paragraphIndex) => (
+                          <p key={paragraphIndex}>{paragraph}</p>
+                        ))}
+                      </>
+                    )}
+                    {msg.sender === 'bot' && !msg._streaming && getDisplayCitations(msg.text, msg.citations).length > 0 && (
                       <div className="venue-citation-list">
                         {getDisplayCitations(msg.text, msg.citations)
                           .map(({ citation, displayIndex }) => (
@@ -538,7 +633,7 @@ const AIChatWidget = () => {
               </div>
             </div>
           ))}
-          {isLoading && (
+          {isLoading && !messages.some(m => m._streaming) && (
             <div className="message bot-message">
               <div className="message-bubble">
                 <div className="typing-indicator" role="status">

@@ -1,378 +1,207 @@
-# Security Documentation
+# Security
 
-## Overview
+Verified implementation notes for committed `urban-gala-v2` on 2026-06-09.
+This document separates repository controls from deployment responsibilities
+and explicitly lists controls the project does not provide.
 
-This document outlines the security measures implemented in the Urban Gala project, including authentication, authorization, data protection, and secrets management.
+## Implemented controls
 
-## Secrets Management
+### Authentication and authorization
 
-### Environment Variables
+- Spring uses stateless JWT authentication.
+- Passwords are hashed with BCrypt.
+- Protected Spring and chat routes validate Bearer tokens.
+- Plans, favorites, friends, profiles, and shared resources apply user-scoped
+  authorization in their service/controller paths.
+- Rotating `APP_JWT_SECRET` invalidates existing sessions.
 
-All sensitive configuration is managed through environment variables to prevent secrets from being committed to version control.
+Spring disables CSRF because the API is stateless and authenticated with JWT
+headers:
 
-#### Required Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
-
-```bash
-# Database Configuration
-MYSQL_ROOT_PASSWORD=your_secure_root_password_here
-MYSQL_DATABASE=urban_gala
-MYSQL_USER=urbanuser
-MYSQL_PASSWORD=your_secure_db_password_here
-
-# JWT Configuration
-APP_JWT_SECRET=your_very_long_and_secure_jwt_secret_here_minimum_256_bits
-
-# External API Keys
-VITE_GOOGLE_API_KEY=your_google_maps_api_key_here
-HF_TOKEN=your_huggingface_token_here
-
-# Optional: MySQL Configuration File
-MYSQL_CONFIG_FILE=my.cnf
+```java
+.csrf(AbstractHttpConfigurer::disable)
 ```
 
-### Security Best Practices for Secrets
+Do not describe CSRF protection as enabled.
 
-1. **JWT Secret**: Use a cryptographically secure random string of at least 256 bits (32 characters)
-2. **Database Passwords**: Use strong, unique passwords for each environment
-3. **API Keys**: Store external API keys securely and rotate them regularly
-4. **Never commit secrets**: The `.env` file is excluded from version control
+### Secrets and startup validation
 
-### Manual Setup Instructions
+Create `.env` from `env.example`. Required shared/staging secrets include:
 
-**Step 1: Create your .env file**
-```bash
-cp env.example .env
+```text
+MYSQL_ROOT_PASSWORD
+MYSQL_PASSWORD
+APP_JWT_SECRET
+HF_TOKEN
+VITE_GOOGLE_API_KEY
 ```
 
-**Step 2: Configure your secrets**
-Edit the `.env` file and replace the placeholder values:
+Spring startup validation rejects missing or placeholder-sensitive
+configuration. `.env` is ignored by Git, but ignore rules do not protect a
+secret that has already been committed. Any credential that has appeared in
+Git history, logs, screenshots, or chat must be revoked and replaced.
 
-- **Database Passwords**: Choose strong passwords (12+ characters, mix of letters, numbers, symbols)
-- **JWT Secret**: Generate a secure random string (you can use an online generator or command line)
-- **API Keys**: Add your actual Google Maps API key and Hugging Face token
-
-**Step 3: Generate a secure JWT secret**
-You can generate a secure JWT secret using one of these methods:
+Generate a JWT secret with:
 
 ```bash
-# Method 1: Using openssl (if available)
 openssl rand -base64 32
-
-# Method 2: Using /dev/urandom
-head -c 32 /dev/urandom | base64
-
-# Method 3: Using node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-
-# Method 4: Online generator (for development only)
-# Visit: https://generate-secret.vercel.app/32
 ```
 
-**Step 4: Test your configuration**
-```bash
-docker-compose up
+### Service exposure
+
+- Compose keeps the LLM and busyness work endpoints on the internal Docker
+  network in the production-style topology.
+- The browser-reachable chat route requires the same JWT signing secret as
+  Spring.
+- Both Flask services use `FLASK_CORS_ALLOWED_ORIGINS`.
+- Production/staging deployments must set explicit origins and must not use
+  `*`.
+
+The local default is:
+
+```text
+http://localhost:5173,http://localhost:3000
 ```
 
-## Secret Rotation
+### Input and error boundaries
 
-### Historical exposure (mandatory before production)
+- Spring request DTOs use validation where defined.
+- Avatar uploads validate file content as well as extension/type.
+- JPA parameter binding protects normal repository queries from SQL injection.
+- `GlobalExceptionHandler` translates covered failures into stable,
+  client-safe responses.
+- Cross-service JSON is mapped through typed DTOs and fixture-backed contract
+  tests.
 
-Credentials that have ever appeared in git history — including a database password exposed in commit `79f93214` — must be treated as **compromised**. Rotation is **required** before any production or staging deployment; it is not optional cleanup.
+These controls do not justify the blanket claim that every input is sanitized
+or every endpoint has equivalent validation. Review each boundary when adding
+new routes.
 
-### Secrets in scope
+### Rate limiting
 
-Rotate all of the following before deploying to shared or production environments:
+Selected expensive Spring routes use bounded in-process buckets:
 
-| Secret | Environment variable(s) | Affected services |
-|--------|-------------------------|-------------------|
-| MySQL root password | `MYSQL_ROOT_PASSWORD` | `db`, `backend` |
-| Application DB password | `MYSQL_PASSWORD`, `SPRING_DATASOURCE_PASSWORD` | `db`, `backend` |
-| JWT signing key | `APP_JWT_SECRET` | `backend` |
-| Hugging Face token | `HF_TOKEN` | `llm-service` |
-| Google Maps API key | `VITE_GOOGLE_API_KEY` | `frontend`, `frontend-prod` |
-
-### Pre-rotation checklist
-
-1. Back up your current `.env` file to a secure location outside the repository.
-2. Note which services are running (`docker compose ps`).
-3. Schedule a maintenance window — some rotations invalidate active sessions or require database restarts.
-4. Ensure you can access provider consoles (Google Cloud, Hugging Face) for key revocation after rotation.
-
-### General rotation procedure
-
-For every secret below, follow this pattern:
-
-1. **Generate** a new value (or create a new key at the provider).
-2. **Update** the root `.env` file with the new value.
-3. **Restart** affected Docker Compose services (see per-secret steps).
-4. **Verify** health endpoints respond successfully.
-5. **Revoke or disable** the old credential at the provider where applicable.
-
-### MySQL root password (`MYSQL_ROOT_PASSWORD`)
-
-1. Generate a strong password (12+ characters; use a password manager).
-2. Connect to the running database container:
-   ```bash
-   docker compose exec db mysql -u root -p
-   ```
-   Enter the current root password when prompted.
-3. Change the root password:
-   ```sql
-   ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password_here';
-   ALTER USER 'root'@'%' IDENTIFIED BY 'your_new_password_here';
-   FLUSH PRIVILEGES;
-   ```
-4. Update `MYSQL_ROOT_PASSWORD=your_new_password_here` in `.env`.
-5. Restart database and backend:
-   ```bash
-   docker compose restart db backend
-   ```
-6. Verify: `docker compose exec db mysqladmin ping -h localhost -u root -p`
-
-### Application DB user (`MYSQL_PASSWORD`)
-
-1. Generate a strong password distinct from the root password.
-2. Connect as root:
-   ```bash
-   docker compose exec db mysql -u root -p
-   ```
-3. Rotate the application user (replace `urbanuser` with your `MYSQL_USER` value if different):
-   ```sql
-   ALTER USER 'urbanuser'@'%' IDENTIFIED BY 'your_new_password_here';
-   FLUSH PRIVILEGES;
-   ```
-4. Update `MYSQL_PASSWORD=your_new_password_here` in `.env` (this also feeds `SPRING_DATASOURCE_PASSWORD`).
-5. Restart backend:
-   ```bash
-   docker compose restart backend
-   ```
-6. Verify: `curl -f http://localhost:8080/actuator/health`
-
-### JWT signing key (`APP_JWT_SECRET`)
-
-1. Generate a new secret:
-   ```bash
-   openssl rand -base64 32
-   ```
-2. Update `APP_JWT_SECRET=your_new_jwt_secret_here` in `.env`.
-3. Restart backend:
-   ```bash
-   docker compose restart backend
-   ```
-4. Verify: `curl -f http://localhost:8080/actuator/health`
-5. **Session impact:** All active JWT sessions are invalidated immediately. Every user must log in again after this rotation.
-
-### Hugging Face token (`HF_TOKEN`)
-
-1. Create a new read token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
-2. Update `HF_TOKEN=your_new_hf_token_here` in `.env`.
-3. Restart the LLM service:
-   ```bash
-   docker compose restart llm-service
-   ```
-4. Verify: `curl -f http://localhost:5001/health`
-5. Revoke the old token in the Hugging Face console.
-
-### Google Maps API key (`VITE_GOOGLE_API_KEY`)
-
-`VITE_GOOGLE_API_KEY` is a **browser-visible, public-but-restricted** credential. Vite inlines `VITE_*` variables into the frontend bundle at build time, so anyone can read the key from compiled JavaScript or network requests. Treat it as exposed by design and rely on Google Cloud Console restrictions—not repository secrecy—to limit abuse.
-
-#### Required Google Cloud Console restrictions (SEC-08)
-
-Apply these settings in [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials) for every browser key. This cannot be automated from the repository; operators must verify manually after each change.
-
-**Application restrictions — HTTP referrer**
-
-Restrict the browser key to approved origins only:
-
-| Environment | Referrer patterns |
-|-------------|-------------------|
-| Local development | `http://localhost:5173/*`, `http://127.0.0.1:5173/*` |
-| Staging | Your approved staging origin, e.g. `https://staging.example.com/*` |
-| Production | Your approved production origin, e.g. `https://app.example.com/*` |
-
-Do not use unrestricted keys or IP restrictions for browser keys (IP restrictions apply to server-side keys only).
-
-**API restrictions**
-
-Limit the key to Google Maps Platform APIs actually used by this application:
-
-| API | Required | Used by |
-|-----|----------|---------|
-| **Routes API** | Yes | Walking/transit directions via `computeRoutes` in `MapView.jsx` and `routeClient.js` |
-| **Maps JavaScript API** | Conditional | Enable only if the map implementation loads the Google Maps JS SDK; current routing uses the Routes REST API directly |
-
-Use **separate keys** for development and production. Never reuse an unrestricted development key in production builds.
-
-#### Manual Cloud Console verification
-
-After creating or rotating a key, confirm in the Cloud Console UI:
-
-1. **Application restrictions** shows *HTTP referrers* with the expected origin patterns (not *None*).
-2. **API restrictions** shows *Restrict key* with Routes API (and Maps JavaScript API if enabled)—not *Don't restrict key*.
-3. Open the app in a browser on an allowed origin; confirm map routing works.
-4. From a disallowed origin or with `curl`, confirm Google returns a referrer/API restriction error rather than a successful route response.
-
-#### Rotation procedure
-
-1. Create a new restricted API key in Google Cloud Console (apply HTTP referrer and API restrictions before use).
-2. Update `VITE_GOOGLE_API_KEY=your_new_google_api_key_here` in `.env`.
-3. Restart the dev frontend:
-   ```bash
-   docker compose restart frontend
-   ```
-4. For production static images, **rebuild and redeploy** so build-time args pick up the new key:
-   ```bash
-   docker compose --profile prod build frontend-prod
-   docker compose --profile prod up -d frontend-prod
-   ```
-5. Verify the map and directions load in the browser on each deployed origin.
-6. Disable or delete the old API key in Google Cloud Console.
-
-#### Backend proxy escalation criteria
-
-Phase 8 satisfies SEC-08 through documented browser restrictions, not a backend route proxy. Escalate to an authenticated backend proxy (with per-user/IP rate limits) only when:
-
-- Referrer or API restrictions cannot be managed reliably across all deployment origins, or
-- Abuse continues despite restrictions and you need user-level quotas beyond Google key limits.
-
-A backend proxy requires a separately approved scoped work item covering Spring security, DTOs, caching, and deployment changes.
-
-> **Never include real secret values in documentation or commit messages.** Use placeholders such as `your_new_password_here` and `your_new_jwt_secret_here` only.
-
-## Authentication & Authorization
-
-### JWT-Based Authentication
-
-The application uses JSON Web Tokens (JWT) for stateless authentication:
-
-- **Token Generation**: Secure JWT tokens are generated upon successful login
-- **Token Validation**: All protected endpoints validate JWT tokens
-- **Token Expiration**: Tokens have configurable expiration times
-- **Secret Rotation**: JWT secrets can be rotated with a documented runbook — note that rotation invalidates all active tokens and requires every user to log in again (see [JWT signing key](#jwt-signing-key-app_jwt_secret) for the full procedure)
-
-### Security Configuration
-
-The Spring Security configuration includes:
-
-- **CORS Protection**: Configured to allow only trusted origins
-- **CSRF Protection**: Enabled for state-changing operations
-- **Session Management**: Stateless sessions using JWT
-- **Password Encoding**: BCrypt password hashing with salt
-
-## Database Security
-
-### MySQL Security Measures
-
-1. **Encrypted Connections**: SSL/TLS encryption for database connections
-2. **User Privileges**: Limited database user with minimal required permissions
-3. **Connection Pooling**: Secure connection management
-4. **Parameterized Queries**: Prevention of SQL injection attacks
-
-### Database Configuration
-
-```properties
-# Database connection with security settings
-spring.datasource.url=jdbc:mysql://db:3306/urban_gala?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-spring.datasource.username=${MYSQL_USER}
-spring.datasource.password=${MYSQL_PASSWORD}
-```
-
-## Network Security
-
-### Docker Network Isolation
-
-- **Bridge Network**: Services communicate through isolated Docker networks
-- **Port Exposure**: Only necessary ports are exposed to the host
-- **Internal Communication**: Services communicate using internal hostnames
-
-### Container Security
-
-1. **Non-root Users**: Containers run with limited privileges
-2. **Resource Limits**: Memory and CPU limits prevent resource exhaustion
-3. **Health Checks**: Regular health monitoring for all services
-4. **Restart Policies**: Automatic restart on failure with backoff
-
-## API Security
-
-### Input Validation
-
-- **Request Validation**: All incoming requests are validated
-- **Data Sanitization**: User input is sanitized to prevent injection attacks
-- **Type Safety**: Strong typing prevents type-related vulnerabilities
-
-### Rate Limiting
-
-Phase 04 uses bounded in-process Bucket4j-style buckets for expensive Spring routes. These limits are single-instance controls: quota state is per JVM, counters reset on restart, and multiple backend replicas do not share quota state.
-
-Configuration:
-
-```bash
+```text
 APP_RATE_LIMIT_EXPENSIVE_CAPACITY=30
 APP_RATE_LIMIT_EXPENSIVE_REFILL_SECONDS=60
 APP_RATE_LIMIT_EXPENSIVE_MAX_BUCKETS=10000
 ```
 
-For multi-instance staging or production abuse prevention, use Redis-backed Bucket4j or an API gateway/Nginx rate-limit layer with user-aware keys. Do not treat the Phase 04 in-process limiter as distributed DDoS protection.
+Quota state is per JVM, resets on restart, and is not shared across replicas.
+This is request-cost protection for a single instance, not distributed abuse
+or DDoS protection.
 
-### Flask Service Exposure
+### Artifact integrity
 
-The Flask work endpoints `/search`, `/api/chat`, `/busyness`, and prediction work reached through `/busyness` are private service surfaces. Docker Compose keeps `llm-service` and `busyness-service` on the internal Docker network with `expose: ["5000"]`; direct host port publishing is dev-only and must not be used for staging or production.
+- Required model binaries are delivered through Git LFS.
+- `scripts/verify-artifacts.sh` validates documented checksums.
+- The busyness service verifies its Keras artifact manifest before loading.
+- Unsafe Keras deserialization is disabled by default.
 
-`/api/chat` is the only browser-reachable Flask work route through Nginx. It requires the same `APP_JWT_SECRET` signing secret used by Spring, and requests without a valid Bearer JWT fail before LLM prompt construction, similarity search, model work, or Hugging Face calls.
+Run artifact verification from a clean checkout before deployment.
 
-### Flask CORS
+## Browser-visible Google Maps key
 
-Both Flask services read `FLASK_CORS_ALLOWED_ORIGINS`. The local default is:
+`VITE_GOOGLE_API_KEY` is embedded in the built JavaScript bundle. It is public
+by design and must be protected with Google Cloud restrictions:
+
+1. Use a separate key for each environment.
+2. Apply **HTTP referrer** restrictions for only the deployed origins.
+3. Apply **API restrictions** for Routes API and any other Google Maps API
+   actually used.
+4. Verify an allowed origin works.
+5. Verify a disallowed origin is rejected.
+
+Example local referrers:
+
+```text
+http://localhost:5173/*
+http://127.0.0.1:5173/*
+```
+
+Changing this key requires rebuilding the production Vite bundle.
+
+## Rotation
+
+### JWT
+
+1. Generate a new `APP_JWT_SECRET`.
+2. Update the deployment secret.
+3. Restart Spring and the LLM service.
+4. Confirm both health endpoints.
+5. Require users to log in again.
+
+### Database credentials
+
+1. Change the MySQL user password in MySQL.
+2. Update `MYSQL_PASSWORD` and, if separately configured,
+   `SPRING_DATASOURCE_PASSWORD`.
+3. Restart Spring.
+4. Verify Actuator health and an authenticated database-backed request.
+
+The MySQL root password must be rotated separately when it is used outside
+initial container provisioning.
+
+### Hugging Face
+
+1. Create a new least-privilege token.
+2. Update `HF_TOKEN`.
+3. Restart the LLM service.
+4. Verify health and an authenticated chat request.
+5. Revoke the old token.
+
+### Google
+
+1. Create and restrict the replacement key before use.
+2. Update `VITE_GOOGLE_API_KEY`.
+3. Rebuild and redeploy the frontend.
+4. Test allowed and disallowed origins.
+5. Delete the old key.
+
+## Deployment responsibilities
+
+The repository does not implement the following controls:
+
+| Control | Current truth |
+|---------|---------------|
+| Public HTTPS/TLS termination | Not configured in repository Nginx/Compose |
+| MySQL TLS | Compose JDBC URL uses `useSSL=false` |
+| Content Security Policy | No CSP header in checked-in Nginx configuration |
+| Comprehensive security headers | Not configured |
+| Non-root containers | Dockerfiles do not set `USER` |
+| Distributed rate limiting | Not implemented |
+| Distributed session revocation | Not implemented; JWTs expire or secret rotates |
+| Automated dependency scanning | No verified pipeline in repository |
+| Automated secret scanning | No verified pipeline in repository |
+| Penetration testing | No evidence of a recurring automated program |
+| Encrypted backup automation | Not implemented |
+| Prometheus/Grafana security monitoring | Full stack is not committed v2 |
+
+An external reverse proxy or cloud load balancer should terminate TLS and add
+security headers. A multi-replica deployment should use a shared rate-limit
+store or API gateway.
+
+## Logging and privacy
+
+Committed v2 adds request IDs, structured LLM request events, bounded
+Prometheus labels, query hashes, and JSONL event writing. Operators must:
+
+- Keep raw tokens and secrets out of logs.
+- Avoid using raw user queries as metric labels.
+- Apply retention and access controls to JSONL event files.
+- Treat user identifiers and chat text as potentially sensitive.
+
+The existence of logs and `/metrics` does not by itself constitute a complete
+monitoring or incident-response system.
+
+## Verification
 
 ```bash
-FLASK_CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+bash scripts/verify-sec08-docs.sh
+bash scripts/verify-artifacts.sh
+cd BackEnd && ./mvnw test
+bash scripts/compose-smoke.sh --teardown
 ```
 
-Credentials are disabled by default. Production and staging must set explicit frontend origins and must not use wildcard `*` for Flask CORS.
-
-## Frontend Security
-
-### React Security Measures
-
-1. **XSS Protection**: React's built-in XSS protection
-2. **Content Security Policy**: CSP headers for additional protection
-3. **Secure Storage**: Sensitive data stored securely in browser
-4. **HTTPS Only**: All API calls use secure connections
-
-### Environment Variables
-
-Frontend environment variables are prefixed with `VITE_` for Vite.js. Values are **embedded in the built JavaScript bundle** and are visible to anyone who loads the app:
-
-```javascript
-// Accessible in frontend code — also visible in browser devtools and network traffic
-const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-```
-
-`VITE_GOOGLE_API_KEY` must be restricted via Google Cloud Console HTTP referrer and API restrictions (see [Google Maps API key](#google-maps-api-key-vite_google_api_key) above). Do not treat it as a server-side secret.
-
-
-
-### Logging & Monitoring
-
-1. **Security Events**: All authentication and authorization events are logged
-2. **Error Tracking**: Comprehensive error logging without exposing sensitive data
-3. **Performance Monitoring**: Resource usage monitoring to detect anomalies
-4. **Health Checks**: Regular service health monitoring
-
-### Production Deployment
-
-1. **HTTPS Only**: All production traffic uses HTTPS
-2. **Security Headers**: Comprehensive security headers
-3. **Regular Updates**: Automated security updates
-4. **Backup Security**: Encrypted backups with secure storage
-
-### Development Security
-
-1. **Code Review**: All code changes require security review
-2. **Dependency Scanning**: Regular vulnerability scanning
-3. **Secret Scanning**: Automated detection of exposed secrets
-4. **Security Testing**: Regular security testing and penetration testing
+`verify-sec08-docs.sh` validates the documentation pattern for Google key
+restrictions; it cannot inspect the actual Google Cloud Console settings.

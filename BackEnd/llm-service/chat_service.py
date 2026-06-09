@@ -715,6 +715,289 @@ def huggingface_chat_api_call(messages, model=None, requests_module=None, max_to
 
 
 # ---------------------------------------------------------------------------
+# SSE streaming support (Phase 22)
+# ---------------------------------------------------------------------------
+
+import json as _json
+
+
+def _stream_hf_response(messages, model=None, requests_module=None, max_tokens=400, timeout=90):
+    """Generator that yields content tokens from a streaming HF API call.
+
+    Detects whether the API returns native SSE (text/event-stream) or a
+    regular JSON response.  For non-streaming responses, simulates
+    streaming by yielding word-by-word with a small delay.
+
+    Yields
+    ------
+    str
+        Content tokens as they arrive from the model.
+    """
+    token = os.environ.get("HF_TOKEN")
+    if not token or token == "your-hugging-face-api-token":
+        raise ValueError("Hugging Face API token is missing or invalid.")
+
+    if model is None:
+        model = os.environ.get("HF_CHAT_MODEL", DEFAULT_HF_CHAT_MODEL)
+
+    http = requests_module or requests
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "messages": messages,
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": 0.4,
+        "top_p": 0.9,
+        "stream": True,
+    }
+
+    logger.info("Making streaming request to Hugging Face API...")
+    try:
+        response = http.post(
+            CHAT_API_URL, headers=headers, json=payload,
+            timeout=timeout, stream=True,
+        )
+        response.raise_for_status()
+    except http.exceptions.Timeout:
+        logger.error("Streaming request to Hugging Face API timed out.")
+        raise
+    except http.exceptions.RequestException as exc:
+        logger.error("Error in streaming HF API call: %s", exc)
+        if getattr(exc, "response", None) is not None:
+            logger.error(
+                "Response status: %s, Body: %s",
+                exc.response.status_code,
+                exc.response.text[:500] if exc.response.text else "(empty)",
+            )
+        raise
+
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    is_native_sse = "text/event-stream" in content_type
+
+    if is_native_sse:
+        logger.info("Native SSE streaming from HF API")
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            # Strip SSE prefix ("data: " or "data:")
+            data_str = line
+            if line.startswith("data: "):
+                data_str = line[6:]
+            elif line.startswith("data:"):
+                data_str = line[5:]
+            else:
+                continue
+
+            if data_str == "[DONE]":
+                break
+
+            try:
+                chunk = _json.loads(data_str)
+            except _json.JSONDecodeError:
+                continue
+
+            choices = chunk.get("choices", [])
+            if not choices:
+                continue
+
+            delta = choices[0].get("delta", {})
+            content = delta.get("content", "")
+            if content:
+                yield content
+
+            finish_reason = choices[0].get("finish_reason")
+            if finish_reason and finish_reason not in (None, "null", ""):
+                break
+    else:
+        # Fallback: non-streaming response → simulate token-by-token
+        logger.info("Non-streaming response; simulating token streaming")
+        try:
+            body = response.json()
+            text = body["choices"][0]["message"]["content"]
+        except Exception as exc:
+            logger.error("Failed to parse non-streaming fallback response: %s", exc)
+            raise
+
+        import re as _re
+        import time as _time
+
+        # Split on whitespace boundaries, preserving whitespace.
+        tokens = _re.split(r"(\s+)", text)
+        for tok in tokens:
+            if tok:
+                yield tok
+                _time.sleep(0.03)  # 30 ms between tokens simulates streaming feel
+
+
+def stream_chat_response(
+    query,
+    previous_questions,
+    previous_responses=None,
+    search_helper=None,
+    hf_call=None,
+    busyness_context=None,
+    location_filter=None,
+):
+    """SSE generator that streams chat tokens and emits final citations.
+
+    Follows the same retrieval → generation → post-processing pipeline as
+    ``get_ai_response_with_metadata``, but yields SSE-formatted events so
+    the frontend can render tokens incrementally.
+
+    SSE event types
+    ---------------
+    ``token``
+        Content chunk from the model.  ``data.content`` is the token text.
+    ``done``
+        Stream complete.  ``data.content`` is the full processed response
+        (with citations, corrections, and category notices).
+        ``data.citations`` is the citations array.
+    ``error``
+        An error occurred.  ``data.message`` describes the error.
+
+    Parameters
+    ----------
+    Same as ``get_ai_response_with_metadata``.
+
+    Yields
+    ------
+    str
+        SSE-formatted lines (``data: {…}\n\n``).
+    """
+    import time as _time
+
+    def _emit(event_type, data):
+        """Format and yield a single SSE event."""
+        payload = _json.dumps(data, ensure_ascii=False)
+        return f"event: {event_type}\ndata: {payload}\n\n"
+
+    # ---- Error helper ----------------------------------------------------
+    def _emit_error(message):
+        return _emit("error", {"message": message})
+
+    try:
+        # ---- General chat: skip retrieval ---------------------------------
+        if is_general_chat_query(query):
+            logger.info("General chat query detected — streaming: %r", query[:80])
+            chat_history = _build_chat_history(previous_questions, previous_responses)
+            user_content = f"User question: {query}"
+            if chat_history:
+                user_content = f"{chat_history}\n\n{user_content}"
+
+            messages = [
+                {"role": "system", "content": GENERAL_CHAT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ]
+
+            full_text = ""
+            hf = hf_call if hf_call else huggingface_chat_api_call
+            # General chat doesn't use streaming API; use non-streaming
+            # and token-split for consistency.
+            try:
+                response = hf(messages, max_tokens=200, timeout=15)
+                full_text = response["choices"][0]["message"]["content"]
+
+                import re as _re
+                tokens = _re.split(r"(\s+)", full_text)
+                for tok in tokens:
+                    if tok:
+                        yield _emit("token", {"content": tok})
+            except Exception:
+                yield _emit_error("I'm having trouble processing your request right now.")
+                return
+
+            yield _emit("done", {
+                "content": full_text,
+                "citations": [],
+            })
+            return
+
+        # ---- Venue query: retrieval + streaming generation -----------------
+        retrieval_start = _time.perf_counter()
+
+        # Reformulate for retrieval when history exists.
+        search_query = reformulate_query(
+            query, previous_questions, previous_responses, hf_call=hf_call,
+        )
+        if search_query != query:
+            logger.info(
+                "Query reformulated for retrieval: %d→%d chars",
+                len(query), len(search_query),
+            )
+
+        # Build retrieval context.
+        retrieval_context, citations = build_retrieval_context(
+            search_query, search_helper=search_helper, location_filter=location_filter,
+        )
+        candidates = len(citations)
+        retrieval_elapsed = _time.perf_counter() - retrieval_start
+        logger.info(
+            "Retrieval complete in %.0fms, %d candidates",
+            retrieval_elapsed * 1000, candidates,
+        )
+
+        # Build chat messages with ORIGINAL query in user prompt.
+        messages, _ = build_chat_messages(
+            query=query,
+            previous_questions=previous_questions,
+            previous_responses=previous_responses,
+            retrieval_context=retrieval_context,
+            search_helper=None,
+            busyness_context=busyness_context,
+        )
+
+        # Stream tokens from HF.
+        full_text = ""
+        gen_start = _time.perf_counter()
+        try:
+            for token in _stream_hf_response(messages, max_tokens=400, timeout=90):
+                full_text += token
+                yield _emit("token", {"content": token})
+        except Exception as exc:
+            generation_elapsed = _time.perf_counter() - gen_start
+            logger.error("Streaming generation failed: %s", exc)
+            if citations:
+                # Citation-backed fallback.
+                fallback_text = build_retrieval_fallback_response(
+                    retrieval_context, citations,
+                )
+                fallback_text = append_location_corrections(
+                    fallback_text, citations, location_filter,
+                )
+                fallback_text = prepend_missing_bowling_notice(
+                    fallback_text, query, citations,
+                )
+                yield _emit("done", {
+                    "content": fallback_text,
+                    "citations": citations,
+                })
+            else:
+                yield _emit_error("I'm having trouble processing your request right now.")
+            return
+
+        generation_elapsed = _time.perf_counter() - gen_start
+        logger.info(
+            "Generation complete in %.0fms, %d chars",
+            generation_elapsed * 1000, len(full_text),
+        )
+
+        # Post-processing: apply corrections, notices, and citations.
+        processed = full_text
+        processed = append_location_corrections(processed, citations, location_filter)
+        processed = prepend_missing_bowling_notice(processed, query, citations)
+        processed = parse_inline_citations(processed, citations)
+
+        yield _emit("done", {
+            "content": processed,
+            "citations": citations,
+        })
+
+    except Exception as exc:
+        logger.error("Error in stream_chat_response: %s", exc)
+        yield _emit_error("An unexpected error occurred. Please try again.")
+
+
+# ---------------------------------------------------------------------------
 # Inline citation parsing (S05)
 # ---------------------------------------------------------------------------
 
