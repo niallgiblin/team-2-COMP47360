@@ -411,9 +411,14 @@ def _record_metric(status: str, duration_s: float, decision: str = "query_analys
 
 @dataclass(frozen=True)
 class AnswerVerification:
-    """Typed, calibrated judgement of whether an answer is grounded."""
+    """Typed, calibrated judgement of whether an answer is grounded.
+
+    ``action`` is ``"pass"`` (keep as-is), ``"caveat"`` (keep but flag
+    unverified details), or ``"replace"`` (swap for the grounded venue list).
+    """
 
     grounded: bool = True
+    action: str = "pass"
     faithful_probability: float = 1.0
     fabricated_venue_probability: float = 0.0
     unsupported_detail_probability: float = 0.0
@@ -422,6 +427,7 @@ class AnswerVerification:
     def as_dict(self) -> dict:
         return {
             "grounded": self.grounded,
+            "action": self.action,
             "faithful_probability": round(self.faithful_probability, 4),
             "fabricated_venue_probability": round(self.fabricated_venue_probability, 4),
             "unsupported_detail_probability": round(
@@ -477,6 +483,8 @@ def verify_answer(
     venue_names: Iterable[str] | None = None,
     client: JevClient | None = None,
     confidence_threshold: float | None = None,
+    replace_threshold: float | None = None,
+    caveat_threshold: float | None = None,
     enabled: bool | None = None,
 ) -> AnswerVerification | None:
     """Check whether *answer* is grounded in *context*.
@@ -488,7 +496,9 @@ def verify_answer(
     from config import (
         JEV_CONFIDENCE_THRESHOLD,
         JEV_ENABLED,
+        JEV_GUARDRAIL_CAVEAT_THRESHOLD,
         JEV_GUARDRAIL_ENABLED,
+        JEV_GUARDRAIL_REPLACE_THRESHOLD,
         JEV_TIMEOUT_SECONDS,
     )
 
@@ -507,6 +517,16 @@ def verify_answer(
 
     threshold = (
         JEV_CONFIDENCE_THRESHOLD if confidence_threshold is None else confidence_threshold
+    )
+    replace_threshold = (
+        JEV_GUARDRAIL_REPLACE_THRESHOLD
+        if replace_threshold is None
+        else replace_threshold
+    )
+    caveat_threshold = (
+        JEV_GUARDRAIL_CAVEAT_THRESHOLD
+        if caveat_threshold is None
+        else caveat_threshold
     )
 
     state: dict[str, Any] = {"answer": answer, "context": context}
@@ -537,14 +557,20 @@ def verify_answer(
     # Grounded requires a confident positive on `faithful` and confident
     # negatives on both failure-detection questions.
     negative_threshold = max(0.5, threshold)
-    grounded = (
-        faithful >= threshold
-        and fabricated < negative_threshold
-        and unsupported < negative_threshold
-    )
+
+    # Tiered decision: only a fabricated venue (or a severe unsupported detail)
+    # warrants discarding the answer. Milder issues keep the answer and append
+    # a caveat, preserving answer relevancy.
+    if fabricated >= negative_threshold or unsupported >= replace_threshold:
+        action = "replace"
+    elif faithful < threshold or unsupported >= caveat_threshold:
+        action = "caveat"
+    else:
+        action = "pass"
 
     verification = AnswerVerification(
-        grounded=grounded,
+        grounded=action == "pass",
+        action=action,
         faithful_probability=faithful,
         fabricated_venue_probability=fabricated,
         unsupported_detail_probability=unsupported,

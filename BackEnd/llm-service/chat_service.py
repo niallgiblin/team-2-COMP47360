@@ -174,6 +174,13 @@ GROUNDED_FALLBACK_INTRO = (
     "answer, so here are the confirmed venues from our database:"
 )
 
+# Appended when the guardrail flags unverified details but the answer is kept
+# (the softer tier — replacing the whole answer costs answer relevancy).
+UNVERIFIED_CAVEAT = (
+    "_Heads up: I couldn't verify every detail against our venue data — "
+    "double-check anything important before you go._"
+)
+
 # Response when the calibrated-abstention gate decides retrieval cannot answer
 # the request. Citations are intentionally empty so the UI shows no cards.
 ABSTENTION_MESSAGE = (
@@ -1101,14 +1108,15 @@ def stream_chat_response(
         )
 
         # ---- Faithfulness guardrail (optional) --------------------------
-        # The frontend replaces the streamed text with done.content, so an
-        # ungrounded answer can be swapped for the citation-backed fallback.
+        # The frontend replaces the streamed text with done.content, so a
+        # replacement or caveat can be applied to the final content.
         verification = resolve_answer_verification(
             full_text, retrieval_context, citations,
         )
-        if verification is not None and not verification.grounded:
+        guardrail_action = verification.action if verification is not None else None
+        if guardrail_action == "replace":
             logger.warning(
-                "Jev guardrail: ungrounded streamed answer replaced %s",
+                "Jev guardrail (replace): %s",
                 verification.as_dict(),
             )
             fallback_text = build_retrieval_fallback_response(
@@ -1124,11 +1132,16 @@ def stream_chat_response(
                 "content": fallback_text,
                 "citations": citations,
                 "verified": False,
+                "guardrail_action": "replace",
             })
             return
+        if guardrail_action == "caveat":
+            logger.info("Jev guardrail (caveat): %s", verification.as_dict())
 
         # Post-processing: apply corrections, notices, and citations.
         processed = full_text
+        if guardrail_action == "caveat":
+            processed = f"{processed}\n\n{UNVERIFIED_CAVEAT}"
         processed = append_location_corrections(processed, citations, location_filter)
         processed = prepend_missing_bowling_notice(processed, query, citations)
         processed = parse_inline_citations(processed, citations)
@@ -1137,6 +1150,7 @@ def stream_chat_response(
             "content": processed,
             "citations": citations,
             "verified": None if verification is None else verification.grounded,
+            "guardrail_action": guardrail_action,
         })
 
     except Exception as exc:
@@ -1744,29 +1758,36 @@ def get_ai_response_with_metadata(
         verification = resolve_answer_verification(
             response_text, retrieval_context, citations,
         )
-        if verification is not None and not verification.grounded:
+        guardrail_action = None
+        if verification is not None and verification.action != "pass":
+            guardrail_action = verification.action
             logger.warning(
-                "Jev guardrail: ungrounded answer replaced %s",
+                "Jev guardrail (%s): %s",
+                verification.action,
                 verification.as_dict(),
             )
-            fallback_text = build_retrieval_fallback_response(
-                retrieval_context, citations, intro=GROUNDED_FALLBACK_INTRO,
-            )
-            fallback_text = append_location_corrections(
-                fallback_text, citations, location_filter,
-            )
-            fallback_text = prepend_missing_bowling_notice(
-                fallback_text, query, citations,
-            )
-            return ChatExecutionResult(
-                fallback_text, citations,
-                ChatExecutionMetadata(
-                    mode=mode, retrieval_started=True, candidates=candidates,
-                    fallback_triggered=True, retrieval_elapsed_s=retrieval_elapsed,
-                    generation_elapsed_s=generation_elapsed,
-                    error_stage="verification", error_code="ungrounded_answer",
-                ),
-            )
+            if verification.action == "replace":
+                fallback_text = build_retrieval_fallback_response(
+                    retrieval_context, citations, intro=GROUNDED_FALLBACK_INTRO,
+                )
+                fallback_text = append_location_corrections(
+                    fallback_text, citations, location_filter,
+                )
+                fallback_text = prepend_missing_bowling_notice(
+                    fallback_text, query, citations,
+                )
+                return ChatExecutionResult(
+                    fallback_text, citations,
+                    ChatExecutionMetadata(
+                        mode=mode, retrieval_started=True, candidates=candidates,
+                        fallback_triggered=True, retrieval_elapsed_s=retrieval_elapsed,
+                        generation_elapsed_s=generation_elapsed,
+                        error_stage="verification", error_code="ungrounded_answer",
+                        guardrail_action="replace",
+                    ),
+                )
+            # Caveat tier: keep the answer, flag unverified details.
+            response_text = f"{response_text}\n\n{UNVERIFIED_CAVEAT}"
 
         response_text = append_location_corrections(response_text, citations, location_filter)
         response_text = prepend_missing_bowling_notice(response_text, query, citations)
@@ -1778,6 +1799,7 @@ def get_ai_response_with_metadata(
                 fallback_triggered=False, retrieval_elapsed_s=retrieval_elapsed,
                 generation_elapsed_s=generation_elapsed,
                 error_stage=None, error_code=None,
+                guardrail_action=guardrail_action,
             ),
         )
     except Exception as exc:

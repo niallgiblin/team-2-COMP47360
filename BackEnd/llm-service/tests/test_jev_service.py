@@ -561,3 +561,51 @@ class TestAssessAnswerability:
         assert state["candidates"][0] == {
             "name": "Tomi Jazz", "type": "Jazz Bar", "zone": "midtown",
         }
+
+
+class TestVerifyAnswerTiers:
+    """The guardrail is tiered: replace only on hard failures, else caveat."""
+
+    def _client(self, faithful=0.95, fabricated=0.02, unsupported=0.05):
+        return FakeClient({
+            "faithful": {"noul": faithful},
+            "fabricated_venue": {"noul": fabricated},
+            "unsupported_detail": {"noul": unsupported},
+        })
+
+    def _verify(self, **kwargs):
+        return verify_answer(
+            "answer", "context", client=self._client(**kwargs), enabled=True,
+        )
+
+    def test_grounded_passes(self):
+        v = self._verify(faithful=0.95, fabricated=0.02, unsupported=0.05)
+        assert v.action == "pass"
+        assert v.grounded is True
+
+    def test_low_faithful_no_fabrication_caveats(self):
+        # The common real-world case: nothing invented, just unverified detail.
+        v = self._verify(faithful=0.35, fabricated=0.03, unsupported=0.26)
+        assert v.action == "caveat"
+        assert v.grounded is False
+
+    def test_moderate_unsupported_caveats(self):
+        v = self._verify(faithful=0.6, fabricated=0.03, unsupported=0.6)
+        assert v.action == "caveat"
+
+    def test_severe_unsupported_replaces(self):
+        v = self._verify(faithful=0.6, fabricated=0.03, unsupported=0.9)
+        assert v.action == "replace"
+
+    def test_fabricated_venue_replaces(self):
+        v = self._verify(faithful=0.9, fabricated=0.9, unsupported=0.1)
+        assert v.action == "replace"
+
+    def test_thresholds_are_configurable(self):
+        # A stricter replace bar turns a mild unsupported detail into a caveat.
+        v = verify_answer(
+            "answer", "context",
+            client=self._client(faithful=0.6, fabricated=0.03, unsupported=0.6),
+            enabled=True, replace_threshold=0.95,
+        )
+        assert v.action == "caveat"

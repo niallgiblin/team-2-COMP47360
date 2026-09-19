@@ -254,7 +254,8 @@ class TestGuardrailNonStreaming:
             chat_service,
             "resolve_answer_verification",
             lambda *a, **k: AnswerVerification(
-                grounded=False, faithful_probability=0.1
+                grounded=False, action="replace", faithful_probability=0.1,
+                fabricated_venue_probability=0.95,
             ),
         )
         result = chat_service.get_ai_response_with_metadata(
@@ -269,6 +270,33 @@ class TestGuardrailNonStreaming:
         assert result.metadata.fallback_triggered is True
         assert result.metadata.error_stage == "verification"
         assert result.metadata.error_code == "ungrounded_answer"
+        assert result.metadata.guardrail_action == "replace"
+
+    def test_caveat_answer_kept_and_flagged(self, monkeypatch):
+        """Caveat tier keeps the answer and appends the unverified notice."""
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answer_verification",
+            lambda *a, **k: AnswerVerification(
+                grounded=False, action="caveat", faithful_probability=0.4,
+                fabricated_venue_probability=0.03,
+                unsupported_detail_probability=0.6,
+            ),
+        )
+        result = chat_service.get_ai_response_with_metadata(
+            query="bars in soho",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            hf_call=self._hf("Try Test Bar [1] has great drinks"),
+            busyness_context="Live busyness: unavailable",
+        )
+        assert "Try Test Bar" in result.text  # answer preserved
+        assert "couldn't verify every detail" in result.text  # caveat appended
+        assert result.metadata.fallback_triggered is False
+        assert result.metadata.guardrail_action == "caveat"
 
     def test_grounded_answer_kept(self, monkeypatch):
         import chat_service
@@ -299,7 +327,8 @@ class TestGuardrailStreaming:
             chat_service,
             "resolve_answer_verification",
             lambda *a, **k: AnswerVerification(
-                grounded=False, faithful_probability=0.05
+                grounded=False, action="replace", faithful_probability=0.05,
+                fabricated_venue_probability=0.9,
             ),
         )
         events = list(chat_service.stream_chat_response(
@@ -312,6 +341,29 @@ class TestGuardrailStreaming:
         assert "event: done" in events[-1]
         assert "couldn't verify every detail" in events[-1]
         assert '"verified": false' in events[-1]
+        assert '"guardrail_action": "replace"' in events[-1]
+
+    def test_caveat_streamed_answer_kept_in_done(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr("chat_service._stream_hf_response", _fake_stream)
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answer_verification",
+            lambda *a, **k: AnswerVerification(
+                grounded=False, action="caveat", faithful_probability=0.4,
+            ),
+        )
+        events = list(chat_service.stream_chat_response(
+            query="bars in soho",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+        ))
+        assert "Here you go" in events[-1]  # original streamed text kept
+        assert "couldn't verify every detail" in events[-1]
+        assert '"guardrail_action": "caveat"' in events[-1]
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +431,7 @@ class TestRunRagasEvalJevPath:
                     mode="hybrid", retrieval_started=True, candidates=1,
                     fallback_triggered=True, retrieval_elapsed_s=0.0,
                     generation_elapsed_s=0.0, error_stage="verification",
-                    error_code="ungrounded_answer",
+                    error_code="ungrounded_answer", guardrail_action="replace",
                 ),
             )
 

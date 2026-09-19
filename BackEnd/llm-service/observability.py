@@ -247,6 +247,7 @@ class ChatExecutionMetadata:
         "generation_elapsed_s",
         "error_stage",
         "error_code",
+        "guardrail_action",
     )
 
     def __init__(
@@ -260,6 +261,7 @@ class ChatExecutionMetadata:
         generation_elapsed_s: float = 0.0,
         error_stage: Optional[str] = None,
         error_code: Optional[str] = None,
+        guardrail_action: Optional[str] = None,
     ):
         self.mode = mode
         self.retrieval_started = retrieval_started
@@ -269,6 +271,7 @@ class ChatExecutionMetadata:
         self.generation_elapsed_s = generation_elapsed_s
         self.error_stage = error_stage
         self.error_code = error_code
+        self.guardrail_action = guardrail_action
 
 
 # ── Request state ────────────────────────────────────────────────

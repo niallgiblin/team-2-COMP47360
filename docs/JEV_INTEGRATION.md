@@ -38,6 +38,8 @@ guessing.
 | `JEV_MAX_RETRIES` | `2` | Retries for 429/529 + transient errors |
 | `JEV_CONFIDENCE_THRESHOLD` | `0.5` | Below this, an answer is treated as no signal |
 | `JEV_GUARDRAIL_ENABLED` | `true` | Runtime faithfulness guardrail (needs `JEV_ENABLED`) |
+| `JEV_GUARDRAIL_REPLACE_THRESHOLD` | `0.8` | Replace the answer at/above this unsupported-detail probability |
+| `JEV_GUARDRAIL_CAVEAT_THRESHOLD` | `0.5` | Append a caveat at/above this unsupported/faithful probability |
 | `JEV_ABSTENTION_ENABLED` | `true` | Calibrated abstention gate (needs `JEV_ENABLED`) |
 | `JEV_ABSTENTION_THRESHOLD` | `0.5` | Abstain when P(answerable) < t or P(out_of_scope) ≥ t |
 | `JEV_RERANK_ENABLED` | `false` | Use Jev to re-rank candidates (replaces the cross-encoder) |
@@ -93,15 +95,16 @@ After retrieval and before generation, both paths run the abstention gate:
 After generation, when citations exist, both paths run the guardrail:
 
 4. `resolve_answer_verification` checks the answer against the retrieved
-   context. If it is not grounded, the generated text is replaced by
-   `build_retrieval_fallback_response(..., intro=GROUNDED_FALLBACK_INTRO)` — a
-   deterministic, citation-backed venue list.
-   - Non-streaming: replaced before returning; metadata gets
+   context and returns an action:
+   - `replace` (fabricated venue or unsupported detail ≥ 0.8) → swap the
+     answer for `build_retrieval_fallback_response(...)`. Non-streaming sets
      `fallback_triggered=True`, `error_stage="verification"`,
-     `error_code="ungrounded_answer"`.
-   - Streaming: the frontend replaces streamed text with the `done` event's
-     `content`, so the fallback is emitted in `done` with `"verified": false`.
-     (The ungrounded text is briefly visible while it streams.)
+     `error_code="ungrounded_answer"`, `guardrail_action="replace"`.
+   - `caveat` (low faithfulness or unsupported detail ≥ 0.5) → keep the
+     answer and append `UNVERIFIED_CAVEAT`; `guardrail_action="caveat"`.
+   - `pass` → no change.
+   - Streaming applies the same to the `done` event's `content`, which the
+     frontend swaps in. (Replaced text is briefly visible while streaming.)
 
 Everything is behind `JEV_ENABLED` / `JEV_GUARDRAIL_ENABLED` /
 `JEV_ABSTENTION_ENABLED`. When off, the key is missing, the call times out, or
@@ -184,32 +187,48 @@ Q096 private rooms for 20) are attribute-level requests. They are deliberately
 so, and the guardrail/prompt stop the model fabricating the attribute. Treating
 them as abstention would require a separate, noisier signal.
 
-### A/B result (96 questions, same Jev judge both arms)
+### A/B result (96 questions, same Jev judge all arms)
 
-Both arms scored with the Jev judge (`--jev-judge`) so only the pipeline varies.
-Generation used the restored HF credits; 0 scoring failures in either arm.
+All arms scored with the Jev judge so only the pipeline varies. Generation used
+the restored HF credits; 0 scoring failures.
 
-| Metric | A: baseline pipeline | B: Jev pipeline | Δ |
-|---|---|---|---|
-| Faithfulness | 0.3566 | **0.4282** | **+0.0716** |
-| Answer relevancy | **0.7784** | 0.6873 | −0.0911 |
-| Context precision | 0.6773 | **0.6992** | +0.0219 |
+| Arm | Faithfulness | Answer relevancy | Context precision | Guardrail |
+|---|---|---|---|---|
+| A baseline pipeline | 0.3566 | **0.7784** | 0.6773 | — |
+| B guardrail v1 (replace-any) | **0.4282** | 0.6873 | **0.6992** | 32 replace |
+| B2 guardrail tuned (tiered) | 0.3486 | 0.7590 | 0.6943 | 4 replace + 25 caveat |
 
-In arm B the guardrail replaced 32/96 answers and the abstention gate fired on
-16 (15 in the abstention category, 1 adversarial).
+Abstention fired on 16 questions in both B and B2 (unchanged).
+
+The v1 guardrail logged each verdict; the signal distribution was the case for
+tuning:
+
+| Trigger reason (v1, n=31) | Count |
+|---|---|
+| `fabricated_venue ≥ 0.5` (invented venue) | **1** |
+| `unsupported_detail ≥ 0.5` | 13 |
+| only `faithful < 0.5` (no fabrication, low detail risk) | 17 |
+
+So 30/31 wholesale replacements were not fabricated venues — the answer was
+merely under-grounded. The tiered guardrail keeps those answers and appends a
+caveat instead, replacing only on a fabricated venue or a severe
+unsupported detail (`≥ JEV_GUARDRAIL_REPLACE_THRESHOLD`, default 0.8).
 
 Reading:
 
-- **The guardrail works:** faithfulness rises 7 points, context precision
-  slightly up. Replacement answers are grounded in the citation list.
-- **Relevancy falls 9 points, in every category** — not just abstention. The
-  guardrail replaced a third of answers with the generic
-  "I couldn't verify every detail…" venue list, which is faithful but less
-  directly responsive. This is the real cost of the guardrail and the main
-  tuning target (trigger less often, or append a caveat instead of replacing).
-- The trigger rate (33%) is high, which is itself a signal that the 8B
-  generator violates grounding often — consistent with the low absolute
-  faithfulness in both arms.
+- **Tuning recovers most of the relevancy** (−0.019 vs −0.091) while still
+  hard-blocking fabricated venues (4 replacements). The caveat applies to
+  soft cases (median `faithful` 0.42).
+- The faithfulness advantage of v1 comes from replacing 32 answers with
+grounded venue lists; with only 4 replacements that lift largely disappears.
+- **Methodological caveat:** generation uses `temperature=0.4`, so each arm
+  re-samples the answers and cross-arm differences include generation noise.
+  The v1→B2 faithfulness drop (0.43→0.35) is larger than plausible noise, but
+  a definitive number needs a fixed-generation (temperature 0) or multi-seed
+  run. The relevancy/trigger-count differences are policy effects and are
+  reliable.
+- **Chosen default: the tuned (tiered) guardrail.** Its core job is to stop
+  invented venues, which it does, without discarding a third of all answers.
 
 ### Re-ranking: cross-encoder vs Jev
 
@@ -250,10 +269,10 @@ PYTHONPATH=. python3 scripts/jev_smoke.py "is there a rooftop bar in soho?"
 
 Ordered by expected value:
 
-1. **Guardrail tuning.** It replaced 33% of answers, costing 9 points of answer
-   relevancy for 7 points of faithfulness. Try a higher trigger bar (only
-   replace on `fabricated_venue`, not merely low `faithful`) or append a caveat
-   instead of replacing the whole answer, then re-run the A/B.
+1. **Controlled guardrail evaluation.** Re-run the A/B at temperature 0 (or
+   multi-seed) so the guardrail's effect is not confounded by generation
+   sampling. The trigger-count and relevancy effects are already clear; the
+   faithfulness delta needs a fixed-generation comparison.
 2. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
    once in `app.py` and pass it through, then remove the remaining
    `extract_location_from_query` / regex category paths.

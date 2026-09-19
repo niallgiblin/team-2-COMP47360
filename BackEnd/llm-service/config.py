@@ -108,6 +108,16 @@ JEV_ABSTENTION_ENABLED = os.getenv(
 # Abstain when P(answerable) < threshold or P(out_of_scope) >= threshold.
 JEV_ABSTENTION_THRESHOLD = float(os.getenv("JEV_ABSTENTION_THRESHOLD", "0.5"))
 
+# Guardrail tiers. A fabricated venue (or a severe unsupported detail) replaces
+# the answer with the grounded venue list; milder issues keep the answer and
+# append a caveat. See docs/JEV_INTEGRATION.md "A/B result".
+JEV_GUARDRAIL_REPLACE_THRESHOLD = float(
+    os.getenv("JEV_GUARDRAIL_REPLACE_THRESHOLD", "0.8")
+)
+JEV_GUARDRAIL_CAVEAT_THRESHOLD = float(
+    os.getenv("JEV_GUARDRAIL_CAVEAT_THRESHOLD", "0.5")
+)
+
 # --- Jev re-ranking (cross-encoder replacement) ---
 # Scores (query, candidate) relevance with calibrated probabilities in a single
 # parallel call, avoiding the per-pair CPU forward passes that made the

@@ -443,6 +443,7 @@ def run_ragas_eval(
         ragas_error: str | None = None
         answer: str = ""
         guardrail_triggered = False
+        guardrail_action = None
         agent_mode: str | None = None
 
         if use_jev:
@@ -466,6 +467,8 @@ def run_ragas_eval(
                 )
                 answer = gen_result.text
                 guardrail_triggered = bool(gen_result.metadata.fallback_triggered)
+                guardrail_action = getattr(gen_result.metadata, "guardrail_action", None)
+                guardrail_triggered = guardrail_action in ("replace", "caveat")
                 agent_mode = gen_result.metadata.mode
                 logger.debug(
                     "  Jev-path answer (%d chars, guardrail=%s, mode=%s)",
@@ -540,6 +543,7 @@ def run_ragas_eval(
         }
         if use_jev:
             result["guardrail_triggered"] = guardrail_triggered
+            result["guardrail_action"] = guardrail_action
             result["mode"] = agent_mode
             result["abstained"] = agent_mode == "abstention"
         if retrieval_metrics is not None:
@@ -586,6 +590,8 @@ def build_combined_report(
     ragas_scored = 0
     ragas_failed = 0
     guardrail_total = 0
+    guardrail_replace_total = 0
+    guardrail_caveat_total = 0
     abstained_total = 0
 
     for r in ragas_results:
@@ -608,6 +614,8 @@ def build_combined_report(
                 "ragas_failed": 0,
                 # Jev guardrail / abstention
                 "guardrail_triggered": 0,
+                "guardrail_replace": 0,
+                "guardrail_caveat": 0,
                 "abstained": 0,
             }
 
@@ -641,6 +649,12 @@ def build_combined_report(
         if r.get("guardrail_triggered"):
             stats["guardrail_triggered"] += 1
             guardrail_total += 1
+            if r.get("guardrail_action") == "replace":
+                stats["guardrail_replace"] += 1
+                guardrail_replace_total += 1
+            elif r.get("guardrail_action") == "caveat":
+                stats["guardrail_caveat"] += 1
+                guardrail_caveat_total += 1
 
         # Calibrated abstention
         if r.get("abstained"):
@@ -712,6 +726,8 @@ def build_combined_report(
         "ragas_scoring_failures": ragas_failed,
         "guardrail": {
             "triggered_total": guardrail_total,
+            "replace_total": guardrail_replace_total,
+            "caveat_total": guardrail_caveat_total,
             "categories": {
                 cat: stats["guardrail_triggered"]
                 for cat, stats in sorted(categories.items())
