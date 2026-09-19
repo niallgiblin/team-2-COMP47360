@@ -13,6 +13,7 @@ from config import (
     DATA_PATH,
     DEFAULT_HF_CHAT_MODEL,
     HF_CHAT_MODEL,
+    JEV_ENABLED,
 )
 from dto import create_citation_dto
 from prompt_loader import PromptLoadError, load_prompt_template
@@ -255,6 +256,37 @@ def is_general_chat_query(query):
 
     # 3. Default: no clear signal either way → not general chat.
     return False
+
+
+def resolve_query_analysis(query, previous_questions=None):
+    """Return a Jev ``QueryAnalysis`` for *query*, or ``None`` for regex fallback.
+
+    Jev provides one typed, calibrated call that covers the general-chat gate
+    and location extraction that regex currently approximates. This function
+    never raises — any Jev failure degrades to the existing behaviour.
+    """
+    if not JEV_ENABLED:
+        return None
+    try:
+        from jev_service import analyze_query
+
+        return analyze_query(
+            query,
+            zones=_load_known_zones(),
+            categories=list(_ACTIVITY_PATTERNS.keys()),
+            previous_questions=previous_questions,
+            enabled=True,
+        )
+    except Exception as exc:  # defensive: never break the chat path
+        logger.debug("Jev query analysis unavailable: %s", exc)
+        return None
+
+
+def _is_general_chat(query, analysis=None):
+    """Jev-first general-chat decision, falling back to the regex detector."""
+    if analysis is not None:
+        return analysis.is_general_chat
+    return is_general_chat_query(query)
 
 
 GENERAL_CHAT_SYSTEM_PROMPT = (
@@ -876,8 +908,20 @@ def stream_chat_response(
         return _emit("error", {"message": message})
 
     try:
+        # ---- Jev query understanding (optional) ---------------------------
+        # One typed, calibrated call replaces the regex general-chat gate
+        # and substring location extraction when enabled. Falls back to regex.
+        analysis = resolve_query_analysis(query, previous_questions)
+        if analysis is not None and analysis.location and not location_filter:
+            location_filter = analysis.location
+            logger.info(
+                "Jev location filter: %r (confidence=%.2f)",
+                location_filter,
+                analysis.location_confidence,
+            )
+
         # ---- General chat: skip retrieval ---------------------------------
-        if is_general_chat_query(query):
+        if _is_general_chat(query, analysis):
             logger.info("General chat query detected — streaming: %r", query[:80])
             chat_history = _build_chat_history(previous_questions, previous_responses)
             user_content = f"User question: {query}"
@@ -1427,8 +1471,18 @@ def get_ai_response_with_metadata(
     error_code = None
 
     try:
+        # ---- Jev query understanding (optional) -------------------------
+        analysis = resolve_query_analysis(query, previous_questions)
+        if analysis is not None and analysis.location and not location_filter:
+            location_filter = analysis.location
+            logger.info(
+                "Jev location filter: %r (confidence=%.2f)",
+                location_filter,
+                analysis.location_confidence,
+            )
+
         # ---- General chat: skip retrieval for non-venue queries ---------
-        if is_general_chat_query(query):
+        if _is_general_chat(query, analysis):
             logger.info(
                 "General chat query detected — skipping retrieval: %r", query[:80]
             )

@@ -1,0 +1,502 @@
+"""TypeSafe System One / Jev integration for the LLM service.
+
+Jev turns unstructured state into *typed, calibrated decisions* (Choice,
+Score, Noul). This module is the single boundary between the concierge and
+the TypeSafe API; everything above it consumes plain dataclasses so the rest
+of the pipeline stays testable without network access.
+
+Design rules (mirrors the existing ``hf_call`` injection pattern):
+
+* **Never raise into the chat path.** Every entry point returns ``None`` on
+  any failure so callers fall back to the existing regex/LLM behaviour.
+* **Disabled by default.** Guarded by ``JEV_ENABLED`` plus a configured
+  ``TYPESAFE_API_KEY``. ``QUERY_REWRITE_ENABLED`` is the closest precedent.
+* **Confidence-gated.** A typed answer below ``JEV_CONFIDENCE_THRESHOLD`` is
+  reported but not acted on. See https://docs.typesafe.ai/confidence.
+
+API reference: https://docs.typesafe.ai/api
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterable, Mapping, Sequence
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_API_URL = "https://api.typesafe.ai/v1/systemone"
+DEFAULT_MODEL = "jev-latest"
+
+# TypeSafe returns these retryable status codes; back off per the docs.
+_RETRYABLE_STATUS = {429, 529}
+
+
+class JevError(Exception):
+    """Raised internally when a Jev call cannot be completed."""
+
+
+# ---------------------------------------------------------------------------
+# Question builders (the three System One primitives)
+# ---------------------------------------------------------------------------
+
+
+def noul(instructions: str, criteria: Mapping[str, str] | None = None) -> dict:
+    """A yes/no question. Answer is a probability in [0, 1]."""
+    question: dict[str, Any] = {"type": "noul", "instructions": instructions}
+    if criteria:
+        question["criteria"] = dict(criteria)
+    return question
+
+
+def choice(instructions: str, criteria: Mapping[str, str | None]) -> dict:
+    """A single-choice question over a caller-defined option set."""
+    return {"type": "choice", "instructions": instructions, "criteria": dict(criteria)}
+
+
+def score(instructions: str, criteria: Sequence[str]) -> dict:
+    """An ordered-rubric question returning a probability-weighted level."""
+    return {"type": "score", "instructions": instructions, "criteria": list(criteria)}
+
+
+# ---------------------------------------------------------------------------
+# Client
+# ---------------------------------------------------------------------------
+
+
+class JevClient:
+    """Thin HTTP client for ``POST /v1/systemone`` with retry/backoff.
+
+    Parameters
+    ----------
+    api_key : str | None
+        TypeSafe API key. Falls back to ``TYPESAFE_API_KEY``.
+    api_url : str | None
+        Override the endpoint (tests, self-hosted proxies).
+    model : str | None
+        Model alias, e.g. ``jev-latest``.
+    timeout : int | None
+        Per-request timeout in seconds.
+    max_retries : int | None
+        Number of retries for 429/529 and transient network errors.
+    transport : callable | None
+        Injection point mirroring ``hf_call``: ``(url, headers, json, timeout)
+        -> response-like``. When ``None``, ``requests.post`` is used.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        api_url: str | None = None,
+        model: str | None = None,
+        timeout: int | None = None,
+        max_retries: int | None = None,
+        transport: Callable[..., Any] | None = None,
+    ):
+        self.api_key = api_key if api_key is not None else os.getenv("TYPESAFE_API_KEY", "")
+        self.api_url = (api_url or os.getenv("TYPESAFE_API_URL") or DEFAULT_API_URL).rstrip("/")
+        self.model = model or os.getenv("JEV_MODEL") or DEFAULT_MODEL
+        self.timeout = int(timeout if timeout is not None else os.getenv("JEV_TIMEOUT_SECONDS", 8))
+        self.max_retries = int(
+            max_retries if max_retries is not None else os.getenv("JEV_MAX_RETRIES", 2)
+        )
+        self._transport = transport or requests.post
+
+    @property
+    def available(self) -> bool:
+        """True when a key is configured and the client can be used."""
+        return bool(self.api_key) and not self.api_key.startswith("your-")
+
+    def system_one(
+        self,
+        state: Any,
+        questions: Mapping[str, dict],
+        *,
+        model: str | None = None,
+    ) -> dict:
+        """Evaluate *state* against *questions* and return the ``answers`` map.
+
+        Raises
+        ------
+        JevError
+            On missing key, exhausted retries, or a malformed response.
+        """
+        if not self.available:
+            raise JevError("TYPESAFE_API_KEY is not configured")
+
+        if not questions:
+            raise JevError("at least one question is required")
+
+        payload = {
+            "state": state,
+            "model": model or self.model,
+            "questions": dict(questions),
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self._transport(
+                    self.api_url, headers=headers, json=payload, timeout=self.timeout
+                )
+            except Exception as exc:  # network/timeout — retry
+                last_error = exc
+            else:
+                status = getattr(response, "status_code", None)
+                if status in _RETRYABLE_STATUS:
+                    last_error = JevError(f"TypeSafe returned retryable status {status}")
+                elif status is not None and status >= 400:
+                    body = getattr(response, "text", "")
+                    raise JevError(f"TypeSafe error {status}: {body[:200]}")
+                else:
+                    data = response.json()
+                    answers = data.get("answers")
+                    if not isinstance(answers, dict):
+                        raise JevError("TypeSafe response missing 'answers' map")
+                    return answers
+
+            if attempt < self.max_retries:
+                backoff = 0.25 * (2 ** attempt)
+                logger.debug(
+                    "jev_service: retry %d/%d in %.2fs (%s)",
+                    attempt + 1,
+                    self.max_retries,
+                    backoff,
+                    last_error,
+                )
+                time.sleep(backoff)
+
+        raise JevError(f"TypeSafe call failed after {self.max_retries + 1} attempts: {last_error}")
+
+
+# ---------------------------------------------------------------------------
+# Query-understanding decision
+# ---------------------------------------------------------------------------
+
+# Categories are asked as one Noul per category so the model can express
+# independent, parallel judgements. Keep this bounded to the activity
+# vocabulary the corpus actually tags.
+_DEFAULT_CATEGORIES: tuple[str, ...] = (
+    "bowling",
+    "comedy",
+    "jazz",
+    "dance",
+    "rooftop",
+    "wine",
+    "cocktail",
+    "speakeasy",
+    "karaoke",
+    "live music",
+    "outdoor",
+    "quiet",
+)
+
+_PRICE_TIERS: Mapping[str, str | None] = {
+    "unspecified": "No price preference stated",
+    "budget": "Cheap, affordable, or budget-friendly",
+    "moderate": "Mid-range, reasonable prices",
+    "upscale": "Upscale, luxury, or expensive",
+}
+
+
+@dataclass(frozen=True)
+class QueryAnalysis:
+    """Typed, calibrated reading of a user query.
+
+    All fields are safe defaults when the corresponding question was not
+    asked or its confidence fell below threshold.
+    """
+
+    is_general_chat: bool = False
+    general_chat_probability: float = 0.0
+    location: str | None = None
+    location_confidence: float = 0.0
+    location_probabilities: Mapping[str, float] = field(default_factory=dict)
+    price_tier: str | None = None
+    price_tier_confidence: float = 0.0
+    categories: tuple[str, ...] = ()
+    category_probabilities: Mapping[str, float] = field(default_factory=dict)
+    confidences: Mapping[str, float] = field(default_factory=dict)
+
+    def as_dict(self) -> dict:
+        """JSON-serialisable view for structured logs / observability."""
+        return {
+            "is_general_chat": self.is_general_chat,
+            "general_chat_probability": round(self.general_chat_probability, 4),
+            "location": self.location,
+            "location_confidence": round(self.location_confidence, 4),
+            "price_tier": self.price_tier,
+            "price_tier_confidence": round(self.price_tier_confidence, 4),
+            "categories": list(self.categories),
+            "confidences": {k: round(v, 4) for k, v in self.confidences.items()},
+        }
+
+
+def build_query_questions(
+    zones: Iterable[str] | None = None,
+    categories: Iterable[str] | None = None,
+) -> dict[str, dict]:
+    """Build the System One question map for the query-understanding decision.
+
+    Kept public so it can be shared with the Playground/eval harness.
+    """
+    questions: dict[str, dict] = {
+        "is_general_chat": noul(
+            "Is this message a greeting, small talk, or a meta question about "
+            "the assistant or app itself (for example 'how do you work?', "
+            "'what can you do?'), rather than a request to find venues?",
+            criteria={
+                "true": "Greeting, small talk, or meta/capability question",
+                "false": "A request to find, compare, or ask about venues",
+            },
+        ),
+        "price_tier": choice(
+            "What price preference, if any, does the user express?",
+            _PRICE_TIERS,
+        ),
+    }
+
+    if zones:
+        # 'none' is the explicit no-signal option; concrete zones carry no
+        # extra rubric text (criteria values may be null).
+        zone_criteria: dict[str, str | None] = {
+            "none": "No Manhattan neighborhood is named or clearly implied",
+        }
+        for zone in sorted({str(z).strip().lower() for z in zones if str(z).strip()}):
+            zone_criteria[zone] = None
+        questions["location"] = choice(
+            "Which Manhattan neighborhood does the user name or clearly imply? "
+            "Answer 'none' if no neighborhood is specified.",
+            zone_criteria,
+        )
+
+    for category in categories or ():
+        questions[f"category:{category}"] = noul(
+            f"Does the user ask for or clearly imply '{category}' as a venue "
+            "activity or category?"
+        )
+
+    return questions
+
+
+def _probabilities_for(answer: Mapping[str, Any]) -> Mapping[str, float]:
+    raw = answer.get("probabilities")
+    if not isinstance(raw, Mapping):
+        return {}
+    probs: dict[str, float] = {}
+    for key, value in raw.items():
+        try:
+            probs[str(key)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return probs
+
+
+def _answer_confidence(answer: Mapping[str, Any]) -> float:
+    try:
+        return float(answer.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_analysis(
+    answers: Mapping[str, Any],
+    confidence_threshold: float,
+) -> QueryAnalysis:
+    """Fold a raw ``answers`` map into a :class:`QueryAnalysis`."""
+    confidences: dict[str, float] = {}
+
+    # --- is_general_chat (Noul) ---
+    general_prob = 0.0
+    general_answer = answers.get("is_general_chat")
+    if isinstance(general_answer, Mapping):
+        try:
+            general_prob = float(general_answer.get("noul", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            general_prob = 0.0
+    is_general_chat = general_prob >= confidence_threshold
+
+    # --- location (Choice) ---
+    location: str | None = None
+    location_confidence = 0.0
+    location_probabilities: Mapping[str, float] = {}
+    location_answer = answers.get("location")
+    if isinstance(location_answer, Mapping):
+        location_confidence = _answer_confidence(location_answer)
+        location_probabilities = _probabilities_for(location_answer)
+        chosen = location_answer.get("choice")
+        if (
+            chosen
+            and str(chosen) != "none"
+            and location_confidence >= confidence_threshold
+        ):
+            location = str(chosen)
+        confidences["location"] = location_confidence
+
+    # --- price_tier (Choice) ---
+    price_tier: str | None = None
+    price_confidence = 0.0
+    price_answer = answers.get("price_tier")
+    if isinstance(price_answer, Mapping):
+        price_confidence = _answer_confidence(price_answer)
+        chosen = price_answer.get("choice")
+        if (
+            chosen
+            and str(chosen) != "unspecified"
+            and price_confidence >= confidence_threshold
+        ):
+            price_tier = str(chosen)
+        confidences["price_tier"] = price_confidence
+
+    # --- categories (one Noul each) ---
+    category_probabilities: dict[str, float] = {}
+    for key, value in answers.items():
+        if not key.startswith("category:") or not isinstance(value, Mapping):
+            continue
+        name = key.split(":", 1)[1]
+        try:
+            prob = float(value.get("noul", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+        category_probabilities[name] = prob
+    categories = tuple(
+        name
+        for name, prob in sorted(
+            category_probabilities.items(), key=lambda item: item[1], reverse=True
+        )
+        if prob >= confidence_threshold
+    )
+    confidences["categories"] = (
+        max(category_probabilities.values()) if category_probabilities else 0.0
+    )
+
+    return QueryAnalysis(
+        is_general_chat=is_general_chat,
+        general_chat_probability=general_prob,
+        location=location,
+        location_confidence=location_confidence,
+        location_probabilities=location_probabilities,
+        price_tier=price_tier,
+        price_tier_confidence=price_confidence,
+        categories=categories,
+        category_probabilities=category_probabilities,
+        confidences=confidences,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Metrics (lazy; never fatal)
+# ---------------------------------------------------------------------------
+
+
+def _record_metric(status: str, duration_s: float, decision: str = "query_analysis") -> None:
+    try:
+        from observability import JEV_LATENCY_SECONDS, JEV_REQUESTS_TOTAL
+    except Exception:
+        return
+    try:
+        JEV_REQUESTS_TOTAL.labels(decision=decision, status=status).inc()
+        JEV_LATENCY_SECONDS.labels(decision=decision).observe(max(duration_s, 0.0))
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+
+def analyze_query(
+    query: str,
+    *,
+    zones: Iterable[str] | None = None,
+    categories: Iterable[str] | None = None,
+    previous_questions: Sequence[str] | None = None,
+    client: JevClient | None = None,
+    confidence_threshold: float | None = None,
+    enabled: bool | None = None,
+) -> QueryAnalysis | None:
+    """Read a user query into typed, calibrated signals via Jev.
+
+    Returns ``None`` whenever Jev is disabled, misconfigured, times out, or
+    returns a malformed response. Callers must treat ``None`` as "no Jev
+    signal" and fall back to their existing behaviour.
+    """
+    from config import (
+        JEV_CONFIDENCE_THRESHOLD,
+        JEV_ENABLED,
+        JEV_TIMEOUT_SECONDS,
+    )
+
+    is_enabled = JEV_ENABLED if enabled is None else enabled
+    if not is_enabled:
+        _record_metric("disabled", 0.0)
+        return None
+
+    if not query or not query.strip():
+        return None
+
+    active_client = client or JevClient(timeout=JEV_TIMEOUT_SECONDS)
+    if not active_client.available:
+        logger.debug("jev_service: no API key configured — skipping query analysis")
+        _record_metric("disabled", 0.0)
+        return None
+
+    threshold = (
+        JEV_CONFIDENCE_THRESHOLD if confidence_threshold is None else confidence_threshold
+    )
+
+    # Present conversation context as part of the state so follow-up
+    # questions can be classified in context.
+    state: Any = query
+    if previous_questions:
+        history = [str(q) for q in previous_questions if q][-3:]
+        if history:
+            state = {
+                "current_message": query,
+                "previous_questions": history,
+            }
+
+    questions = build_query_questions(
+        zones=zones,
+        categories=categories if categories is not None else _DEFAULT_CATEGORIES,
+    )
+
+    t0 = time.perf_counter()
+    try:
+        answers = active_client.system_one(state, questions)
+    except JevError as exc:
+        elapsed = time.perf_counter() - t0
+        status = "timeout" if "timeout" in str(exc).lower() else "error"
+        logger.warning("jev_service: query analysis unavailable (%s): %s", status, exc)
+        _record_metric(status, elapsed)
+        return None
+    except Exception as exc:  # defensive: never leak into the chat path
+        elapsed = time.perf_counter() - t0
+        logger.warning("jev_service: unexpected query analysis failure: %s", exc)
+        _record_metric("error", elapsed)
+        return None
+
+    elapsed = time.perf_counter() - t0
+    try:
+        analysis = _parse_analysis(answers, threshold)
+    except Exception as exc:
+        logger.warning("jev_service: could not parse answers: %s", exc)
+        _record_metric("error", elapsed)
+        return None
+
+    logger.info(
+        "jev_service: query analysis in %.0fms %s",
+        elapsed * 1000,
+        analysis.as_dict(),
+    )
+    _record_metric("success", elapsed)
+    return analysis

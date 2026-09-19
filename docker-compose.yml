@@ -31,6 +31,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    restart: unless-stopped
     volumes:
       - ./BackEnd/avatars:/app/avatars
 
@@ -97,6 +98,7 @@ services:
     depends_on:
       - backend
       - llm-service
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -121,6 +123,13 @@ services:
       - CROSS_ENCODER_MODEL_NAME=/app/models/cross-encoder
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - HF_TOKEN=${HF_TOKEN}
+      # TypeSafe System One / Jev. Disabled by default; regex fallback applies
+      # whenever the key is absent or the flag is false.
+      - TYPESAFE_API_KEY=${TYPESAFE_API_KEY:-}
+      - JEV_ENABLED=${JEV_ENABLED:-false}
+      - JEV_MODEL=${JEV_MODEL:-jev-latest}
+      - JEV_TIMEOUT_SECONDS=${JEV_TIMEOUT_SECONDS:-8}
+      - JEV_CONFIDENCE_THRESHOLD=${JEV_CONFIDENCE_THRESHOLD:-0.5}
       - APP_JWT_SECRET=${APP_JWT_SECRET}
       - GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
       - FLASK_CORS_ALLOWED_ORIGINS=${FLASK_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}

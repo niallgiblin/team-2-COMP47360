@@ -80,3 +80,19 @@ CROSS_ENCODER_OVERFETCH_MULTIPLIER = _env_int("CROSS_ENCODER_OVERFETCH_MULTIPLIE
 QUERY_EXPANSION_ENABLED = os.getenv(
     "QUERY_EXPANSION_ENABLED", "true"
 ).lower() in {"1", "true", "yes"}
+
+# --- TypeSafe System One / Jev ---
+# Jev makes fast, typed, calibrated decisions. Used to replace brittle regex
+# routing/verification in the chat path. Disabled by default; the existing
+# regex/LLM behaviour is the fallback whenever Jev is off or unavailable.
+JEV_ENABLED = os.getenv("JEV_ENABLED", "false").lower() in {"1", "true", "yes"}
+TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY", "")
+TYPESAFE_API_URL = os.getenv(
+    "TYPESAFE_API_URL", "https://api.typesafe.ai/v1/systemone"
+)
+JEV_MODEL = os.getenv("JEV_MODEL", "jev-latest")
+JEV_TIMEOUT_SECONDS = _env_int("JEV_TIMEOUT_SECONDS", 8)
+JEV_MAX_RETRIES = _env_int("JEV_MAX_RETRIES", 2)
+# Below this confidence, a Jev classification is treated as "no signal" and
+# the caller falls back to the regex path. See docs.typesafe.ai/confidence.
+JEV_CONFIDENCE_THRESHOLD = float(os.getenv("JEV_CONFIDENCE_THRESHOLD", "0.5"))

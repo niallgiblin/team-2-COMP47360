@@ -137,6 +137,26 @@ CITATIONS_PER_RESPONSE = Histogram(
     buckets=(0, 1, 2, 3, 5, 8, 10),
 )
 
+# --- TypeSafe System One / Jev ---
+JEV_REQUESTS_TOTAL = Counter(
+    "jev_requests_total",
+    "Total Jev (System One) calls by decision and status",
+    labelnames=["decision", "status"],
+)
+
+JEV_LATENCY_SECONDS = Histogram(
+    "jev_latency_seconds",
+    "Jev (System One) end-to-end latency",
+    labelnames=["decision"],
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 8),
+)
+
+# Pre-initialize the query-analysis decision so dashboards never see an
+# empty series before first traffic.
+for _jev_status in ("success", "fallback", "timeout", "error", "disabled"):
+    JEV_REQUESTS_TOTAL.labels(decision="query_analysis", status=_jev_status)
+JEV_LATENCY_SECONDS.labels(decision="query_analysis")
+
 # Pre-initialize all 12 label combinations
 for _mode in MODE_VALUES:
     CHAT_LATENCY_SECONDS.labels(mode=_mode)
