@@ -13,6 +13,7 @@ from config import (
     DATA_PATH,
     DEFAULT_HF_CHAT_MODEL,
     HF_CHAT_MODEL,
+    JEV_ABSTENTION_ENABLED,
     JEV_ENABLED,
     JEV_GUARDRAIL_ENABLED,
 )
@@ -173,6 +174,13 @@ GROUNDED_FALLBACK_INTRO = (
     "answer, so here are the confirmed venues from our database:"
 )
 
+# Response when the calibrated-abstention gate decides retrieval cannot answer
+# the request. Citations are intentionally empty so the UI shows no cards.
+ABSTENTION_MESSAGE = (
+    "I couldn't find a good match for that in Manhattan. "
+    "Try a different neighborhood, vibe, or type of venue."
+)
+
 # ---------------------------------------------------------------------------
 # General / non-venue chat detection (prevents random venue results for meta
 # questions like "how do you work?" or "what can you do?")
@@ -320,6 +328,26 @@ def resolve_answer_verification(answer, retrieval_context, citations):
         )
     except Exception as exc:  # defensive: never break the chat path
         logger.debug("Jev answer verification unavailable: %s", exc)
+        return None
+
+
+def resolve_answerability(query, citations):
+    """Decide whether retrieved citations can answer *query* (calibrated).
+
+    Returns an ``AnswerabilityAssessment``, or ``None`` when abstention gating
+    is disabled, unavailable, or there is nothing to assess. Callers must
+    treat ``None`` as "do not abstain".
+    """
+    if not JEV_ENABLED or not JEV_ABSTENTION_ENABLED:
+        return None
+    if not citations:
+        return None
+    try:
+        from jev_service import assess_answerability
+
+        return assess_answerability(query, citations, enabled=True)
+    except Exception as exc:  # defensive: never break the chat path
+        logger.debug("Jev answerability unavailable: %s", exc)
         return None
 
 
@@ -1014,6 +1042,19 @@ def stream_chat_response(
             retrieval_elapsed * 1000, candidates,
         )
 
+        # ---- Calibrated abstention (optional) -----------------------------
+        # Decide whether the retrieved candidates can actually answer the
+        # query before spending a generation call on them.
+        assessment = resolve_answerability(search_query, citations)
+        if assessment is not None and assessment.should_abstain:
+            logger.info("Jev abstention (streaming): %s", assessment.as_dict())
+            yield _emit("done", {
+                "content": ABSTENTION_MESSAGE,
+                "citations": [],
+                "abstained": True,
+            })
+            return
+
         # Build chat messages with ORIGINAL query in user prompt.
         messages, _ = build_chat_messages(
             query=query,
@@ -1637,6 +1678,20 @@ def get_ai_response_with_metadata(
         mode = "dense"  # default — overridden by app.py in Task 2
 
         retrieval_elapsed = _time.perf_counter() - retrieval_start
+
+        # ---- Calibrated abstention (optional) -----------------------------
+        assessment = resolve_answerability(search_query, citations)
+        if assessment is not None and assessment.should_abstain:
+            logger.info("Jev abstention: %s", assessment.as_dict())
+            return ChatExecutionResult(
+                ABSTENTION_MESSAGE, [],
+                ChatExecutionMetadata(
+                    mode="abstention", retrieval_started=True, candidates=candidates,
+                    fallback_triggered=False, retrieval_elapsed_s=retrieval_elapsed,
+                    generation_elapsed_s=0.0,
+                    error_stage=None, error_code=None,
+                ),
+            )
 
         # ---- Build chat messages with ORIGINAL query in user prompt -----
         messages, _ = build_chat_messages(

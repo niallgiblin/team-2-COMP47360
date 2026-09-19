@@ -38,6 +38,8 @@ guessing.
 | `JEV_MAX_RETRIES` | `2` | Retries for 429/529 + transient errors |
 | `JEV_CONFIDENCE_THRESHOLD` | `0.5` | Below this, an answer is treated as no signal |
 | `JEV_GUARDRAIL_ENABLED` | `true` | Runtime faithfulness guardrail (needs `JEV_ENABLED`) |
+| `JEV_ABSTENTION_ENABLED` | `true` | Calibrated abstention gate (needs `JEV_ENABLED`) |
+| `JEV_ABSTENTION_THRESHOLD` | `0.5` | Abstain when P(answerable) < t or P(out_of_scope) ≥ t |
 
 Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
 `docker-compose.yml` (already wired for the `llm-service`).
@@ -73,9 +75,16 @@ request, then:
 2. Fill `location_filter` from `analysis.location` when the route layer did not
    already detect one.
 
+After retrieval and before generation, both paths run the abstention gate:
+
+3. `resolve_answerability` asks Jev whether the retrieved candidates can
+   answer the query (`answerable` + `out_of_scope` Nouls). When it abstains,
+   generation is skipped and the response is `ABSTENTION_MESSAGE` with empty
+   citations; non-streaming metadata gets `mode="abstention"`.
+
 After generation, when citations exist, both paths run the guardrail:
 
-3. `resolve_answer_verification` checks the answer against the retrieved
+4. `resolve_answer_verification` checks the answer against the retrieved
    context. If it is not grounded, the generated text is replaced by
    `build_retrieval_fallback_response(..., intro=GROUNDED_FALLBACK_INTRO)` — a
    deterministic, citation-backed venue list.
@@ -86,11 +95,12 @@ After generation, when citations exist, both paths run the guardrail:
      `content`, so the fallback is emitted in `done` with `"verified": false`.
      (The ungrounded text is briefly visible while it streams.)
 
-Everything is behind `JEV_ENABLED` / `JEV_GUARDRAIL_ENABLED`. When off, the
-key is missing, the call times out, or the response is malformed, the code
-behaves exactly as before. New Prometheus series:
-`jev_requests_total{decision,status}` and `jev_latency_seconds{decision}`
-(`decision` is `query_analysis`, `answer_verification`, or `eval_judge`).
+Everything is behind `JEV_ENABLED` / `JEV_GUARDRAIL_ENABLED` /
+`JEV_ABSTENTION_ENABLED`. When off, the key is missing, the call times out, or
+the response is malformed, the code behaves exactly as before. New Prometheus
+series: `jev_requests_total{decision,status}` and `jev_latency_seconds{decision}`
+(`decision` is `query_analysis`, `answer_verification`, `answerability`, or
+`eval_judge`).
 
 ## Evaluation harness
 
@@ -130,6 +140,37 @@ NDCG to 0. `compute_ndcg_at_k` now normalises keys (aggregate NDCG
 > working generator plus the Jev judge remains viable — another reason to run
 > `--jev`.
 
+### Abstention calibration
+
+`scripts/run_eval.py --jev` uses the Jev abstention gate for the abstention
+category instead of the raw `similarity < 0.3` cutoff. Measured on the
+96-question benchmark (retrieval only, no generation):
+
+| | Abstention pass | Over-abstention on legit queries |
+|---|---|---|
+| Baseline (`similarity < 0.3`) | 15/18 | ~0/78 |
+| Jev gate | 15/18 | 1/78 (1.3%) |
+
+Getting there took two wording iterations (documented here so the next person
+doesn't repeat them):
+
+- A strict "satisfy every requested attribute" `answerable` question caught
+  all 18 but over-abstained on **83%** of legit queries (it conflates retrieval
+  quality with scope). Rejected.
+- Defining scope as "Manhattan nightlife" wrongly flagged restaurants, cafes,
+  museums, and galleries as out of scope (**~19%** over-abstention). Fixed by
+  enumerating the catalog: bars, clubs, lounges, restaurants, cafes, museums,
+  art galleries.
+- Adding an events/schedules clause to `out_of_scope` caused false positives on
+  "live jazz performances in Manhattan". Moved that catch into the `answerable`
+  question instead.
+
+The 3 remaining misses (Q092 valet parking + waterfront views, Q095 dog menus,
+Q096 private rooms for 20) are attribute-level requests. They are deliberately
+**not** abstained: the venues may well satisfy them, the data just doesn't say
+so, and the guardrail/prompt stop the model fabricating the attribute. Treating
+them as abstention would require a separate, noisier signal.
+
 ## Verifying
 
 Unit tests (no network):
@@ -152,17 +193,16 @@ PYTHONPATH=. python3 scripts/jev_smoke.py "is there a rooftop bar in soho?"
 
 Ordered by expected value:
 
-1. **Calibrated abstention.** Decide `answerable` over the retrieved candidate
-   set instead of the prompt rule "respond exactly 'no matching venues
-   found'". Directly targets the 18 abstention benchmark cases.
-2. **Rerank with Jev Score.** Score `(query, candidate)` relevance with
+1. **Rerank with Jev Score.** Score `(query, candidate)` relevance with
    calibrated probabilities, replacing the latency-blocked cross-encoder and
    enabling threshold-based filtering.
-3. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
+2. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
    once in `app.py` and pass it through, then remove the remaining
    `extract_location_from_query` / regex category paths.
-4. **Guardrail threshold tuning.** The grounded decision currently uses
-   `JEV_CONFIDENCE_THRESHOLD` plus a fixed 0.5 floor on the failure detectors.
-   Calibrate against the benchmark's false-positive / false-negative rates.
-5. **Run the A/B.** With HF credits restored, run `--jev` vs. baseline over
-   all 96 questions and record the deltas in `docs/EVALUATION_STRATEGY.md`.
+3. **Guardrail + abstention threshold tuning.** Calibrate
+   `JEV_CONFIDENCE_THRESHOLD` / `JEV_ABSTENTION_THRESHOLD` against the
+   benchmark's false-positive and false-negative rates once generation credits
+   are restored.
+4. **Run the full A/B.** With HF credits restored, run `--jev` vs. baseline
+   over all 96 questions and record the deltas in
+   `docs/EVALUATION_STRATEGY.md`.

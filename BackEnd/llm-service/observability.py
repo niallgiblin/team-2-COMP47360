@@ -46,7 +46,7 @@ _canonical_logger = structlog.get_logger("chat_request_event")
 
 # ── Finite taxonomies ───────────────────────────────────────────
 
-MODE_VALUES: tuple[str, ...] = ("unknown", "general_chat", "dense", "hybrid")
+MODE_VALUES: tuple[str, ...] = ("unknown", "general_chat", "dense", "hybrid", "abstention")
 STATUS_VALUES: tuple[str, ...] = ("success", "fallback", "error")
 
 ERROR_STAGE_VALUES: tuple[str, ...] = (
@@ -157,9 +157,11 @@ for _jev_status in ("success", "fallback", "timeout", "error", "disabled"):
     JEV_REQUESTS_TOTAL.labels(decision="query_analysis", status=_jev_status)
     JEV_REQUESTS_TOTAL.labels(decision="answer_verification", status=_jev_status)
     JEV_REQUESTS_TOTAL.labels(decision="eval_judge", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="answerability", status=_jev_status)
 JEV_LATENCY_SECONDS.labels(decision="query_analysis")
 JEV_LATENCY_SECONDS.labels(decision="answer_verification")
 JEV_LATENCY_SECONDS.labels(decision="eval_judge")
+JEV_LATENCY_SECONDS.labels(decision="answerability")
 
 # Pre-initialize all 12 label combinations
 for _mode in MODE_VALUES:

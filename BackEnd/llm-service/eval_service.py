@@ -541,6 +541,7 @@ def run_ragas_eval(
         if use_jev:
             result["guardrail_triggered"] = guardrail_triggered
             result["mode"] = agent_mode
+            result["abstained"] = agent_mode == "abstention"
         if retrieval_metrics is not None:
             result["retrieval_metrics"] = retrieval_metrics
         if ragas_scores is not None:
@@ -585,6 +586,7 @@ def build_combined_report(
     ragas_scored = 0
     ragas_failed = 0
     guardrail_total = 0
+    abstained_total = 0
 
     for r in ragas_results:
         cat = r["category"]
@@ -604,8 +606,9 @@ def build_combined_report(
                 "precision_ragas_sum": 0.0,
                 "ragas_scored": 0,
                 "ragas_failed": 0,
-                # Jev guardrail
+                # Jev guardrail / abstention
                 "guardrail_triggered": 0,
+                "abstained": 0,
             }
 
         stats = categories[cat]
@@ -638,6 +641,11 @@ def build_combined_report(
         if r.get("guardrail_triggered"):
             stats["guardrail_triggered"] += 1
             guardrail_total += 1
+
+        # Calibrated abstention
+        if r.get("abstained"):
+            stats["abstained"] += 1
+            abstained_total += 1
 
     # Build category summaries
     retrieval_categories: dict[str, dict] = {}
@@ -706,6 +714,13 @@ def build_combined_report(
             "triggered_total": guardrail_total,
             "categories": {
                 cat: stats["guardrail_triggered"]
+                for cat, stats in sorted(categories.items())
+            },
+        },
+        "abstention": {
+            "abstained_total": abstained_total,
+            "categories": {
+                cat: stats["abstained"]
                 for cat, stats in sorted(categories.items())
             },
         },

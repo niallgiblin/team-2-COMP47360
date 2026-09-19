@@ -8,11 +8,14 @@ from __future__ import annotations
 import pytest
 
 from jev_service import (
+    AnswerabilityAssessment,
     AnswerVerification,
     JevClient,
     JevError,
     QueryAnalysis,
     analyze_query,
+    assess_answerability,
+    build_answerability_questions,
     build_judge_questions,
     build_query_questions,
     build_verification_questions,
@@ -473,3 +476,88 @@ class TestJevJudge:
             "answer_relevancy": _score_answer(4),
         })
         assert judge_answer("q", "a", "ctx", client=client, enabled=True) is None
+
+
+# ---------------------------------------------------------------------------
+# Calibrated abstention — assess_answerability
+# ---------------------------------------------------------------------------
+
+
+class TestAnswerabilityQuestions:
+    def test_question_shape(self):
+        questions = build_answerability_questions()
+        assert set(questions) == {"answerable", "out_of_scope"}
+        assert all(q["type"] == "noul" for q in questions.values())
+
+
+class TestAssessAnswerability:
+    _CANDIDATES = [
+        {"name": "Tomi Jazz", "type": "Jazz Bar", "zone": "midtown"},
+        {"name": "Blue Note", "type": "Jazz Club", "zone": "west village"},
+    ]
+
+    def _client(self, answerable=0.9, out_of_scope=0.05):
+        return FakeClient({
+            "answerable": {"type": "noul", "noul": answerable},
+            "out_of_scope": {"type": "noul", "noul": out_of_scope},
+        })
+
+    def test_answerable_does_not_abstain(self):
+        result = assess_answerability(
+            "jazz bars in midtown", self._CANDIDATES,
+            client=self._client(answerable=0.9), enabled=True,
+        )
+        assert result.answerable is True
+        assert result.should_abstain is False
+
+    def test_low_answerability_abstains(self):
+        result = assess_answerability(
+            "karate classes in midtown", self._CANDIDATES,
+            client=self._client(answerable=0.1), enabled=True,
+        )
+        assert result.answerable is False
+        assert result.should_abstain is True
+
+    def test_out_of_scope_abstains_even_if_answerable(self):
+        # e.g. "bars in Brooklyn": candidates exist but geography is wrong.
+        result = assess_answerability(
+            "bars in Brooklyn with live music", self._CANDIDATES,
+            client=self._client(answerable=0.6, out_of_scope=0.9), enabled=True,
+        )
+        assert result.should_abstain is True
+        assert result.out_of_scope_probability == pytest.approx(0.9)
+
+    def test_threshold_is_configurable(self):
+        client = self._client(answerable=0.4)
+        # At 0.5 the answer is not confident enough → abstain.
+        assert assess_answerability(
+            "q", self._CANDIDATES, client=client, enabled=True, threshold=0.5,
+        ).should_abstain is True
+        # A permissive threshold lets the same answer through.
+        assert assess_answerability(
+            "q", self._CANDIDATES, client=client, enabled=True, threshold=0.3,
+        ).should_abstain is False
+
+    def test_disabled_returns_none(self):
+        assert assess_answerability(
+            "q", self._CANDIDATES, client=self._client(), enabled=False,
+        ) is None
+
+    def test_no_candidates_returns_none(self):
+        assert assess_answerability(
+            "q", [], client=self._client(), enabled=True,
+        ) is None
+
+    def test_transport_error_returns_none(self):
+        assert assess_answerability(
+            "q", self._CANDIDATES,
+            client=FakeClient(error=JevError("boom")), enabled=True,
+        ) is None
+
+    def test_candidates_are_compacted_in_state(self):
+        client = self._client()
+        assess_answerability("q", self._CANDIDATES, client=client, enabled=True)
+        state, _questions = client.calls[0]
+        assert state["candidates"][0] == {
+            "name": "Tomi Jazz", "type": "Jazz Bar", "zone": "midtown",
+        }

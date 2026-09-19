@@ -397,8 +397,22 @@ def _run_question(
     citation_ok, citation_detail = check_citation_accuracy(results)
 
     # -- pass/fail logic ----------------------------------------------------
+    abstained = None
+    if cat == "abstention" and use_jev:
+        # Calibrated abstention decision instead of a raw similarity cutoff.
+        try:
+            from jev_service import assess_answerability
+
+            assessment = assess_answerability(query, results, enabled=True)
+            if assessment is not None:
+                abstained = assessment.should_abstain
+        except Exception as exc:
+            logger.debug("Jev abstention check failed for %s: %s", qid, exc)
+
     if cat == "abstention":
-        if len(results) == 0:
+        if abstained is not None:
+            passed = abstained
+        elif len(results) == 0:
             passed = True
         else:
             passed = all(float(r.get("similarity", 0)) < 0.3 for r in results)
@@ -424,6 +438,8 @@ def _run_question(
         "num_results": len(results),
         "scores": [round(float(r.get("similarity", 0)), 4) for r in results],
     }
+    if abstained is not None:
+        result["abstained"] = abstained
 
     # -- RAGAS scoring (optional) -------------------------------------------
     if run_ragas:

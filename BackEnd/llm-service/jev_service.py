@@ -714,6 +714,148 @@ def judge_answer(
 
 
 # ---------------------------------------------------------------------------
+# Calibrated abstention (answerability)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AnswerabilityAssessment:
+    """Typed, calibrated decision on whether retrieval can answer the query."""
+
+    answerable: bool = True
+    answerable_probability: float = 1.0
+    out_of_scope_probability: float = 0.0
+    should_abstain: bool = False
+
+    def as_dict(self) -> dict:
+        return {
+            "answerable": self.answerable,
+            "answerable_probability": round(self.answerable_probability, 4),
+            "out_of_scope_probability": round(self.out_of_scope_probability, 4),
+            "should_abstain": self.should_abstain,
+        }
+
+
+def build_answerability_questions() -> dict[str, dict]:
+    """System One questions for the calibrated-abstention decision."""
+    return {
+        "answerable": noul(
+            "Can the candidate venues in `candidates` plausibly satisfy "
+            "`query` in terms of venue type, vibe, and location? Answer "
+            "false when the request targets a different city or borough, a "
+            "non-venue service this app does not cover, or event listings "
+            "rather than a specific venue.",
+            criteria={
+                "true": "A candidate plausibly fits the request",
+                "false": "No candidate fits or the request is out of scope",
+            },
+        ),
+        "out_of_scope": noul(
+            "Is `query` outside this app's catalog of Manhattan venues? The "
+            "catalog covers bars, clubs, lounges, restaurants, cafes, "
+            "museums, and art galleries in Manhattan. Answer true only for a "
+            "different city or borough, or a non-venue service the catalog "
+            "does not cover (plumbers, dentists, gyms, hotels, schools, "
+            "coworking, salons, pharmacies, car repair).",
+            criteria={
+                "true": "Outside the Manhattan venue catalog",
+                "false": "Within the Manhattan venue catalog",
+            },
+        ),
+    }
+
+
+def assess_answerability(
+    query: str,
+    candidates: Iterable[Mapping[str, Any]] | None,
+    *,
+    client: JevClient | None = None,
+    threshold: float | None = None,
+    enabled: bool | None = None,
+) -> AnswerabilityAssessment | None:
+    """Decide whether retrieved *candidates* can answer *query*.
+
+    Returns ``None`` when abstention gating is disabled or Jev is unavailable,
+    so callers keep their existing behaviour. ``should_abstain`` is true when
+    the request is out of scope or answerability is below *threshold* — a
+    calibrated decision, not a raw similarity cutoff.
+    """
+    from config import (
+        JEV_ABSTENTION_ENABLED,
+        JEV_ABSTENTION_THRESHOLD,
+        JEV_ENABLED,
+        JEV_TIMEOUT_SECONDS,
+    )
+
+    is_enabled = JEV_ENABLED if enabled is None else enabled
+    if not (is_enabled and JEV_ABSTENTION_ENABLED):
+        _record_metric("disabled", 0.0, decision="answerability")
+        return None
+
+    if not query or not query.strip():
+        return None
+
+    active_client = client or JevClient(timeout=JEV_TIMEOUT_SECONDS)
+    if not active_client.available:
+        _record_metric("disabled", 0.0, decision="answerability")
+        return None
+
+    gate = JEV_ABSTENTION_THRESHOLD if threshold is None else threshold
+
+    # Compact candidate list keeps the state small and the decision focused.
+    compact: list[dict[str, Any]] = []
+    for candidate in candidates or ():
+        if not isinstance(candidate, Mapping):
+            continue
+        compact.append({
+            "name": candidate.get("name"),
+            "type": candidate.get("type"),
+            "zone": candidate.get("zone"),
+        })
+    if not compact:
+        return None
+
+    state = {"query": query, "candidates": compact}
+
+    t0 = time.perf_counter()
+    try:
+        answers = active_client.system_one(state, build_answerability_questions())
+    except JevError as exc:
+        elapsed = time.perf_counter() - t0
+        status = "timeout" if "timeout" in str(exc).lower() else "error"
+        logger.warning("jev_service: answerability unavailable (%s): %s", status, exc)
+        _record_metric(status, elapsed, decision="answerability")
+        return None
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        logger.warning("jev_service: unexpected answerability failure: %s", exc)
+        _record_metric("error", elapsed, decision="answerability")
+        return None
+
+    elapsed = time.perf_counter() - t0
+
+    answerable_prob = _noul_probability(answers.get("answerable", {}) or {})
+    out_of_scope_prob = _noul_probability(answers.get("out_of_scope", {}) or {})
+
+    answerable = answerable_prob >= gate
+    should_abstain = out_of_scope_prob >= gate or answerable_prob < gate
+
+    assessment = AnswerabilityAssessment(
+        answerable=answerable,
+        answerable_probability=answerable_prob,
+        out_of_scope_probability=out_of_scope_prob,
+        should_abstain=should_abstain,
+    )
+    logger.info(
+        "jev_service: answerability in %.0fms %s",
+        elapsed * 1000,
+        assessment.as_dict(),
+    )
+    _record_metric("success", elapsed, decision="answerability")
+    return assessment
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 

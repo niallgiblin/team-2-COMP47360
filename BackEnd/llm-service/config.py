@@ -99,6 +99,14 @@ JEV_MAX_RETRIES = _env_int("JEV_MAX_RETRIES", 2)
 JEV_GUARDRAIL_ENABLED = os.getenv(
     "JEV_GUARDRAIL_ENABLED", "true"
 ).lower() in {"1", "true", "yes"}
+# Calibrated abstention: decide whether the retrieved candidates can plausibly
+# answer the query before generating, instead of relying on a raw similarity
+# cutoff or the prompt rule. Only active when JEV_ENABLED is also true.
+JEV_ABSTENTION_ENABLED = os.getenv(
+    "JEV_ABSTENTION_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
+# Abstain when P(answerable) < threshold or P(out_of_scope) >= threshold.
+JEV_ABSTENTION_THRESHOLD = float(os.getenv("JEV_ABSTENTION_THRESHOLD", "0.5"))
 # Below this confidence, a Jev classification is treated as "no signal" and
 # the caller falls back to the regex path. See docs.typesafe.ai/confidence.
 JEV_CONFIDENCE_THRESHOLD = float(os.getenv("JEV_CONFIDENCE_THRESHOLD", "0.5"))

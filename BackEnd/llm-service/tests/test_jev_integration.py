@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from jev_service import AnswerVerification, QueryAnalysis
+from jev_service import AnswerabilityAssessment, AnswerVerification, QueryAnalysis
 
 
 def _fake_search_recorder(record):
@@ -424,3 +424,134 @@ class TestRunRagasEvalJevPath:
         ])
         assert report["guardrail"]["triggered_total"] == 1
         assert report["guardrail"]["categories"]["retrieval"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Calibrated abstention wiring
+# ---------------------------------------------------------------------------
+
+
+class TestResolveAnswerability:
+    def test_disabled_when_flag_off(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(chat_service, "JEV_ENABLED", True)
+        monkeypatch.setattr(chat_service, "JEV_ABSTENTION_ENABLED", False)
+        assert chat_service.resolve_answerability("q", [{"name": "X"}]) is None
+
+    def test_none_without_citations(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(chat_service, "JEV_ENABLED", True)
+        monkeypatch.setattr(chat_service, "JEV_ABSTENTION_ENABLED", True)
+        assert chat_service.resolve_answerability("q", []) is None
+
+    def test_failure_returns_none(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(chat_service, "JEV_ENABLED", True)
+        monkeypatch.setattr(chat_service, "JEV_ABSTENTION_ENABLED", True)
+        monkeypatch.setattr(
+            "jev_service.assess_answerability",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")),
+        )
+        assert chat_service.resolve_answerability("q", [{"name": "X"}]) is None
+
+
+class TestAbstentionStreaming:
+    def test_abstains_and_returns_no_citations(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answerability",
+            lambda q, c: AnswerabilityAssessment(
+                answerable=False, answerable_probability=0.05,
+                out_of_scope_probability=0.9, should_abstain=True,
+            ),
+        )
+        events = list(chat_service.stream_chat_response(
+            query="bars in Brooklyn with live music",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+        ))
+        assert "event: done" in events[-1]
+        assert "couldn't find a good match" in events[-1]
+        assert '"citations": []' in events[-1].replace(" ", " ")
+        assert '"abstained": true' in events[-1]
+
+    def test_not_abstaining_proceeds_to_generation(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr("chat_service._stream_hf_response", _fake_stream)
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answerability",
+            lambda q, c: AnswerabilityAssessment(
+                answerable=True, answerable_probability=0.95, should_abstain=False,
+            ),
+        )
+        events = list(chat_service.stream_chat_response(
+            query="jazz bars in midtown",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+        ))
+        assert "event: done" in events[-1]
+        assert "couldn't find a good match" not in events[-1]
+
+
+class TestAbstentionNonStreaming:
+    def test_abstains_with_mode_and_no_citations(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answerability",
+            lambda q, c: AnswerabilityAssessment(
+                answerable=False, answerable_probability=0.02,
+                out_of_scope_probability=0.95, should_abstain=True,
+            ),
+        )
+
+        def _should_not_run(*a, **k):
+            raise AssertionError("generation must be skipped when abstaining")
+
+        result = chat_service.get_ai_response_with_metadata(
+            query="dentists in Upper East Side accepting new patients",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            hf_call=_should_not_run,
+            busyness_context="Live busyness: unavailable",
+        )
+        assert result.text == chat_service.ABSTENTION_MESSAGE
+        assert result.citations == []
+        assert result.metadata.mode == "abstention"
+        assert result.metadata.fallback_triggered is False
+
+    def test_not_abstaining_proceeds(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answerability",
+            lambda q, c: AnswerabilityAssessment(should_abstain=False),
+        )
+
+        def fake_hf(messages, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": "Try Test Bar [1]"}}]}
+
+        result = chat_service.get_ai_response_with_metadata(
+            query="jazz bars in midtown",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            hf_call=fake_hf,
+            busyness_context="Live busyness: unavailable",
+        )
+        assert result.text != chat_service.ABSTENTION_MESSAGE
+        assert result.metadata.mode != "abstention"
