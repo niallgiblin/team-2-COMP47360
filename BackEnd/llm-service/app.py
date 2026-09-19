@@ -222,7 +222,7 @@ def _chat_search_helper(query, limit=5, location_filter=None):
         return []
 
 
-def get_ai_response(query, previous_questions, previous_responses=None, location_filter=None):
+def get_ai_response(query, previous_questions, previous_responses=None, location_filter=None, query_analysis=None):
     """Route-owned wrapper returning ChatExecutionResult.
 
     Tests may monkeypatch this with a simple tuple-returning lambda for
@@ -234,10 +234,11 @@ def get_ai_response(query, previous_questions, previous_responses=None, location
         previous_questions,
         previous_responses=previous_responses,
         location_filter=location_filter,
+        query_analysis=query_analysis,
     )
 
 
-def _get_ai_response_with_metadata(query, previous_questions, previous_responses=None, location_filter=None):
+def _get_ai_response_with_metadata(query, previous_questions, previous_responses=None, location_filter=None, query_analysis=None):
     """Route-owned wrapper returning ChatExecutionResult with metadata."""
     from chat_service import get_ai_response_with_metadata as _svc_get_with_meta
     return _svc_get_with_meta(
@@ -246,6 +247,7 @@ def _get_ai_response_with_metadata(query, previous_questions, previous_responses
         previous_responses=previous_responses,
         search_helper=_chat_search_helper_with_metadata,
         location_filter=location_filter,
+        query_analysis=query_analysis,
     )
 
 
@@ -541,10 +543,15 @@ def chat_endpoint():
 
         state.query_hash = hash_query(query)
 
-        # Resolve location filter.
-        from chat_service import extract_location_from_query
+        # ---- Query understanding (route layer) ---------------------------
+        # Computed once here and passed down so chat_service does not repeat it.
+        from chat_service import extract_location_from_query, resolve_query_analysis
+
+        analysis = resolve_query_analysis(query, previous_questions)
 
         location_filter = (data.get("location") or "").strip() or None
+        if not location_filter and analysis is not None and analysis.location:
+            location_filter = analysis.location
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
@@ -553,6 +560,7 @@ def chat_endpoint():
             query, previous_questions,
             previous_responses=previous_responses,
             location_filter=location_filter,
+            query_analysis=analysis,
         )
 
         # Handle both ChatExecutionResult and backward-compatible tuple mock.
@@ -747,10 +755,14 @@ def chat_stream_endpoint():
 
         state.query_hash = hash_query(query)
 
-        # Resolve location filter.
-        from chat_service import extract_location_from_query
+        # ---- Query understanding (route layer) ---------------------------
+        from chat_service import extract_location_from_query, resolve_query_analysis
+
+        analysis = resolve_query_analysis(query, previous_questions)
 
         location_filter = (data.get("location") or "").strip() or None
+        if not location_filter and analysis is not None and analysis.location:
+            location_filter = analysis.location
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
@@ -763,6 +775,7 @@ def chat_stream_endpoint():
             previous_responses=previous_responses,
             search_helper=_chat_search_helper_with_metadata,
             location_filter=location_filter,
+            query_analysis=analysis,
         )
 
         state.mode = "dense"

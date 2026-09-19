@@ -607,3 +607,57 @@ class TestAbstentionNonStreaming:
         )
         assert result.text != chat_service.ABSTENTION_MESSAGE
         assert result.metadata.mode != "abstention"
+
+
+# ---------------------------------------------------------------------------
+# Route-layer query analysis (compute once, pass down)
+# ---------------------------------------------------------------------------
+
+
+class TestAnalysisPassedDown:
+    def test_service_does_not_recompute_when_analysis_supplied(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_query_analysis",
+            lambda *a, **k: (_ for _ in ()).throw(
+                AssertionError("must not recompute when analysis is passed")
+            ),
+        )
+        monkeypatch.setattr("chat_service._stream_hf_response", _fake_stream)
+
+        calls = []
+        analysis = QueryAnalysis(
+            is_general_chat=False, location="soho", location_confidence=0.9,
+        )
+        list(chat_service.stream_chat_response(
+            query="somewhere fun",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder(calls),
+            busyness_context="Live busyness: unavailable",
+            query_analysis=analysis,
+        ))
+        assert calls and calls[0]["location_filter"] == "soho"
+
+    def test_service_computes_when_analysis_not_supplied(self, monkeypatch):
+        """Legacy callers (no query_analysis) still trigger the computation."""
+        import chat_service
+
+        seen = {"n": 0}
+
+        def fake_resolve(query, prev=None):
+            seen["n"] += 1
+            return None
+
+        monkeypatch.setattr(chat_service, "resolve_query_analysis", fake_resolve)
+        monkeypatch.setattr("chat_service._stream_hf_response", _fake_stream)
+        list(chat_service.stream_chat_response(
+            query="jazz bars",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+        ))
+        assert seen["n"] == 1

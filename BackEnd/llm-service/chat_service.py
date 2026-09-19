@@ -23,6 +23,11 @@ from search_service import _LOCATION_FILTER_GROUPS
 
 logger = logging.getLogger(__name__)
 
+# Sentinel distinguishing "caller did not supply a QueryAnalysis" (compute it
+# here, for backward compatibility) from "caller supplied None" (Jev returned
+# no signal — do not recompute). The route layer passes the value explicitly.
+_QUERY_ANALYSIS_UNSET = object()
+
 # ---------------------------------------------------------------------------
 # Zone extraction for location-aware chat
 # ---------------------------------------------------------------------------
@@ -310,6 +315,13 @@ def _is_general_chat(query, analysis=None):
     if analysis is not None:
         return analysis.is_general_chat
     return is_general_chat_query(query)
+
+
+def _analysis_categories(analysis):
+    """Category names from a Jev QueryAnalysis, or None for the regex map."""
+    if analysis is None:
+        return None
+    return list(analysis.categories)
 
 
 def resolve_answer_verification(answer, retrieval_context, citations):
@@ -765,7 +777,7 @@ def build_chat_messages(
     return messages, citations
 
 
-def huggingface_chat_api_call(messages, model=None, requests_module=None, max_tokens=400, timeout=30):
+def huggingface_chat_api_call(messages, model=None, requests_module=None, max_tokens=400, timeout=30, temperature=0.4):
     """Make a call to the Hugging Face chat completions API.
 
     Parameters
@@ -774,6 +786,9 @@ def huggingface_chat_api_call(messages, model=None, requests_module=None, max_to
         Maximum tokens in the response (default 400).
     timeout : int
         Request timeout in seconds (default 30).
+    temperature : float
+        Sampling temperature (default 0.4). Set to 0 for deterministic
+        evaluation runs.
     """
     token = os.environ.get("HF_TOKEN")
     if not token or token == "your-hugging-face-api-token":
@@ -791,7 +806,7 @@ def huggingface_chat_api_call(messages, model=None, requests_module=None, max_to
         "messages": messages,
         "model": model,
         "max_tokens": max_tokens,
-        "temperature": 0.4,
+        "temperature": temperature,
         "top_p": 0.9,
     }
 
@@ -938,6 +953,7 @@ def stream_chat_response(
     hf_call=None,
     busyness_context=None,
     location_filter=None,
+    query_analysis=_QUERY_ANALYSIS_UNSET,
 ):
     """SSE generator that streams chat tokens and emits final citations.
 
@@ -980,7 +996,11 @@ def stream_chat_response(
         # ---- Jev query understanding (optional) ---------------------------
         # One typed, calibrated call replaces the regex general-chat gate
         # and substring location extraction when enabled. Falls back to regex.
-        analysis = resolve_query_analysis(query, previous_questions)
+        analysis = (
+            resolve_query_analysis(query, previous_questions)
+            if query_analysis is _QUERY_ANALYSIS_UNSET
+            else query_analysis
+        )
         if analysis is not None and analysis.location and not location_filter:
             location_filter = analysis.location
             logger.info(
@@ -1092,6 +1112,7 @@ def stream_chat_response(
                 )
                 fallback_text = prepend_missing_bowling_notice(
                     fallback_text, query, citations,
+                    requested_categories=_analysis_categories(analysis),
                 )
                 yield _emit("done", {
                     "content": fallback_text,
@@ -1127,6 +1148,7 @@ def stream_chat_response(
             )
             fallback_text = prepend_missing_bowling_notice(
                 fallback_text, query, citations,
+                requested_categories=_analysis_categories(analysis),
             )
             yield _emit("done", {
                 "content": fallback_text,
@@ -1143,7 +1165,10 @@ def stream_chat_response(
         if guardrail_action == "caveat":
             processed = f"{processed}\n\n{UNVERIFIED_CAVEAT}"
         processed = append_location_corrections(processed, citations, location_filter)
-        processed = prepend_missing_bowling_notice(processed, query, citations)
+        processed = prepend_missing_bowling_notice(
+            processed, query, citations,
+            requested_categories=_analysis_categories(analysis),
+        )
         processed = parse_inline_citations(processed, citations)
 
         yield _emit("done", {
@@ -1326,13 +1351,21 @@ def _citation_matches_category(citation, category):
     return False
 
 
-def prepend_missing_category_notice(response_text, query, citations):
+def prepend_missing_category_notice(response_text, query, citations, requested_categories=None):
     """Prepend a notice when activity categories were requested but none of
-    the retrieved citations match them."""
+    the retrieved citations match them.
+
+    When *requested_categories* is provided (the Jev ``QueryAnalysis``
+    categories), it is used instead of the regex detector.
+    """
     if not response_text or not citations:
         return response_text
 
-    requested = _detect_requested_categories(query)
+    requested = (
+        set(requested_categories)
+        if requested_categories is not None
+        else _detect_requested_categories(query)
+    )
     if not requested:
         return response_text
 
@@ -1384,8 +1417,10 @@ def _citation_is_bowling(citation):
     return _citation_matches_category(citation, "bowling")
 
 
-def prepend_missing_bowling_notice(response_text, query, citations):
-    return prepend_missing_category_notice(response_text, query, citations)
+def prepend_missing_bowling_notice(response_text, query, citations, requested_categories=None):
+    return prepend_missing_category_notice(
+        response_text, query, citations, requested_categories=requested_categories,
+    )
 
 
 def build_retrieval_fallback_response(retrieval_context, citations, intro=None):
@@ -1552,6 +1587,7 @@ def get_ai_response(
     hf_call=None,
     busyness_context=None,
     location_filter=None,
+    query_analysis=_QUERY_ANALYSIS_UNSET,
 ):
     """Get AI response (compatibility wrapper — returns tuple only)."""
     result = get_ai_response_with_metadata(
@@ -1562,6 +1598,7 @@ def get_ai_response(
         hf_call=hf_call,
         busyness_context=busyness_context,
         location_filter=location_filter,
+        query_analysis=query_analysis,
     )
     return result.text, result.citations
 
@@ -1574,6 +1611,7 @@ def get_ai_response_with_metadata(
     hf_call=None,
     busyness_context=None,
     location_filter=None,
+    query_analysis=_QUERY_ANALYSIS_UNSET,
 ):
     """Get AI response with execution metadata for observability.
 
@@ -1595,7 +1633,13 @@ def get_ai_response_with_metadata(
 
     try:
         # ---- Jev query understanding (optional) -------------------------
-        analysis = resolve_query_analysis(query, previous_questions)
+        # The route layer normally computes this once and passes it down;
+        # the sentinel keeps legacy/test callers working.
+        analysis = (
+            resolve_query_analysis(query, previous_questions)
+            if query_analysis is _QUERY_ANALYSIS_UNSET
+            else query_analysis
+        )
         if analysis is not None and analysis.location and not location_filter:
             location_filter = analysis.location
             logger.info(
@@ -1775,6 +1819,7 @@ def get_ai_response_with_metadata(
                 )
                 fallback_text = prepend_missing_bowling_notice(
                     fallback_text, query, citations,
+                    requested_categories=_analysis_categories(analysis),
                 )
                 return ChatExecutionResult(
                     fallback_text, citations,
@@ -1790,7 +1835,10 @@ def get_ai_response_with_metadata(
             response_text = f"{response_text}\n\n{UNVERIFIED_CAVEAT}"
 
         response_text = append_location_corrections(response_text, citations, location_filter)
-        response_text = prepend_missing_bowling_notice(response_text, query, citations)
+        response_text = prepend_missing_bowling_notice(
+            response_text, query, citations,
+            requested_categories=_analysis_categories(analysis),
+        )
         response_text = parse_inline_citations(response_text, citations)
         return ChatExecutionResult(
             response_text, citations,

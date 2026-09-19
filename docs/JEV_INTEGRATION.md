@@ -77,13 +77,18 @@ Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
 
 ## Wired today
 
-Both chat entry points (`stream_chat_response` and
-`get_ai_response_with_metadata`) call `resolve_query_analysis` once per
-request, then:
+The **route layer** (`app.py`) computes `resolve_query_analysis` once per
+request and passes the resulting `QueryAnalysis` down. `chat_service` accepts
+it via a `query_analysis` argument (a sentinel means "not supplied — compute
+here" so legacy/test callers still work). The route uses it to:
 
-1. Use `analysis.is_general_chat` in place of `is_general_chat_query`.
-2. Fill `location_filter` from `analysis.location` when the route layer did not
-   already detect one.
+1. Route on `analysis.is_general_chat` (in place of `is_general_chat_query`).
+2. Set `location_filter`: explicit request field → `analysis.location` →
+   regex `extract_location_from_query` as a last resort.
+
+`chat_service` then uses the passed analysis for the general-chat gate, the
+location filter, and Jev-derived activity categories (falling back to the
+regex map when the analysis is absent).
 
 After retrieval and before generation, both paths run the abstention gate:
 
@@ -187,48 +192,44 @@ Q096 private rooms for 20) are attribute-level requests. They are deliberately
 so, and the guardrail/prompt stop the model fabricating the attribute. Treating
 them as abstention would require a separate, noisier signal.
 
-### A/B result (96 questions, same Jev judge all arms)
+### Guardrail A/B — controlled (96 questions, fixed generation)
 
-All arms scored with the Jev judge so only the pipeline varies. Generation used
-the restored HF credits; 0 scoring failures.
+`scripts/guardrail_ab.py` generates each answer **once** at temperature 0,
+then applies every policy to the *same* answers. Judge scores are cached per
+answer, so identical answers get identical scores — the guardrail effect is
+fully isolated from generation and judge sampling.
 
-| Arm | Faithfulness | Answer relevancy | Context precision | Guardrail |
+| Policy | Faithfulness | Answer relevancy | Context precision | Actions |
 |---|---|---|---|---|
-| A baseline pipeline | 0.3566 | **0.7784** | 0.6773 | — |
-| B guardrail v1 (replace-any) | **0.4282** | 0.6873 | **0.6992** | 32 replace |
-| B2 guardrail tuned (tiered) | 0.3486 | 0.7590 | 0.6943 | 4 replace + 25 caveat |
+| none | 0.3729 | **0.7180** | 0.6079 | 96 pass |
+| v1 replace-any | **0.4513** | 0.6440 | **0.6185** | 36 replace |
+| **tiered (chosen)** | 0.3924 | 0.7105 | 0.6109 | 5 replace + 31 caveat |
 
-Abstention fired on 16 questions in both B and B2 (unchanged).
+Δ vs no guardrail:
 
-The v1 guardrail logged each verdict; the signal distribution was the case for
-tuning:
+- v1: faithfulness **+0.078**, relevancy **−0.074**
+- tiered: faithfulness **+0.020**, relevancy **−0.008**
 
-| Trigger reason (v1, n=31) | Count |
+The tiered guardrail is a favourable trade (~2.6:1): it keeps a quarter of
+v1's faithfulness gain at a tenth of its relevancy cost, and still
+hard-replaces every fabricated venue.
+
+Why it works — the v1 trigger distribution (same run):
+
+| Trigger reason | Count |
 |---|---|
-| `fabricated_venue ≥ 0.5` (invented venue) | **1** |
-| `unsupported_detail ≥ 0.5` | 13 |
-| only `faithful < 0.5` (no fabrication, low detail risk) | 17 |
+| `fabricated_venue ≥ 0.5` (invented venue) | **5** |
+| `unsupported_detail ≥ 0.5` | 12 |
+| only `faithful < 0.5` (no fabrication, low detail risk) | 19 |
 
-So 30/31 wholesale replacements were not fabricated venues — the answer was
-merely under-grounded. The tiered guardrail keeps those answers and appends a
-caveat instead, replacing only on a fabricated venue or a severe
-unsupported detail (`≥ JEV_GUARDRAIL_REPLACE_THRESHOLD`, default 0.8).
+Most v1 replacements were not fabricated venues — the answer was merely
+under-grounded. The tiered guardrail keeps those and appends a caveat,
+reserving replacement for a fabricated venue or a severe unsupported detail
+(`≥ JEV_GUARDRAIL_REPLACE_THRESHOLD`, default 0.8).
 
-Reading:
-
-- **Tuning recovers most of the relevancy** (−0.019 vs −0.091) while still
-  hard-blocking fabricated venues (4 replacements). The caveat applies to
-  soft cases (median `faithful` 0.42).
-- The faithfulness advantage of v1 comes from replacing 32 answers with
-grounded venue lists; with only 4 replacements that lift largely disappears.
-- **Methodological caveat:** generation uses `temperature=0.4`, so each arm
-  re-samples the answers and cross-arm differences include generation noise.
-  The v1→B2 faithfulness drop (0.43→0.35) is larger than plausible noise, but
-  a definitive number needs a fixed-generation (temperature 0) or multi-seed
-  run. The relevancy/trigger-count differences are policy effects and are
-  reliable.
-- **Chosen default: the tuned (tiered) guardrail.** Its core job is to stop
-  invented venues, which it does, without discarding a third of all answers.
+> The earlier temperature-0.4 arms (A/B/B2, in `reports/ab-*.json`) are
+> retained for provenance, but their cross-arm faithfulness deltas were
+dominated by generation sampling and are superseded by the controlled run.
 
 ### Re-ranking: cross-encoder vs Jev
 
@@ -269,14 +270,13 @@ PYTHONPATH=. python3 scripts/jev_smoke.py "is there a rooftop bar in soho?"
 
 Ordered by expected value:
 
-1. **Controlled guardrail evaluation.** Re-run the A/B at temperature 0 (or
-   multi-seed) so the guardrail's effect is not confounded by generation
-   sampling. The trigger-count and relevancy effects are already clear; the
-   faithfulness delta needs a fixed-generation comparison.
-2. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
-   once in `app.py` and pass it through, then remove the remaining
-   `extract_location_from_query` / regex category paths.
-3. **Jev re-ranking for serverless / batch.** Keep `JEV_RERANK_ENABLED=false`
+1. **Controlled guardrail evaluation.** Done — see the A/B section
+   (`scripts/guardrail_ab.py`).
+2. **Jev re-ranking for serverless / batch.** Keep `JEV_RERANK_ENABLED=false`
    for interactive use (see the benchmark), but it is a viable option where no
    local cross-encoder can run, or for offline re-ranking of large candidate
    sets.
+3. **Route the search rewrite through the analysis.** `_chat_search_helper`
+   still calls `rewrite_query` (an HF generation call) before every search;
+   the route's `QueryAnalysis` could supply the rewritten query instead,
+   removing that call.
