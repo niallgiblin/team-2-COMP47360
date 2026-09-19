@@ -661,3 +661,33 @@ class TestAnalysisPassedDown:
             busyness_context="Live busyness: unavailable",
         ))
         assert seen["n"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Jev-composed search query (replaces HF rewrite_query)
+# ---------------------------------------------------------------------------
+
+
+class TestComposeSearchQuery:
+    def test_composes_location_price_and_categories(self):
+        from chat_service import compose_search_query
+        from jev_service import QueryAnalysis
+
+        analysis = QueryAnalysis(
+            location="midtown", price_tier="budget",
+            categories=("jazz", "live music"),
+        )
+        assert compose_search_query("find a bar", analysis) == (
+            "find a bar midtown budget jazz live music"
+        )
+
+    def test_none_analysis_returns_query_unchanged(self):
+        from chat_service import compose_search_query
+
+        assert compose_search_query("find a bar", None) == "find a bar"
+
+    def test_empty_fields_are_omitted(self):
+        from chat_service import compose_search_query
+        from jev_service import QueryAnalysis
+
+        assert compose_search_query("bar", QueryAnalysis(is_general_chat=False)) == "bar"

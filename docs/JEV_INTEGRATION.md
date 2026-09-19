@@ -45,6 +45,7 @@ guessing.
 | `JEV_RERANK_ENABLED` | `false` | Use Jev to re-rank candidates (replaces the cross-encoder) |
 | `JEV_RERANK_OVERFETCH_MULTIPLIER` | `5` | Candidate over-fetch when Jev re-ranks |
 | `JEV_RERANK_MAX_CANDIDATES` | `50` | Max candidates scored in one Jev call |
+| `JEV_SEARCH_COMPOSE_ENABLED` | `false` | Append Jev location/price/category terms to the search query |
 
 Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
 `docker-compose.yml` (already wired for the `llm-service`).
@@ -89,6 +90,13 @@ here" so legacy/test callers still work). The route uses it to:
 `chat_service` then uses the passed analysis for the general-chat gate, the
 location filter, and Jev-derived activity categories (falling back to the
 regex map when the analysis is absent).
+
+The route's search helper (`app._resolve_search_query`) also uses the analysis
+to decide **not** to call the HF `rewrite_query`: when the route supplies an
+analysis, the helper skips the rewrite and applies only the static
+`expand_query` map. The analysis still drives the location filter and category
+handling. Without an analysis (Jev disabled) the HF rewrite runs as before.
+See "Query resolution" below for why the analysis is not appended as text.
 
 After retrieval and before generation, both paths run the abstention gate:
 
@@ -231,6 +239,31 @@ reserving replacement for a fabricated venue or a severe unsupported detail
 > retained for provenance, but their cross-arm faithfulness deltas were
 dominated by generation sampling and are superseded by the controlled run.
 
+### Query resolution: HF rewrite vs Jev
+
+`scripts/query_rewrite_ab.py` over all 96 questions (cross-encoder enabled):
+
+| Resolution | Recall@5 | NDCG@5 | Hit Rate | Query ms |
+|---|---|---|---|---|
+| raw query | 0.4899 | 0.4984 | 0.6771 | 97 |
+| static `expand` | **0.4950** | 0.4966 | 0.6667 | 57 |
+| HF `rewrite_query` + expand | 0.4137 | 0.4091 | 0.5521 | **1027** |
+| Jev compose + expand | 0.4774 | 0.4871 | 0.6562 | 820 |
+| Jev compose (fallback only) | 0.4793 | 0.4848 | 0.6562 | 813 |
+
+The HF rewrite **hurts** retrieval (−0.076 Recall@5 vs expand) and costs ~1 s
+per query. Jev composition beats the HF rewrite but still underperforms plain
+static expansion, so it is **not** used by default.
+
+Decision: with a Jev analysis the HF rewrite is **removed**; the query is
+`expand_query(query)` and the analysis is used only for the location filter and
+category handling. Jev text composition is available behind
+`JEV_SEARCH_COMPOSE_ENABLED=true` for deployments that want it.
+
+> Caveat: the benchmark queries are already keyword-rich, which flatters the
+> no-rewrite options. Conversational queries could differ; re-measure on real
+> traffic before relying on this.
+
 ### Re-ranking: cross-encoder vs Jev
 
 `scripts/rerank_bench.py` over all 96 questions:
@@ -276,7 +309,5 @@ Ordered by expected value:
    for interactive use (see the benchmark), but it is a viable option where no
    local cross-encoder can run, or for offline re-ranking of large candidate
    sets.
-3. **Route the search rewrite through the analysis.** `_chat_search_helper`
-   still calls `rewrite_query` (an HF generation call) before every search;
-   the route's `QueryAnalysis` could supply the rewritten query instead,
-   removing that call.
+3. **Conversational reformulation.** `reformulate_query` still makes an HF call
+   per multi-turn follow-up; the same `QueryAnalysis` could absorb it.

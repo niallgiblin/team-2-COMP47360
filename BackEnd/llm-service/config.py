@@ -118,6 +118,14 @@ JEV_GUARDRAIL_CAVEAT_THRESHOLD = float(
     os.getenv("JEV_GUARDRAIL_CAVEAT_THRESHOLD", "0.5")
 )
 
+# Search-query composition. When the route supplies a Jev QueryAnalysis, the
+# HF rewrite_query call is skipped (it measured worse than plain expansion and
+# cost ~1 s). Set this to true to instead append the analysis's typed
+# location/price/category terms — measured roughly neutral, so off by default.
+JEV_SEARCH_COMPOSE_ENABLED = os.getenv(
+    "JEV_SEARCH_COMPOSE_ENABLED", "false"
+).lower() in {"1", "true", "yes"}
+
 # --- Jev re-ranking (cross-encoder replacement) ---
 # Scores (query, candidate) relevance with calibrated probabilities in a single
 # parallel call, avoiding the per-pair CPU forward passes that made the

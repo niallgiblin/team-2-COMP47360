@@ -324,6 +324,24 @@ def _analysis_categories(analysis):
     return list(analysis.categories)
 
 
+def compose_search_query(query, analysis):
+    """Build a keyword-rich retrieval query from a Jev ``QueryAnalysis``.
+
+    Replaces the HF ``rewrite_query`` call when Jev is enabled: the typed
+    location, price tier, and categories are appended to the original query,
+    then the static ``expand_query`` synonym map runs as usual.
+    """
+    if analysis is None:
+        return query
+    parts = [query]
+    if analysis.location:
+        parts.append(analysis.location)
+    if analysis.price_tier:
+        parts.append(analysis.price_tier)
+    parts.extend(analysis.categories)
+    return " ".join(part for part in parts if part)
+
+
 def resolve_answer_verification(answer, retrieval_context, citations):
     """Check a generated answer for faithfulness via Jev.
 

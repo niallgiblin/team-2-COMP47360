@@ -81,3 +81,78 @@ def test_huggingface_chat_api_call_raises_without_token(monkeypatch):
 
     with pytest.raises(ValueError, match="Hugging Face API token"):
         huggingface_chat_api_call([{"role": "user", "content": "hi"}])
+
+
+def test_search_helper_with_analysis_skips_hf_rewrite(monkeypatch):
+    """A route-supplied QueryAnalysis replaces the HF rewrite_query call."""
+    app_module = _ready_chat_app(
+        monkeypatch,
+        rows=[_LocRow(name="Test Bar", zone="East Village", type="Bar")],
+    )
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("rewrite_query must not run when analysis is given")
+
+    monkeypatch.setattr(app_module, "rewrite_query", _boom)
+
+    from jev_service import QueryAnalysis
+
+    analysis = QueryAnalysis(
+        is_general_chat=False, location="east village", categories=("jazz",),
+    )
+    result = app_module._chat_search_helper(
+        "jazz bars", query_analysis=analysis,
+    )
+    assert len(result) > 0
+    assert result[0]["name"] == "Test Bar"
+
+
+def test_search_helper_without_analysis_uses_rewrite(monkeypatch):
+    """Legacy path (no analysis) still calls the HF rewrite."""
+    app_module = _ready_chat_app(
+        monkeypatch,
+        rows=[_LocRow(name="Test Bar", zone="East Village", type="Bar")],
+    )
+    seen = {"called": False}
+
+    def _fake_rewrite(query):
+        seen["called"] = True
+        return f"{query} rewritten"
+
+    monkeypatch.setattr(app_module, "rewrite_query", _fake_rewrite)
+    result = app_module._chat_search_helper("jazz bars")
+    assert seen["called"] is True
+    assert len(result) > 0
+
+
+def test_resolve_search_query_skips_rewrite_with_analysis(monkeypatch):
+    """With a Jev analysis the HF rewrite is skipped and only expand runs."""
+    app_module = _ready_chat_app(monkeypatch)
+
+    def _boom(*a, **k):
+        raise AssertionError("rewrite_query must not run with an analysis")
+
+    monkeypatch.setattr(app_module, "rewrite_query", _boom)
+
+    from jev_service import QueryAnalysis
+
+    analysis = QueryAnalysis(location="midtown", categories=("jazz",))
+    out = app_module._resolve_search_query("comedy clubs", analysis)
+    # static expansion applied, but Jev location/category terms are NOT appended
+    # (location is applied as a filter, not text)
+    assert "comedy" in out
+    assert "midtown" not in out
+
+
+def test_resolve_search_query_compose_flag_appends_jev_terms(monkeypatch):
+    app_module = _ready_chat_app(monkeypatch)
+    import config
+
+    monkeypatch.setattr(config, "JEV_SEARCH_COMPOSE_ENABLED", True)
+
+    from jev_service import QueryAnalysis
+
+    analysis = QueryAnalysis(location="midtown", categories=("jazz",))
+    out = app_module._resolve_search_query("bars", analysis)
+    assert "midtown" in out
+    assert "jazz" in out
