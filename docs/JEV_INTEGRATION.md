@@ -40,6 +40,9 @@ guessing.
 | `JEV_GUARDRAIL_ENABLED` | `true` | Runtime faithfulness guardrail (needs `JEV_ENABLED`) |
 | `JEV_ABSTENTION_ENABLED` | `true` | Calibrated abstention gate (needs `JEV_ENABLED`) |
 | `JEV_ABSTENTION_THRESHOLD` | `0.5` | Abstain when P(answerable) < t or P(out_of_scope) ≥ t |
+| `JEV_RERANK_ENABLED` | `false` | Use Jev to re-rank candidates (replaces the cross-encoder) |
+| `JEV_RERANK_OVERFETCH_MULTIPLIER` | `5` | Candidate over-fetch when Jev re-ranks |
+| `JEV_RERANK_MAX_CANDIDATES` | `50` | Max candidates scored in one Jev call |
 
 Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
 `docker-compose.yml` (already wired for the `llm-service`).
@@ -64,6 +67,11 @@ Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
   questions (`faithful`, `fabricated_venue`, `unsupported_detail`) returning
   an `AnswerVerification`. Grounded requires a confident positive on `faithful`
   and confident negatives on both failure detectors.
+- `jev_service.rerank()` — one `Score` question per candidate, evaluated in a
+  single parallel call, returning calibrated 0–1 relevance aligned to the
+  input. `search_service._re_rank` prefers it over the cross-encoder when
+  `JEV_RERANK_ENABLED` is set; `_overfetch()` selects the candidate pool size
+  for the active strategy.
 
 ## Wired today
 
@@ -99,8 +107,8 @@ Everything is behind `JEV_ENABLED` / `JEV_GUARDRAIL_ENABLED` /
 `JEV_ABSTENTION_ENABLED`. When off, the key is missing, the call times out, or
 the response is malformed, the code behaves exactly as before. New Prometheus
 series: `jev_requests_total{decision,status}` and `jev_latency_seconds{decision}`
-(`decision` is `query_analysis`, `answer_verification`, `answerability`, or
-`eval_judge`).
+(`decision` is `query_analysis`, `answer_verification`, `answerability`,
+`rerank`, or `eval_judge`).
 
 ## Evaluation harness
 
@@ -121,13 +129,18 @@ The benchmark harness can use Jev in two places, enabled by `--jev`:
 ```bash
 cd BackEnd/llm-service
 export TYPESAFE_API_KEY=ts_...
-# Full: Jev query analysis + guardrail + Jev judge
+# Full: Jev query analysis + guardrail + abstention
 PYTHONPATH=. python3 scripts/eval_ragas.py --jev --report reports/jev-on.json
 # Baseline (no Jev) for comparison
 PYTHONPATH=. python3 scripts/eval_ragas.py --report reports/jev-off.json
+# Isolate the pipeline: same Jev judge, baseline generation path
+PYTHONPATH=. python3 scripts/eval_ragas.py --jev-judge --report reports/control.json
 # Hermetic smoke (mock generation + mocked Jev judge, no API calls)
 PYTHONPATH=. python3 scripts/eval_ragas.py --jev --mock-judge --limit 5
 ```
+
+The clean A/B is `--jev-judge` (control) vs `--jev` (treatment): both score
+with the Jev judge, so only the generation pipeline differs.
 
 `scripts/run_eval.py` accepts `--jev` too, applying it to the `--ragas` pass.
 It also carries a fix for graded NDCG: `relevance_grades` keys arrive as
@@ -171,6 +184,50 @@ Q096 private rooms for 20) are attribute-level requests. They are deliberately
 so, and the guardrail/prompt stop the model fabricating the attribute. Treating
 them as abstention would require a separate, noisier signal.
 
+### A/B result (96 questions, same Jev judge both arms)
+
+Both arms scored with the Jev judge (`--jev-judge`) so only the pipeline varies.
+Generation used the restored HF credits; 0 scoring failures in either arm.
+
+| Metric | A: baseline pipeline | B: Jev pipeline | Δ |
+|---|---|---|---|
+| Faithfulness | 0.3566 | **0.4282** | **+0.0716** |
+| Answer relevancy | **0.7784** | 0.6873 | −0.0911 |
+| Context precision | 0.6773 | **0.6992** | +0.0219 |
+
+In arm B the guardrail replaced 32/96 answers and the abstention gate fired on
+16 (15 in the abstention category, 1 adversarial).
+
+Reading:
+
+- **The guardrail works:** faithfulness rises 7 points, context precision
+  slightly up. Replacement answers are grounded in the citation list.
+- **Relevancy falls 9 points, in every category** — not just abstention. The
+  guardrail replaced a third of answers with the generic
+  "I couldn't verify every detail…" venue list, which is faithful but less
+  directly responsive. This is the real cost of the guardrail and the main
+  tuning target (trigger less often, or append a caveat instead of replacing).
+- The trigger rate (33%) is high, which is itself a signal that the 8B
+  generator violates grounding often — consistent with the low absolute
+  faithfulness in both arms.
+
+### Re-ranking: cross-encoder vs Jev
+
+`scripts/rerank_bench.py` over all 96 questions:
+
+| Strategy | p50 | p95 | Recall@5 | NDCG@5 | Hit Rate |
+|---|---|---|---|---|---|
+| None | 22.5 ms | 25.1 ms | 0.4493 | 0.4357 | 0.5938 |
+| Cross-encoder | 57.8 ms | 81.2 ms | 0.4899 | 0.4984 | 0.6771 |
+| Jev | 887.7 ms | 1222.5 ms | 0.4889 | 0.4975 | 0.6562 |
+
+**Jev re-ranking matches cross-encoder quality but is ~15× slower.** It does not
+unblock the cross-encoder — the opposite: the local model is already the cheap
+option. Consequently the cross-encoder was **re-enabled**
+(`CROSS_ENCODER_ENABLED=true`) and Jev re-ranking stays behind
+`JEV_RERANK_ENABLED=false`, useful only where no local model can run or for
+offline batch re-ranking. See [CROSS_ENCODER_TRADEOFF.md](CROSS_ENCODER_TRADEOFF.md).
+
 ## Verifying
 
 Unit tests (no network):
@@ -193,16 +250,14 @@ PYTHONPATH=. python3 scripts/jev_smoke.py "is there a rooftop bar in soho?"
 
 Ordered by expected value:
 
-1. **Rerank with Jev Score.** Score `(query, candidate)` relevance with
-   calibrated probabilities, replacing the latency-blocked cross-encoder and
-   enabling threshold-based filtering.
+1. **Guardrail tuning.** It replaced 33% of answers, costing 9 points of answer
+   relevancy for 7 points of faithfulness. Try a higher trigger bar (only
+   replace on `fabricated_venue`, not merely low `faithful`) or append a caveat
+   instead of replacing the whole answer, then re-run the A/B.
 2. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
    once in `app.py` and pass it through, then remove the remaining
    `extract_location_from_query` / regex category paths.
-3. **Guardrail + abstention threshold tuning.** Calibrate
-   `JEV_CONFIDENCE_THRESHOLD` / `JEV_ABSTENTION_THRESHOLD` against the
-   benchmark's false-positive and false-negative rates once generation credits
-   are restored.
-4. **Run the full A/B.** With HF credits restored, run `--jev` vs. baseline
-   over all 96 questions and record the deltas in
-   `docs/EVALUATION_STRATEGY.md`.
+3. **Jev re-ranking for serverless / batch.** Keep `JEV_RERANK_ENABLED=false`
+   for interactive use (see the benchmark), but it is a viable option where no
+   local cross-encoder can run, or for offline re-ranking of large candidate
+   sets.

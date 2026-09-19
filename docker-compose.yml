@@ -117,9 +117,9 @@ services:
       - FLASK_ENV=production
       - MODEL_PATH=/app/models/mpnet-base-v2
       - EMBEDDING_MODEL_NAME=all-mpnet-base-v2
-      # CPU re-ranking added too much interactive latency for its observed
-      # benefit. See docs/CROSS_ENCODER_TRADEOFF.md.
-      - CROSS_ENCODER_ENABLED=false
+      # Measured 2026-09-19 over 96 questions: +35 ms p50 for +0.041 Recall@5.
+      # See docs/CROSS_ENCODER_TRADEOFF.md.
+      - CROSS_ENCODER_ENABLED=true
       - CROSS_ENCODER_MODEL_NAME=/app/models/cross-encoder
       - EMBEDDINGS_PATH=/app/data/location_embeddings.npy
       - HF_TOKEN=${HF_TOKEN}
@@ -133,6 +133,10 @@ services:
       - JEV_GUARDRAIL_ENABLED=${JEV_GUARDRAIL_ENABLED:-true}
       - JEV_ABSTENTION_ENABLED=${JEV_ABSTENTION_ENABLED:-true}
       - JEV_ABSTENTION_THRESHOLD=${JEV_ABSTENTION_THRESHOLD:-0.5}
+      # Jev re-ranking replaces the CPU cross-encoder (kept off by default).
+      - JEV_RERANK_ENABLED=${JEV_RERANK_ENABLED:-false}
+      - JEV_RERANK_OVERFETCH_MULTIPLIER=${JEV_RERANK_OVERFETCH_MULTIPLIER:-5}
+      - JEV_RERANK_MAX_CANDIDATES=${JEV_RERANK_MAX_CANDIDATES:-50}
       - APP_JWT_SECRET=${APP_JWT_SECRET}
       - GOOGLE_API_KEY=${VITE_GOOGLE_API_KEY}
       - FLASK_CORS_ALLOWED_ORIGINS=${FLASK_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}

@@ -229,6 +229,9 @@ class SearchService:
         rrf_k=60,
         cross_encoder=None,
         cross_encoder_overfetch=3,
+        jev_rerank=False,
+        jev_rerank_overfetch=5,
+        jev_rerank_max_candidates=50,
     ):
         self._df = df
         self._embeddings = np.asarray(embeddings, dtype="float32")
@@ -242,6 +245,17 @@ class SearchService:
         self._rrf_k = int(rrf_k)
         self._cross_encoder = cross_encoder
         self._cross_encoder_overfetch = max(1, int(cross_encoder_overfetch))
+        self._jev_rerank = bool(jev_rerank)
+        self._jev_rerank_overfetch = max(1, int(jev_rerank_overfetch))
+        self._jev_rerank_max = max(1, int(jev_rerank_max_candidates))
+
+    def _overfetch(self):
+        """Candidate over-fetch count for the active re-ranking strategy."""
+        if self._jev_rerank:
+            return self._jev_rerank_overfetch
+        if self._cross_encoder is not None:
+            return self._cross_encoder_overfetch
+        return self._over_fetch_multiplier
 
     @classmethod
     def from_startup(
@@ -453,6 +467,20 @@ class SearchService:
             if allow_torch_fallback is not None
             else ALLOW_TORCH_FULL_SCAN_FALLBACK
         )
+
+        from config import (
+            JEV_RERANK_ENABLED as _cfg_jev_rerank,
+            JEV_RERANK_MAX_CANDIDATES as _cfg_jev_rerank_max,
+            JEV_RERANK_OVERFETCH_MULTIPLIER as _cfg_jev_rerank_overfetch,
+        )
+        if _cfg_jev_rerank:
+            logger.info(
+                "JEV_RERANK_ENABLED=true — Jev re-ranking active "
+                "(overfetch=%d, max=%d)",
+                _cfg_jev_rerank_overfetch,
+                _cfg_jev_rerank_max,
+            )
+
         logger.info("SearchService index_source=%s", index_source)
         return cls(
             df=df,
@@ -466,6 +494,9 @@ class SearchService:
             rrf_k=rrf_k,
             cross_encoder=_cross_encoder,
             cross_encoder_overfetch=_ce_overfetch,
+            jev_rerank=_cfg_jev_rerank,
+            jev_rerank_overfetch=_cfg_jev_rerank_overfetch,
+            jev_rerank_max_candidates=_cfg_jev_rerank_max,
         )
 
     def _encode_query(self, query_text):
@@ -541,12 +572,8 @@ class SearchService:
         """Dense-only retrieval using FAISS index (original behaviour)."""
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
 
-        # Use cross-encoder overfetch multiplier when re-ranking is available.
-        overfetch = (
-            self._cross_encoder_overfetch
-            if self._cross_encoder is not None
-            else self._over_fetch_multiplier
-        )
+        # Candidate pool size depends on the active re-ranking strategy.
+        overfetch = self._overfetch()
         batch = min(
             len(self._df),
             max(limit * overfetch, limit + len(exclude_lower)),
@@ -623,12 +650,8 @@ class SearchService:
         """Hybrid retrieval: BM25 + FAISS fused via RRF, then filtered."""
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
 
-        # Use cross-encoder overfetch multiplier when re-ranking is available.
-        overfetch = (
-            self._cross_encoder_overfetch
-            if self._cross_encoder is not None
-            else self._over_fetch_multiplier
-        )
+        # Candidate pool size depends on the active re-ranking strategy.
+        overfetch = self._overfetch()
         fetch_k = min(len(self._df), limit * overfetch)
 
         # 1. BM25 lexical search.
@@ -707,30 +730,58 @@ class SearchService:
 
         return results
 
+    def _jev_re_rank(self, query_text, candidates):
+        """Re-rank candidates with Jev's calibrated relevance scores.
+
+        Returns a re-ordered ``[(row_idx, score), ...]`` list, or ``None``
+        when Jev re-ranking is disabled/unavailable so the caller can fall
+        through to the cross-encoder.
+        """
+        if not self._jev_rerank or not candidates:
+            return None
+
+        try:
+            from jev_service import rerank
+        except Exception:
+            return None
+
+        head = candidates[: self._jev_rerank_max]
+        tail = list(candidates[self._jev_rerank_max:])  # already ordered upstream
+        try:
+            docs = [compose_document_text(self._df.iloc[row_idx]) for row_idx, _ in head]
+            scores = rerank(query_text, docs, enabled=True)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Jev re-rank failed: %s", exc)
+            return None
+        if scores is None:
+            return None
+
+        ranked = [
+            (head[i][0], float(scores[i])) for i in range(len(head))
+        ]
+        ranked.sort(key=lambda item: item[1], reverse=True)
+        ranked.extend(tail)
+        return ranked
+
     def _re_rank(self, query_text, candidates):
-        """Cross-encoder re-rank of candidate documents.
+        """Re-rank candidate documents.
 
-        Takes a query string and list of (row_idx, score) tuples. If no
-        cross-encoder is loaded or candidates is empty, returns unchanged.
-        Otherwise scores each document pair with the cross-encoder, returns
-        results sorted by cross-encoder logit score descending.
-
-        Args:
-            query_text: The raw user query string.
-            candidates: [(row_idx, upstream_score), ...]
-
-        Returns:
-            [(row_idx, ce_score), ...] sorted by ce_score descending.
+        Jev calibrated relevance is preferred when enabled; otherwise the
+        cross-encoder is used; otherwise the upstream order is preserved.
         """
         import logging
         import time
 
         logger = logging.getLogger(__name__)
 
-        if self._cross_encoder is None:
+        if not candidates:
             return candidates
 
-        if not candidates:
+        jev_ranked = self._jev_re_rank(query_text, candidates)
+        if jev_ranked is not None:
+            return jev_ranked
+
+        if self._cross_encoder is None:
             return candidates
 
         t0 = time.perf_counter()

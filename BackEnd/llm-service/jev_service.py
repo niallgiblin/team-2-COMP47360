@@ -856,6 +856,113 @@ def assess_answerability(
 
 
 # ---------------------------------------------------------------------------
+# Jev re-ranking (calibrated relevance scoring)
+# ---------------------------------------------------------------------------
+
+# Ordered relevance levels, ascending. A candidate's Score maps linearly to a
+# 0–1 relevance that is directly usable as the DTO similarity.
+_RELEVANCE_LEVELS: tuple[str, ...] = (
+    "Not relevant to the request",
+    "Weakly relevant",
+    "Somewhat relevant",
+    "Relevant",
+    "Highly relevant",
+)
+
+
+def build_rerank_questions(num_candidates: int) -> dict[str, dict]:
+    """One Score question per candidate, evaluated in parallel by Jev."""
+    return {
+        f"rel_{i}": score(
+            f"How relevant is the venue at `candidates[{i}]` to the user's "
+            "request in `query`? Weigh venue type, vibe, neighborhood, price, "
+            "and any requested attributes.",
+            _RELEVANCE_LEVELS,
+        )
+        for i in range(num_candidates)
+    }
+
+
+def rerank(
+    query: str,
+    documents: Iterable[str],
+    *,
+    client: JevClient | None = None,
+    enabled: bool | None = None,
+    max_candidates: int | None = None,
+) -> list[float] | None:
+    """Score each document's relevance to *query*, returning floats in [0, 1].
+
+    The returned list is aligned with *documents* (same order and length).
+    Returns ``None`` when re-ranking is disabled or Jev is unavailable, so
+    callers fall back to their previous ordering.
+    """
+    from config import (
+        JEV_ENABLED,
+        JEV_RERANK_ENABLED,
+        JEV_RERANK_MAX_CANDIDATES,
+        JEV_TIMEOUT_SECONDS,
+    )
+
+    is_enabled = JEV_ENABLED if enabled is None else enabled
+    if not (is_enabled and JEV_RERANK_ENABLED):
+        _record_metric("disabled", 0.0, decision="rerank")
+        return None
+
+    if not query or not query.strip():
+        return None
+
+    docs = [str(doc) for doc in (documents or ())]
+    if not docs:
+        return None
+
+    cap = JEV_RERANK_MAX_CANDIDATES if max_candidates is None else max_candidates
+    n = min(len(docs), max(0, cap))
+    if n == 0:
+        return None
+
+    active_client = client or JevClient(timeout=JEV_TIMEOUT_SECONDS)
+    if not active_client.available:
+        _record_metric("disabled", 0.0, decision="rerank")
+        return None
+
+    state = {
+        "query": query,
+        "candidates": [{"index": i, "venue": docs[i]} for i in range(n)],
+    }
+
+    t0 = time.perf_counter()
+    try:
+        answers = active_client.system_one(state, build_rerank_questions(n))
+    except JevError as exc:
+        elapsed = time.perf_counter() - t0
+        status = "timeout" if "timeout" in str(exc).lower() else "error"
+        logger.warning("jev_service: rerank unavailable (%s): %s", status, exc)
+        _record_metric(status, elapsed, decision="rerank")
+        return None
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        logger.warning("jev_service: unexpected rerank failure: %s", exc)
+        _record_metric("error", elapsed, decision="rerank")
+        return None
+
+    elapsed = time.perf_counter() - t0
+    scores = [
+        _score_to_unit(answers.get(f"rel_{i}", {}) or {})
+        for i in range(n)
+    ]
+    logger.info(
+        "jev_service: rerank %d candidates in %.0fms (top=%.3f)",
+        n,
+        elapsed * 1000,
+        max(scores) if scores else 0.0,
+    )
+    _record_metric("success", elapsed, decision="rerank")
+    # Documents beyond the cap keep a neutral score so the list stays aligned.
+    return scores + [0.0] * (len(docs) - n)
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 

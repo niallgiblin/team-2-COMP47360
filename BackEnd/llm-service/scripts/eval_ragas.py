@@ -98,8 +98,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--jev",
         action="store_true",
-        help="Use Jev end-to-end: route generation through the chat pipeline "
-             "(query analysis + faithfulness guardrail) and score with the Jev judge.",
+        help="Use the Jev pipeline: route generation through the chat "
+             "pipeline (query analysis + guardrail + abstention).",
+    )
+    parser.add_argument(
+        "--jev-judge",
+        action="store_true",
+        help="Score with the Jev judge while keeping the baseline generation "
+             "path. Pair with --jev to isolate the pipeline effect.",
     )
     return parser.parse_args(argv)
 
@@ -369,10 +375,10 @@ def main(argv: list[str] | None = None) -> None:
 
     delay = 0.0 if args.no_delay else args.delay
 
-    judge = "jev" if args.jev else "hf"
+    judge = "jev" if (args.jev or args.jev_judge) else "hf"
     use_jev = args.jev
-    if use_jev:
-        logger.info("Jev mode enabled — chat-pipeline generation + Jev judge")
+    if use_jev or judge == "jev":
+        logger.info("Jev config — pipeline=%s judge=%s", use_jev, judge)
 
     # Resolve HF call (mock or real)
     if args.mock_judge:

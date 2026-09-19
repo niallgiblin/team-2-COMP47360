@@ -107,6 +107,16 @@ JEV_ABSTENTION_ENABLED = os.getenv(
 ).lower() in {"1", "true", "yes"}
 # Abstain when P(answerable) < threshold or P(out_of_scope) >= threshold.
 JEV_ABSTENTION_THRESHOLD = float(os.getenv("JEV_ABSTENTION_THRESHOLD", "0.5"))
+
+# --- Jev re-ranking (cross-encoder replacement) ---
+# Scores (query, candidate) relevance with calibrated probabilities in a single
+# parallel call, avoiding the per-pair CPU forward passes that made the
+# cross-encoder too slow for interactive use. Disabled by default.
+JEV_RERANK_ENABLED = os.getenv(
+    "JEV_RERANK_ENABLED", "false"
+).lower() in {"1", "true", "yes"}
+JEV_RERANK_OVERFETCH_MULTIPLIER = _env_int("JEV_RERANK_OVERFETCH_MULTIPLIER", 5)
+JEV_RERANK_MAX_CANDIDATES = _env_int("JEV_RERANK_MAX_CANDIDATES", 50)
 # Below this confidence, a Jev classification is treated as "no signal" and
 # the caller falls back to the regex path. See docs.typesafe.ai/confidence.
 JEV_CONFIDENCE_THRESHOLD = float(os.getenv("JEV_CONFIDENCE_THRESHOLD", "0.5"))

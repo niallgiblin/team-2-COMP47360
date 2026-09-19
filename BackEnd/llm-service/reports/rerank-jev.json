@@ -1,0 +1,17 @@
+{
+  "label": "jev",
+  "strategy": "jev",
+  "queries": 96,
+  "latency_ms": {
+    "mean": 933.9,
+    "p50": 887.7,
+    "p95": 1222.5,
+    "p99": 1654.3,
+    "max": 1926.1
+  },
+  "quality": {
+    "recall_at_5": 0.4889,
+    "ndcg_at_5": 0.4975,
+    "hit_rate": 0.6562
+  }
+}
