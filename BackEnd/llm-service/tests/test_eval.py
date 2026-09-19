@@ -209,6 +209,22 @@ class TestNdcgAtK:
         assert before == 0.0
         assert after > 0.0
 
+    def test_graded_ndcg_with_string_keys(self):
+        """Graded relevance from JSON has string keys; they must still match.
+
+        Regression: benchmark.jsonl stores relevance_grades as {"51": 3},
+        but retrieved ids are ints. Without key normalisation every lookup
+        missed and graded NDCG collapsed to 0.
+        """
+        fn = self._import_compute()
+        grades = {"51": 3, "570": 3, "606": 3}
+        # Ideal order: all graded venues first.
+        assert fn([51, 570, 606], [51, 570, 606, 99, 100], k=5, relevance_grades=grades) == pytest.approx(1.0)
+        # A perfect-but-lower-grade result must score above zero.
+        assert fn([51, 570], [51, 99, 100, 570, 101], k=5, relevance_grades=grades) > 0.0
+        # No graded venue retrieved → zero.
+        assert fn([51, 570], [99, 100, 101, 102, 103], k=5, relevance_grades=grades) == 0.0
+
 
 class TestMrr:
     """Pure-function tests for compute_mrr."""

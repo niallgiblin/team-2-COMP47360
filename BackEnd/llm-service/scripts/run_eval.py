@@ -99,6 +99,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=2.0,
         help="Seconds between RAGAS questions to avoid HF rate limits (default: 2.0)",
     )
+    parser.add_argument(
+        "--jev",
+        action="store_true",
+        help="Use Jev for the chained RAGAS pass: route generation through the "
+             "chat pipeline (query analysis + faithfulness guardrail) and score "
+             "with the Jev judge. Requires --ragas to have an effect.",
+    )
     return parser.parse_args(argv)
 
 
@@ -137,15 +144,24 @@ def compute_ndcg_at_k(expected_ids: list[int], retrieved_ids: list[int], k: int 
     top_k = retrieved_ids[:k]
 
     if relevance_grades:
-        # Graded NDCG
+        # Graded NDCG. JSON object keys arrive as strings ("51"), but venue
+        # ids are ints, so normalise keys before lookup — otherwise every
+        # lookup misses and NDCG collapses to 0.
+        grades: dict[int, float] = {}
+        for key, value in relevance_grades.items():
+            try:
+                grades[int(key)] = float(value)
+            except (TypeError, ValueError):
+                continue
+
         dcg = 0.0
         for i, doc_id in enumerate(top_k):
-            grade = relevance_grades.get(doc_id, 0)
+            grade = grades.get(int(doc_id), 0)
             if grade > 0:
                 dcg += grade / math.log2(i + 2)
 
         # IDCG: sort grades descending, take top k
-        all_grades = sorted(relevance_grades.values(), reverse=True)[:k]
+        all_grades = sorted(grades.values(), reverse=True)[:k]
         idcg = 0.0
         for i, grade in enumerate(all_grades):
             idcg += grade / math.log2(i + 2)
@@ -330,6 +346,8 @@ def _run_question(
     baseline_mode: bool = False,
     run_ragas: bool = False,
     ragas_delay: float = 0.0,
+    use_jev: bool = False,
+    judge: str = "hf",
 ) -> dict:
     """Execute one benchmark question and return a result record.
 
@@ -417,29 +435,53 @@ def _run_question(
             result["ragas_error"] = "no_retrieval_results"
         else:
             try:
-                from chat_service import (
-                    build_busyness_context,
-                    build_chat_messages,
-                    format_retrieval_context,
-                    huggingface_chat_api_call,
-                )
                 from eval_service import score_with_ragas
 
-                # Build retrieval context and call generation
-                retrieval_context_str, _citations = format_retrieval_context(results)
-                busyness_str = build_busyness_context()
+                if use_jev:
+                    # Route generation through the chat pipeline so the Jev
+                    # query analysis and faithfulness guardrail run.
+                    from chat_service import get_ai_response_with_metadata
 
-                messages, _ = build_chat_messages(
-                    query=query,
-                    previous_questions=[],
-                    previous_responses=[],
-                    retrieval_context=retrieval_context_str,
-                    search_helper=None,
-                    busyness_context=busyness_str,
-                )
+                    def _precomputed_helper(
+                        q, limit=5, location_filter=None, _results=results,
+                    ):
+                        return _results
 
-                response = huggingface_chat_api_call(messages)
-                answer = response["choices"][0]["message"]["content"]
+                    gen_result = get_ai_response_with_metadata(
+                        query,
+                        previous_questions=[],
+                        previous_responses=[],
+                        search_helper=_precomputed_helper,
+                    )
+                    answer = gen_result.text
+                    result["guardrail_triggered"] = bool(
+                        gen_result.metadata.fallback_triggered
+                    )
+                    result["mode"] = gen_result.metadata.mode
+                else:
+                    from chat_service import (
+                        build_busyness_context,
+                        build_chat_messages,
+                        format_retrieval_context,
+                        huggingface_chat_api_call,
+                    )
+
+                    # Build retrieval context and call generation
+                    retrieval_context_str, _citations = format_retrieval_context(results)
+                    busyness_str = build_busyness_context()
+
+                    messages, _ = build_chat_messages(
+                        query=query,
+                        previous_questions=[],
+                        previous_responses=[],
+                        retrieval_context=retrieval_context_str,
+                        search_helper=None,
+                        busyness_context=busyness_str,
+                    )
+
+                    response = huggingface_chat_api_call(messages)
+                    answer = response["choices"][0]["message"]["content"]
+
                 result["answer"] = answer
 
                 # Build context strings for the judge
@@ -465,7 +507,7 @@ def _run_question(
                     contexts.append(ctx)
 
                 ragas_scores = score_with_ragas(
-                    query=query, answer=answer, contexts=contexts,
+                    query=query, answer=answer, contexts=contexts, judge=judge,
                 )
 
                 if ragas_scores.get("faithfulness") is None:
@@ -556,11 +598,15 @@ def _run_all_questions(entries, search_service, args, baseline_mode=False):
 
         run_ragas = getattr(args, "ragas", False)
         ragas_delay = getattr(args, "ragas_delay", 0.0)
+        use_jev = getattr(args, "jev", False)
+        judge = "jev" if use_jev else "hf"
 
         for i, entry in enumerate(entries):
             qr = _run_question(entry, search_service, args.threshold_recall,
                                baseline_mode=baseline_mode,
-                               run_ragas=run_ragas)
+                               run_ragas=run_ragas,
+                               use_jev=use_jev,
+                               judge=judge)
             question_results.append(qr)
 
             cat = qr["category"]

@@ -13,9 +13,11 @@ from jev_service import (
     JevError,
     QueryAnalysis,
     analyze_query,
+    build_judge_questions,
     build_query_questions,
     build_verification_questions,
     choice,
+    judge_answer,
     noul,
     score,
     verify_answer,
@@ -402,3 +404,72 @@ class TestVerifyAnswer:
         )
         state, _questions = client.calls[0]
         assert state["known_venue_names"] == ["Tomi Jazz", "Blue Note"]
+
+
+# ---------------------------------------------------------------------------
+# Jev-backed evaluation judge
+# ---------------------------------------------------------------------------
+
+
+def _score_answer(score, confidence=0.8):
+    legend = {str(i): f"level {i}" for i in range(5)}
+    return {
+        "type": "score",
+        "score": score,
+        "legend": legend,
+        "probabilities": {str(i): (0.7 if i == round(score) else 0.075) for i in range(5)},
+        "confidence": confidence,
+    }
+
+
+class TestJevJudge:
+    def _client(self, faith=4.0, relev=4.0, prec=3.0):
+        return FakeClient({
+            "faithfulness": _score_answer(faith),
+            "answer_relevancy": _score_answer(relev),
+            "context_precision": _score_answer(prec),
+        })
+
+    def test_question_shape(self):
+        questions = build_judge_questions()
+        assert set(questions) == {"faithfulness", "answer_relevancy", "context_precision"}
+        for q in questions.values():
+            assert q["type"] == "score"
+            assert len(q["criteria"]) == 5
+
+    def test_score_to_unit_mapping(self):
+        from jev_service import _score_to_unit
+
+        assert _score_to_unit(_score_answer(0)) == 0.0
+        assert _score_to_unit(_score_answer(4)) == 1.0
+        assert _score_to_unit(_score_answer(2)) == pytest.approx(0.5)
+
+    def test_judge_answer_returns_unit_scores(self):
+        result = judge_answer(
+            "q", "a", "ctx", client=self._client(faith=4, relev=3, prec=2), enabled=True
+        )
+        assert result["faithfulness"] == pytest.approx(1.0)
+        assert result["answer_relevancy"] == pytest.approx(0.75)
+        assert result["context_precision"] == pytest.approx(0.5)
+        assert "jev" in result["faithfulness_reasoning"].lower()
+        assert result["faithfulness_reasoning"]
+
+    def test_judge_disabled_returns_none(self):
+        assert judge_answer("q", "a", "ctx", client=self._client(), enabled=False) is None
+
+    def test_judge_blank_answer_returns_none(self):
+        assert judge_answer("q", "", "ctx", client=self._client(), enabled=True) is None
+
+    def test_judge_error_returns_none(self):
+        assert judge_answer(
+            "q", "a", "ctx",
+            client=FakeClient(error=JevError("boom")), enabled=True,
+        ) is None
+
+    def test_judge_missing_dimension_returns_none(self):
+        # Client omits one dimension → treat as judge failure.
+        client = FakeClient({
+            "faithfulness": _score_answer(4),
+            "answer_relevancy": _score_answer(4),
+        })
+        assert judge_answer("q", "a", "ctx", client=client, enabled=True) is None

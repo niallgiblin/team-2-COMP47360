@@ -312,3 +312,115 @@ class TestGuardrailStreaming:
         assert "event: done" in events[-1]
         assert "couldn't verify every detail" in events[-1]
         assert '"verified": false' in events[-1]
+
+
+# ---------------------------------------------------------------------------
+# Jev judge + --jev harness wiring
+# ---------------------------------------------------------------------------
+
+
+class TestJevJudgeDispatch:
+    def test_score_with_ragas_jev_uses_jev_judge(self, monkeypatch):
+        import eval_service
+
+        monkeypatch.setattr(
+            "jev_service.judge_answer",
+            lambda question, answer, context, **k: {
+                "faithfulness": 0.8,
+                "answer_relevancy": 0.9,
+                "context_precision": 0.7,
+                "faithfulness_reasoning": "x",
+                "answer_relevancy_reasoning": "y",
+                "context_precision_reasoning": "z",
+            },
+        )
+        scores = eval_service.score_with_ragas("q", "a", ["c1"], judge="jev")
+        assert scores == {
+            "faithfulness": 0.8,
+            "answer_relevancy": 0.9,
+            "context_precision": 0.7,
+        }
+
+    def test_score_with_ragas_jev_failure_returns_none_scores(self, monkeypatch):
+        import eval_service
+
+        monkeypatch.setattr("jev_service.judge_answer", lambda *a, **k: None)
+        scores = eval_service.score_with_ragas("q", "a", ["c1"], judge="jev")
+        assert scores["faithfulness"] is None
+        assert scores["answer_relevancy"] is None
+        assert scores["context_precision"] is None
+
+
+class _FakeSearchService:
+    def search(self, query, limit=5, location_filter=None, price_range=None, mode="auto"):
+        return [{
+            "id": 1, "name": "Test Bar", "zone": "soho", "type": "Bar",
+            "price": "$$", "rating": 4.2, "description": "d", "summary": "s",
+            "similarity": 0.9,
+        }]
+
+
+class TestRunRagasEvalJevPath:
+    def test_use_jev_routes_generation_and_records_guardrail(self, monkeypatch):
+        import chat_service
+        import eval_service
+        from observability import ChatExecutionMetadata, ChatExecutionResult
+
+        captured = {}
+
+        def fake_gen(query, previous_questions, previous_responses=None,
+                     search_helper=None, hf_call=None, busyness_context=None,
+                     location_filter=None):
+            captured["helper_result"] = search_helper(query) if search_helper else None
+            return ChatExecutionResult(
+                "Grounded answer [1]",
+                [{"name": "Test Bar"}],
+                ChatExecutionMetadata(
+                    mode="hybrid", retrieval_started=True, candidates=1,
+                    fallback_triggered=True, retrieval_elapsed_s=0.0,
+                    generation_elapsed_s=0.0, error_stage="verification",
+                    error_code="ungrounded_answer",
+                ),
+            )
+
+        monkeypatch.setattr(chat_service, "get_ai_response_with_metadata", fake_gen)
+        monkeypatch.setattr(
+            "jev_service.judge_answer",
+            lambda *a, **k: {
+                "faithfulness": 0.9,
+                "answer_relevancy": 1.0,
+                "context_precision": 1.0,
+                "faithfulness_reasoning": "x",
+                "answer_relevancy_reasoning": "y",
+                "context_precision_reasoning": "z",
+            },
+        )
+
+        entry = {
+            "id": "Q999", "category": "retrieval", "query": "bars in soho",
+            "expected_venue_ids": [1],
+        }
+        results = eval_service.run_ragas_eval(
+            [entry], _FakeSearchService(),
+            use_jev=True, judge="jev", ragas_only=True,
+        )
+        assert len(results) == 1
+        r = results[0]
+        assert r["answer"] == "Grounded answer [1]"
+        assert r["guardrail_triggered"] is True
+        assert r["mode"] == "hybrid"
+        assert r["ragas_scores"]["faithfulness"] == 0.9
+        # The pre-computed helper must hand the already-retrieved results back.
+        assert captured["helper_result"][0]["name"] == "Test Bar"
+
+    def test_build_combined_report_counts_guardrail(self):
+        import eval_service
+
+        report = eval_service.build_combined_report([
+            {"id": "a", "category": "retrieval", "query": "q", "answer": "",
+             "retrieved_ids": [], "guardrail_triggered": True},
+            {"id": "b", "category": "retrieval", "query": "q", "answer": "",
+             "retrieved_ids": [], "guardrail_triggered": False},
+        ])
+        assert report["guardrail"]["triggered_total"] == 1
+        assert report["guardrail"]["categories"]["retrieval"] == 1

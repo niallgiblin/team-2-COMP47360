@@ -1,0 +1,126 @@
+{
+  "total_questions": 3,
+  "ragas_scoring_failures": 0,
+  "retrieval": {
+    "aggregates": {
+      "recall": 0.3667,
+      "ndcg": 0.3246,
+      "mrr": 0.5,
+      "precision": 0.3333,
+      "hit_rate": 1.0
+    },
+    "categories": {
+      "retrieval": {
+        "recall_at_5": 0.3667,
+        "ndcg_at_5": 0.3246,
+        "mrr": 0.5,
+        "precision_at_5": 0.3333,
+        "hit_rate": 1.0,
+        "total": 3
+      }
+    }
+  },
+  "ragas": {
+    "aggregates": {
+      "faithfulness": 0.7333,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0
+    },
+    "categories": {
+      "retrieval": {
+        "faithfulness": 0.7333,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0,
+        "scored": 3,
+        "failed": 0,
+        "total": 3
+      }
+    },
+    "scored_total": 3,
+    "failed_total": 0
+  },
+  "questions": [
+    {
+      "id": "Q001",
+      "category": "retrieval",
+      "query": "jazz clubs with live music in NYC",
+      "answer": "You're looking for jazz clubs with live music in NYC. I've got a few recommendations for you. \n\nFirst, I'd suggest checking out **Mintons Playhouse** in Central Harlem [1]. It's a historic jazz club with a great lineup of DJs and a cozy setting. The vibe is relaxed, and the crowd is there for the music, not just to be seen. Plus, the bottle service is worth it, according to some reviewers.\n\nAnother great option is **Bills Place** in Central Harlem North [2]. It's another historic jazz club with live music, and the atmosphere is cozy and intimate. The crowd is diverse, and the music is top-notch. If you're looking for a more laid-back experience, this might be the spot for you.\n\nIf you're willing to head to the Upper West Side, I'd recommend **Birdland Jazz Club** in Clinton East [3]. It's a legendary jazz club with live performances and cocktails. The vibe is sophisticated, and the crowd is there for the music. If you're looking for a more upscale experience, this might be the place for you.\n\nAll three of these clubs offer a unique experience, so you can't go wrong with any of them. Now, if you're planning an outing, I'd suggest checking out **Mintons Playhouse** first, as it's in a relatively quiet area, and you might be able to get a table without a long wait.",
+      "retrieved_ids": [
+        1288,
+        1377,
+        880,
+        606,
+        879
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.3191,
+        "mrr": 0.25,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q002",
+      "category": "retrieval",
+      "query": "rooftop bars with great views of the skyline",
+      "answer": "Based on the context, I'd recommend the following rooftop bars with great views of the skyline:\n\n1. **The Delancey Rooftop [1]** in Two Bridges/Seward Park - This rooftop bar offers skyline views and a great vibe, with a moderate price level and a 4-star rating from 19,925 reviews. One reviewer raved about the \"incredible\" sound system, and another praised the \"intimate space\" with amazing jazz on Thursday nights.\n2. **The Cantor Roof Garden Bar [2]** in Central Park - This seasonal rooftop bar at the Met offers drinks and skyline views, with a very cheap price level and a 4.2-star rating from 11,475 reviews. Reviewers love the deep whiskey list, intimate space, and perfect date spot atmosphere.\n3. **Refinery Rooftop [3]** in Midtown South - This trendy rooftop bar offers skyline views and cocktails, with an expensive price level and a 4.4-star rating from 3,890 reviews. Reviewers praise the bottle service, great lineup of DJs, and quality justifying the premium price.\n\nAll three options offer great views of the skyline, but keep in mind that The Delancey Rooftop is in a more residential area, while The Cantor Roof Garden Bar is in Central Park, and Refinery Rooftop is in Midtown South. Now might be a good time to visit these rooftop bars, but I'd recommend checking the live busyness data before heading out.",
+      "retrieved_ids": [
+        203,
+        976,
+        502,
+        2141,
+        2193
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.5087,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q003",
+      "category": "retrieval",
+      "query": "comedy clubs for a fun night out",
+      "answer": "Based on the provided context, I'd recommend the following comedy clubs for a fun night out:\n\n* Sesh Comedy [16778] in the Lower East Side is a great spot, with a 4.8 rating and rave reviews about its intimate setting and world-class performers.\n* West Side Comedy Club [6934] on the Upper West Side South is another excellent option, with a 4.4 rating and praise for its cozy atmosphere and talented comedians.\n* Tribeca Comedy Club [7531] in TriBeCa/Civic Center is a popular choice, with a 4.1 rating and positive feedback about its clean and well-staffed venue.\n\nNow's a great time to check out Sesh Comedy, as it's not currently listed as a busy zone. For a more relaxed atmosphere, you might want to consider West Side Comedy Club or Tribeca Comedy Club.",
+      "retrieved_ids": [
+        2254,
+        1583,
+        2240,
+        1496,
+        1502
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.1461,
+        "mrr": 0.25,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    }
+  ],
+  "benchmark_path": "/Users/ng/projects/UCD-CS/Summer25/team-2-COMP47360/BackEnd/llm-service/data/benchmark.jsonl"
+}

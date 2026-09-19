@@ -564,6 +564,156 @@ def verify_answer(
 
 
 # ---------------------------------------------------------------------------
+# Jev-backed evaluation judge (drop-in for eval_service's HF judge)
+# ---------------------------------------------------------------------------
+
+# Five ordered levels per dimension, ascending quality, matching the semantics
+# of prompts/judge-v1.yaml so the Jev judge is comparable to the HF judge.
+JUDGE_LEVELS: dict[str, list[str]] = {
+    "faithfulness": [
+        "Mostly fabricated: claims contradict the context or invent venues",
+        "Several unsupported or contradicted claims",
+        "About half the claims are supported; some unsupported details",
+        "Nearly all claims supported; at most one minor unsupported detail",
+        "Every factual claim is grounded in the context",
+    ],
+    "answer_relevancy": [
+        "Completely irrelevant to the question",
+        "Tangentially related but mostly off-topic",
+        "Partially answers the question but misses key aspects",
+        "Mostly on-topic; misses at most one minor aspect",
+        "Fully and directly answers every aspect of the question",
+    ],
+    "context_precision": [
+        "None of the retrieved context is relevant to the question",
+        "Only one or two context items are relevant; most are noise",
+        "About half the retrieved context is relevant",
+        "Most context is relevant; one item is marginally related",
+        "Every retrieved context item is highly relevant",
+    ],
+}
+
+_JUDGE_DIMENSIONS = ("faithfulness", "answer_relevancy", "context_precision")
+
+
+def build_judge_questions() -> dict[str, dict]:
+    """System One Score questions mirroring prompts/judge-v1.yaml."""
+    return {
+        "faithfulness": score(
+            "Score how well every factual claim in `answer` is supported by "
+            "`context`. Treat `[N]` citation markers and crowd/busyness "
+            "statements as non-factual.",
+            JUDGE_LEVELS["faithfulness"],
+        ),
+        "answer_relevancy": score(
+            "Score how directly and completely `answer` addresses `question`.",
+            JUDGE_LEVELS["answer_relevancy"],
+        ),
+        "context_precision": score(
+            "Score how relevant the retrieved `context` is to `question`.",
+            JUDGE_LEVELS["context_precision"],
+        ),
+    }
+
+
+def _score_to_unit(answer: Mapping[str, Any]) -> float:
+    """Map a Score answer to 0–1 using the level count from its legend."""
+    try:
+        raw = float(answer.get("score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    legend = answer.get("legend")
+    levels = len(legend) if isinstance(legend, Mapping) and len(legend) >= 2 else 5
+    unit = raw / (levels - 1)
+    return round(max(0.0, min(1.0, unit)), 4)
+
+
+def _score_reasoning(answer: Mapping[str, Any]) -> str:
+    """Build a short reasoning string from the dominant level + confidence."""
+    legend = answer.get("legend") if isinstance(answer.get("legend"), Mapping) else {}
+    probabilities = _probabilities_for(answer)
+    if probabilities:
+        level = max(probabilities, key=lambda key: probabilities[key])
+    else:
+        try:
+            level = str(round(float(answer.get("score", 0.0) or 0.0)))
+        except (TypeError, ValueError):
+            level = ""
+    description = legend.get(level) or legend.get(str(level)) or "n/a"
+    confidence = _answer_confidence(answer)
+    return f"Jev level '{description}' (confidence={confidence:.2f})"
+
+
+def judge_answer(
+    question: str,
+    answer: str,
+    context: str,
+    *,
+    client: JevClient | None = None,
+    enabled: bool | None = None,
+) -> dict[str, Any] | None:
+    """Score a RAG answer with Jev, mirroring ``eval_service._call_judge``.
+
+    Returns a dict with ``faithfulness``, ``answer_relevancy``,
+    ``context_precision`` (all 0–1) and matching ``*_reasoning`` strings, or
+    ``None`` when Jev is unavailable — callers treat ``None`` as "judge
+    failed", exactly like the HF judge's all-zero sentinel.
+    """
+    from config import JEV_ENABLED, JEV_TIMEOUT_SECONDS
+
+    is_enabled = JEV_ENABLED if enabled is None else enabled
+    if not is_enabled:
+        _record_metric("disabled", 0.0, decision="eval_judge")
+        return None
+    if not answer or not answer.strip():
+        return None
+
+    active_client = client or JevClient(timeout=JEV_TIMEOUT_SECONDS)
+    if not active_client.available:
+        _record_metric("disabled", 0.0, decision="eval_judge")
+        return None
+
+    state = {"question": question, "answer": answer, "context": context}
+
+    t0 = time.perf_counter()
+    try:
+        answers = active_client.system_one(state, build_judge_questions())
+    except JevError as exc:
+        elapsed = time.perf_counter() - t0
+        status = "timeout" if "timeout" in str(exc).lower() else "error"
+        logger.warning("jev_service: judge unavailable (%s): %s", status, exc)
+        _record_metric(status, elapsed, decision="eval_judge")
+        return None
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        logger.warning("jev_service: unexpected judge failure: %s", exc)
+        _record_metric("error", elapsed, decision="eval_judge")
+        return None
+
+    elapsed = time.perf_counter() - t0
+
+    result: dict[str, Any] = {}
+    for dimension in _JUDGE_DIMENSIONS:
+        raw_answer = answers.get(dimension)
+        if not isinstance(raw_answer, Mapping):
+            logger.warning("jev_service: judge missing dimension %r", dimension)
+            _record_metric("error", elapsed, decision="eval_judge")
+            return None
+        result[dimension] = _score_to_unit(raw_answer)
+        result[f"{dimension}_reasoning"] = _score_reasoning(raw_answer)
+
+    logger.debug(
+        "jev_service: judge in %.0fms faith=%.2f relev=%.2f prec=%.2f",
+        elapsed * 1000,
+        result["faithfulness"],
+        result["answer_relevancy"],
+        result["context_precision"],
+    )
+    _record_metric("success", elapsed, decision="eval_judge")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 

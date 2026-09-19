@@ -221,6 +221,7 @@ def score_with_ragas(
     answer: str,
     contexts: list[str],
     hf_call: Callable[..., Any] | None = None,
+    judge: str = "hf",
 ) -> dict[str, float | None]:
     """Score a single (query, answer, contexts) tuple with the LLM judge.
 
@@ -252,6 +253,29 @@ def score_with_ragas(
         context_str = "\n".join(
             f"- {c}" for c in contexts[:10]  # cap at 10 to keep prompt size bounded
         )
+
+    scores = None
+    if judge == "jev":
+        # Jev judge — typed, calibrated, and far cheaper than the HF judge.
+        try:
+            from jev_service import judge_answer
+
+            scores = judge_answer(question=query, answer=answer, context=context_str)
+        except Exception as exc:
+            logger.warning("Jev judge failed: %s", exc)
+            scores = None
+        if scores is None:
+            logger.warning("Jev judge unavailable — treating as failure")
+            return {
+                "faithfulness": None,
+                "answer_relevancy": None,
+                "context_precision": None,
+            }
+        return {
+            "faithfulness": scores.get("faithfulness"),
+            "answer_relevancy": scores.get("answer_relevancy"),
+            "context_precision": scores.get("context_precision"),
+        }
 
     scores = _call_judge(
         question=query,
@@ -329,6 +353,8 @@ def run_ragas_eval(
     delay: float = 2.0,
     limit: int | None = None,
     ragas_only: bool = False,
+    judge: str = "hf",
+    use_jev: bool = False,
 ) -> list[dict]:
     """Run RAGAS evaluation on a set of benchmark entries.
 
@@ -416,53 +442,69 @@ def run_ragas_eval(
         ragas_scores: dict[str, float | None] | None = None
         ragas_error: str | None = None
         answer: str = ""
+        guardrail_triggered = False
+        agent_mode: str | None = None
 
-        try:
-            chat_result = get_ai_response_with_metadata(
-                query, previous_questions=[], previous_responses=[],
-                search_helper=None,  # we already ran search — build context manually
+        if use_jev:
+            # Route generation through the chat pipeline so the Jev query
+            # analysis and faithfulness guardrail run. A pre-computed search
+            # helper avoids re-running retrieval.
+            from chat_service import get_ai_response_with_metadata
+
+            def _precomputed_helper(
+                q, limit=5, location_filter=None, _results=search_results,
+            ):
+                return _results
+
+            try:
+                gen_result = get_ai_response_with_metadata(
+                    query,
+                    previous_questions=[],
+                    previous_responses=[],
+                    search_helper=_precomputed_helper,
+                    hf_call=hf_call,
+                )
+                answer = gen_result.text
+                guardrail_triggered = bool(gen_result.metadata.fallback_triggered)
+                agent_mode = gen_result.metadata.mode
+                logger.debug(
+                    "  Jev-path answer (%d chars, guardrail=%s, mode=%s)",
+                    len(answer), guardrail_triggered, agent_mode,
+                )
+            except Exception as exc:
+                logger.warning("  Jev-path generation failed for %s: %s", qid, exc)
+                ragas_error = "generation_failed"
+                answer = ""
+        else:
+            # --- Build context and call generation directly ---
+            from chat_service import (
+                build_busyness_context,
+                build_chat_messages,
+                format_retrieval_context,
+                huggingface_chat_api_call,
             )
-            # Hmm, get_ai_response_with_metadata expects search_helper.
-            # We need to call it differently — pass a helper that returns our results.
-        except Exception:
-            pass
 
-        # We need a search helper that returns pre-computed results.
-        # The simplest approach: build retrieval context manually and call
-        # build_chat_messages + huggingface_chat_api_call directly.
+            retrieval_context_str, citations = format_retrieval_context(search_results)
+            busyness_str = build_busyness_context()
 
-        # --- Build context and call generation ---
-        from chat_service import (
-            build_busyness_context,
-            build_chat_messages,
-            format_retrieval_context,
-            huggingface_chat_api_call,
-        )
+            messages, _ = build_chat_messages(
+                query=query,
+                previous_questions=[],
+                previous_responses=[],
+                retrieval_context=retrieval_context_str,
+                search_helper=None,
+                busyness_context=busyness_str,
+            )
 
-        retrieval_context_str, citations = format_retrieval_context(search_results)
-        busyness_str = build_busyness_context()
-
-        messages, _ = build_chat_messages(
-            query=query,
-            previous_questions=[],
-            previous_responses=[],
-            retrieval_context=retrieval_context_str,
-            search_helper=None,
-            busyness_context=busyness_str,
-        )
-
-        try:
-            if hf_call is None:
-                gen_call = huggingface_chat_api_call
-            else:
-                gen_call = hf_call
-            response = gen_call(messages)
-            answer = response["choices"][0]["message"]["content"]
-            logger.debug("  Generated answer (%d chars)", len(answer))
-        except Exception as exc:
-            logger.warning("  Generation failed for %s: %s", qid, exc)
-            ragas_error = "generation_failed"
-            answer = ""
+            try:
+                gen_call = huggingface_chat_api_call if hf_call is None else hf_call
+                response = gen_call(messages)
+                answer = response["choices"][0]["message"]["content"]
+                logger.debug("  Generated answer (%d chars)", len(answer))
+            except Exception as exc:
+                logger.warning("  Generation failed for %s: %s", qid, exc)
+                ragas_error = "generation_failed"
+                answer = ""
 
         # --- RAGAS scoring ---
         if answer and ragas_error is None:
@@ -473,6 +515,7 @@ def run_ragas_eval(
                     answer=answer,
                     contexts=contexts,
                     hf_call=hf_call,
+                    judge=judge,
                 )
                 if ragas_scores.get("faithfulness") is None:
                     ragas_error = "judge_failed"
@@ -495,6 +538,9 @@ def run_ragas_eval(
             "answer": answer,
             "retrieved_ids": retrieved_ids,
         }
+        if use_jev:
+            result["guardrail_triggered"] = guardrail_triggered
+            result["mode"] = agent_mode
         if retrieval_metrics is not None:
             result["retrieval_metrics"] = retrieval_metrics
         if ragas_scores is not None:
@@ -538,6 +584,7 @@ def build_combined_report(
     categories: dict[str, dict[str, Any]] = {}
     ragas_scored = 0
     ragas_failed = 0
+    guardrail_total = 0
 
     for r in ragas_results:
         cat = r["category"]
@@ -557,6 +604,8 @@ def build_combined_report(
                 "precision_ragas_sum": 0.0,
                 "ragas_scored": 0,
                 "ragas_failed": 0,
+                # Jev guardrail
+                "guardrail_triggered": 0,
             }
 
         stats = categories[cat]
@@ -584,6 +633,11 @@ def build_combined_report(
         elif re:
             stats["ragas_failed"] += 1
             ragas_failed += 1
+
+        # Jev faithfulness guardrail
+        if r.get("guardrail_triggered"):
+            stats["guardrail_triggered"] += 1
+            guardrail_total += 1
 
     # Build category summaries
     retrieval_categories: dict[str, dict] = {}
@@ -648,6 +702,13 @@ def build_combined_report(
     return {
         "total_questions": len(ragas_results),
         "ragas_scoring_failures": ragas_failed,
+        "guardrail": {
+            "triggered_total": guardrail_total,
+            "categories": {
+                cat: stats["guardrail_triggered"]
+                for cat, stats in sorted(categories.items())
+            },
+        },
         "retrieval": {
             "aggregates": _agg_retrieval(retrieval_categories),
             "categories": retrieval_categories,

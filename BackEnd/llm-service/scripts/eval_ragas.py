@@ -95,6 +95,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Use synthetic judge scores instead of calling HF API (for smoke testing)",
     )
+    parser.add_argument(
+        "--jev",
+        action="store_true",
+        help="Use Jev end-to-end: route generation through the chat pipeline "
+             "(query analysis + faithfulness guardrail) and score with the Jev judge.",
+    )
     return parser.parse_args(argv)
 
 
@@ -363,6 +369,11 @@ def main(argv: list[str] | None = None) -> None:
 
     delay = 0.0 if args.no_delay else args.delay
 
+    judge = "jev" if args.jev else "hf"
+    use_jev = args.jev
+    if use_jev:
+        logger.info("Jev mode enabled — chat-pipeline generation + Jev judge")
+
     # Resolve HF call (mock or real)
     if args.mock_judge:
         logger.info("Using MOCK mode — synthetic judge AND generation (no HF API calls)")
@@ -389,6 +400,15 @@ def main(argv: list[str] | None = None) -> None:
             }
 
         es._call_judge = _mock_call_judge
+
+        # Also mock the Jev judge so --jev stays hermetic in mock mode.
+        import jev_service as js
+        original_jev_judge = js.judge_answer
+
+        def _mock_jev_judge(question, answer, context, **kwargs):
+            return dict(_mock_call_judge(question, context, answer))
+
+        js.judge_answer = _mock_jev_judge
 
         # Also mock the HF chat generation API to avoid HF_TOKEN requirement
         import chat_service as cs
@@ -433,6 +453,8 @@ def main(argv: list[str] | None = None) -> None:
         delay=delay,
         limit=args.limit,
         ragas_only=args.ragas_only,
+        judge=judge,
+        use_jev=use_jev,
     )
 
     elapsed = time.time() - start_time
@@ -442,8 +464,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.mock_judge:
         import eval_service as es
         import chat_service as cs
+        import jev_service as js
         es._call_judge = original_call_judge
         cs.huggingface_chat_api_call = original_hf_call
+        js.judge_answer = original_jev_judge
 
     # ---- Baseline pass (optional) -----------------------------------------
     baseline_results = None
@@ -459,6 +483,8 @@ def main(argv: list[str] | None = None) -> None:
                 delay=delay,
                 limit=args.limit,
                 ragas_only=args.ragas_only,
+                judge=judge,
+                use_jev=use_jev,
             )
         finally:
             if saved_ce is not None:
