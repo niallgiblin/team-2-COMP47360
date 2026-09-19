@@ -37,6 +37,7 @@ guessing.
 | `JEV_TIMEOUT_SECONDS` | `8` | Per-request timeout |
 | `JEV_MAX_RETRIES` | `2` | Retries for 429/529 + transient errors |
 | `JEV_CONFIDENCE_THRESHOLD` | `0.5` | Below this, an answer is treated as no signal |
+| `JEV_GUARDRAIL_ENABLED` | `true` | Runtime faithfulness guardrail (needs `JEV_ENABLED`) |
 
 Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
 `docker-compose.yml` (already wired for the `llm-service`).
@@ -55,6 +56,12 @@ Add the key to `.env` and pass `TYPESAFE_API_KEY` / `JEV_ENABLED` through
   corpus vocabulary (`_load_known_zones()`, `_ACTIVITY_PATTERNS`) and calls
   `analyze_query`. Returns `None` when `JEV_ENABLED` is false or on failure.
 - `chat_service._is_general_chat()` — Jev-first gate, regex fallback.
+- `chat_service.resolve_answer_verification()` — runs `verify_answer` over a
+  generated answer plus its citations.
+- `jev_service.verify_answer()` — the faithfulness guardrail: three Noul
+  questions (`faithful`, `fabricated_venue`, `unsupported_detail`) returning
+  an `AnswerVerification`. Grounded requires a confident positive on `faithful`
+  and confident negatives on both failure detectors.
 
 ## Wired today
 
@@ -66,10 +73,24 @@ request, then:
 2. Fill `location_filter` from `analysis.location` when the route layer did not
    already detect one.
 
-Everything is behind `JEV_ENABLED`. When it is off, the key is missing, the
-call times out, or the response is malformed, the code behaves exactly as
-before. New Prometheus series: `jev_requests_total{decision,status}` and
-`jev_latency_seconds{decision}`.
+After generation, when citations exist, both paths run the guardrail:
+
+3. `resolve_answer_verification` checks the answer against the retrieved
+   context. If it is not grounded, the generated text is replaced by
+   `build_retrieval_fallback_response(..., intro=GROUNDED_FALLBACK_INTRO)` — a
+   deterministic, citation-backed venue list.
+   - Non-streaming: replaced before returning; metadata gets
+     `fallback_triggered=True`, `error_stage="verification"`,
+     `error_code="ungrounded_answer"`.
+   - Streaming: the frontend replaces streamed text with the `done` event's
+     `content`, so the fallback is emitted in `done` with `"verified": false`.
+     (The ungrounded text is briefly visible while it streams.)
+
+Everything is behind `JEV_ENABLED` / `JEV_GUARDRAIL_ENABLED`. When off, the
+key is missing, the call times out, or the response is malformed, the code
+behaves exactly as before. New Prometheus series:
+`jev_requests_total{decision,status}` and `jev_latency_seconds{decision}`
+(`decision` is `query_analysis` or `answer_verification`).
 
 ## Verifying
 
@@ -93,18 +114,18 @@ PYTHONPATH=. python3 scripts/jev_smoke.py "is there a rooftop bar in soho?"
 
 Ordered by expected value:
 
-1. **Runtime faithfulness guardrail.** After generation, verify each venue
-   claim against the retrieved context with a Noul per citation, and fall back
-   to `build_retrieval_fallback_response` when support is low. Highest
-   reliability win; attacks the prompt-rule fragility directly.
-2. **Calibrated abstention.** Decide `answerable` over the retrieved candidate
+1. **Calibrated abstention.** Decide `answerable` over the retrieved candidate
    set instead of the prompt rule "respond exactly 'no matching venues
    found'". Directly targets the 18 abstention benchmark cases.
-3. **Rerank with Jev Score.** Score `(query, candidate)` relevance with
+2. **Rerank with Jev Score.** Score `(query, candidate)` relevance with
    calibrated probabilities, replacing the latency-blocked cross-encoder and
    enabling threshold-based filtering.
-4. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
+3. **Move the query analysis to the route layer.** Compute `QueryAnalysis`
    once in `app.py` and pass it through, then remove the remaining
    `extract_location_from_query` / regex category paths.
-5. **Jev-backed eval judge.** Swap the slow LLM-as-judge in `eval_service.py`
+4. **Jev-backed eval judge.** Swap the slow LLM-as-judge in `eval_service.py`
    for a typed, calibrated scorer feeding the existing benchmark harness.
+5. **Guardrail threshold tuning.** The grounded decision currently uses
+   `JEV_CONFIDENCE_THRESHOLD` plus a fixed 0.5 floor on the failure detectors.
+   Once the benchmark runs end-to-end, calibrate these against false-positive
+   and false-negative rates.

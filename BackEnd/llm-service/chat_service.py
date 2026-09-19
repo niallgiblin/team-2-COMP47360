@@ -14,6 +14,7 @@ from config import (
     DEFAULT_HF_CHAT_MODEL,
     HF_CHAT_MODEL,
     JEV_ENABLED,
+    JEV_GUARDRAIL_ENABLED,
 )
 from dto import create_citation_dto
 from prompt_loader import PromptLoadError, load_prompt_template
@@ -165,6 +166,13 @@ CHAT_RESPONSE_ERROR_MESSAGE = (
 NO_VENUES_MESSAGE = "no matching venues found"
 NO_BUSYNESS_MESSAGE = "Live busyness data is not available at the moment."
 
+# Lead-in for the deterministic fallback used when the guardrail rejects an
+# ungrounded generated answer (distinct from the model-unavailable wording).
+GROUNDED_FALLBACK_INTRO = (
+    "I found a few options, but I couldn't verify every detail in my first "
+    "answer, so here are the confirmed venues from our database:"
+)
+
 # ---------------------------------------------------------------------------
 # General / non-venue chat detection (prevents random venue results for meta
 # questions like "how do you work?" or "what can you do?")
@@ -287,6 +295,32 @@ def _is_general_chat(query, analysis=None):
     if analysis is not None:
         return analysis.is_general_chat
     return is_general_chat_query(query)
+
+
+def resolve_answer_verification(answer, retrieval_context, citations):
+    """Check a generated answer for faithfulness via Jev.
+
+    Returns an ``AnswerVerification`` when the guardrail runs, or ``None``
+    when it is disabled, unavailable, or there is nothing to verify (no
+    citations). Callers must treat ``None`` as "not verified", not "good".
+    """
+    if not JEV_ENABLED or not JEV_GUARDRAIL_ENABLED:
+        return None
+    if not answer or not citations:
+        return None
+    try:
+        from jev_service import verify_answer
+
+        venue_names = [c.get("name") for c in citations if c.get("name")]
+        return verify_answer(
+            answer,
+            retrieval_context,
+            venue_names=venue_names,
+            enabled=True,
+        )
+    except Exception as exc:  # defensive: never break the chat path
+        logger.debug("Jev answer verification unavailable: %s", exc)
+        return None
 
 
 GENERAL_CHAT_SYSTEM_PROMPT = (
@@ -1025,6 +1059,33 @@ def stream_chat_response(
             generation_elapsed * 1000, len(full_text),
         )
 
+        # ---- Faithfulness guardrail (optional) --------------------------
+        # The frontend replaces the streamed text with done.content, so an
+        # ungrounded answer can be swapped for the citation-backed fallback.
+        verification = resolve_answer_verification(
+            full_text, retrieval_context, citations,
+        )
+        if verification is not None and not verification.grounded:
+            logger.warning(
+                "Jev guardrail: ungrounded streamed answer replaced %s",
+                verification.as_dict(),
+            )
+            fallback_text = build_retrieval_fallback_response(
+                retrieval_context, citations, intro=GROUNDED_FALLBACK_INTRO,
+            )
+            fallback_text = append_location_corrections(
+                fallback_text, citations, location_filter,
+            )
+            fallback_text = prepend_missing_bowling_notice(
+                fallback_text, query, citations,
+            )
+            yield _emit("done", {
+                "content": fallback_text,
+                "citations": citations,
+                "verified": False,
+            })
+            return
+
         # Post-processing: apply corrections, notices, and citations.
         processed = full_text
         processed = append_location_corrections(processed, citations, location_filter)
@@ -1034,6 +1095,7 @@ def stream_chat_response(
         yield _emit("done", {
             "content": processed,
             "citations": citations,
+            "verified": None if verification is None else verification.grounded,
         })
 
     except Exception as exc:
@@ -1271,17 +1333,23 @@ def prepend_missing_bowling_notice(response_text, query, citations):
     return prepend_missing_category_notice(response_text, query, citations)
 
 
-def build_retrieval_fallback_response(retrieval_context, citations):
+def build_retrieval_fallback_response(retrieval_context, citations, intro=None):
     """Create a readable venue answer when the chat model is unavailable.
 
     Retrieval has already succeeded at this point, so returning the venue
     matches is more useful than hiding them behind a generic model error.
+
+    *intro* overrides the lead-in sentence — used by the faithfulness
+    guardrail, which has a different reason for falling back than a model
+    failure.
     """
     if not citations:
         return CHAT_RESPONSE_ERROR_MESSAGE
 
     outside_requested_area = "outside the requested area" in (retrieval_context or "").lower()
-    if outside_requested_area:
+    if intro is not None:
+        lines = [intro]
+    elif outside_requested_area:
         lines = [
             "I found a few nearby options, but they look a little outside the exact area you asked for:",
         ]
@@ -1616,6 +1684,35 @@ def get_ai_response_with_metadata(
                 )
         generation_elapsed = _time.perf_counter() - gen_start
         response_text = response["choices"][0]["message"]["content"]
+
+        # ---- Faithfulness guardrail (optional) --------------------------
+        verification = resolve_answer_verification(
+            response_text, retrieval_context, citations,
+        )
+        if verification is not None and not verification.grounded:
+            logger.warning(
+                "Jev guardrail: ungrounded answer replaced %s",
+                verification.as_dict(),
+            )
+            fallback_text = build_retrieval_fallback_response(
+                retrieval_context, citations, intro=GROUNDED_FALLBACK_INTRO,
+            )
+            fallback_text = append_location_corrections(
+                fallback_text, citations, location_filter,
+            )
+            fallback_text = prepend_missing_bowling_notice(
+                fallback_text, query, citations,
+            )
+            return ChatExecutionResult(
+                fallback_text, citations,
+                ChatExecutionMetadata(
+                    mode=mode, retrieval_started=True, candidates=candidates,
+                    fallback_triggered=True, retrieval_elapsed_s=retrieval_elapsed,
+                    generation_elapsed_s=generation_elapsed,
+                    error_stage="verification", error_code="ungrounded_answer",
+                ),
+            )
+
         response_text = append_location_corrections(response_text, citations, location_filter)
         response_text = prepend_missing_bowling_notice(response_text, query, citations)
         response_text = parse_inline_citations(response_text, citations)

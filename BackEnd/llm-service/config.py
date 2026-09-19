@@ -93,6 +93,12 @@ TYPESAFE_API_URL = os.getenv(
 JEV_MODEL = os.getenv("JEV_MODEL", "jev-latest")
 JEV_TIMEOUT_SECONDS = _env_int("JEV_TIMEOUT_SECONDS", 8)
 JEV_MAX_RETRIES = _env_int("JEV_MAX_RETRIES", 2)
+# Runtime faithfulness guardrail: verify generated venue claims against the
+# retrieved context before returning, replacing ungrounded answers with the
+# citation-backed fallback. Only active when JEV_ENABLED is also true.
+JEV_GUARDRAIL_ENABLED = os.getenv(
+    "JEV_GUARDRAIL_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
 # Below this confidence, a Jev classification is treated as "no signal" and
 # the caller falls back to the regex path. See docs.typesafe.ai/confidence.
 JEV_CONFIDENCE_THRESHOLD = float(os.getenv("JEV_CONFIDENCE_THRESHOLD", "0.5"))

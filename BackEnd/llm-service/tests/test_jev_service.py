@@ -8,14 +8,17 @@ from __future__ import annotations
 import pytest
 
 from jev_service import (
+    AnswerVerification,
     JevClient,
     JevError,
     QueryAnalysis,
     analyze_query,
     build_query_questions,
+    build_verification_questions,
     choice,
     noul,
     score,
+    verify_answer,
 )
 
 
@@ -321,3 +324,81 @@ class TestJevClient:
                 )
         finally:
             mod.time.sleep = original_sleep
+
+
+# ---------------------------------------------------------------------------
+# Faithfulness guardrail — verify_answer
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationQuestions:
+    def test_question_shape(self):
+        questions = build_verification_questions()
+        assert set(questions) == {"faithful", "fabricated_venue", "unsupported_detail"}
+        assert all(q["type"] == "noul" for q in questions.values())
+
+
+class TestVerifyAnswer:
+    _CONTEXT = "1. Tomi Jazz — Zone: Midtown, Type: Jazz Bar, Rating: 4.3/5."
+    _ANSWER = "Tomi Jazz [1] is a jazz bar in Midtown rated 4.3/5."
+
+    def _client(self, **noul_overrides):
+        answers = {
+            "faithful": {"noul": noul_overrides.get("faithful", 0.95)},
+            "fabricated_venue": {"noul": noul_overrides.get("fabricated_venue", 0.02)},
+            "unsupported_detail": {"noul": noul_overrides.get("unsupported_detail", 0.05)},
+        }
+        return FakeClient(answers)
+
+    def test_grounded_answer(self):
+        result = verify_answer(
+            self._ANSWER, self._CONTEXT,
+            client=self._client(), enabled=True, confidence_threshold=0.5,
+        )
+        assert isinstance(result, AnswerVerification)
+        assert result.grounded is True
+
+    def test_ungrounded_when_not_faithful(self):
+        result = verify_answer(
+            self._ANSWER, self._CONTEXT,
+            client=self._client(faithful=0.2), enabled=True,
+        )
+        assert result.grounded is False
+
+    def test_ungrounded_when_venue_fabricated(self):
+        result = verify_answer(
+            self._ANSWER, self._CONTEXT,
+            client=self._client(fabricated_venue=0.9), enabled=True,
+        )
+        assert result.grounded is False
+
+    def test_ungrounded_when_detail_unsupported(self):
+        result = verify_answer(
+            self._ANSWER, self._CONTEXT,
+            client=self._client(unsupported_detail=0.85), enabled=True,
+        )
+        assert result.grounded is False
+
+    def test_disabled_returns_none(self):
+        assert verify_answer(
+            self._ANSWER, self._CONTEXT, client=self._client(), enabled=False
+        ) is None
+
+    def test_blank_answer_returns_none(self):
+        assert verify_answer("", self._CONTEXT, client=self._client(), enabled=True) is None
+
+    def test_transport_error_returns_none(self):
+        assert verify_answer(
+            self._ANSWER, self._CONTEXT,
+            client=FakeClient(error=JevError("boom")), enabled=True,
+        ) is None
+
+    def test_venue_names_forwarded_in_state(self):
+        client = self._client()
+        verify_answer(
+            self._ANSWER, self._CONTEXT,
+            venue_names=["Tomi Jazz", "Blue Note"],
+            client=client, enabled=True,
+        )
+        state, _questions = client.calls[0]
+        assert state["known_venue_names"] == ["Tomi Jazz", "Blue Note"]

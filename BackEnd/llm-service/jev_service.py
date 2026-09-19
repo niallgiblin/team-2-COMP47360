@@ -409,6 +409,160 @@ def _record_metric(status: str, duration_s: float, decision: str = "query_analys
         pass
 
 
+@dataclass(frozen=True)
+class AnswerVerification:
+    """Typed, calibrated judgement of whether an answer is grounded."""
+
+    grounded: bool = True
+    faithful_probability: float = 1.0
+    fabricated_venue_probability: float = 0.0
+    unsupported_detail_probability: float = 0.0
+    confidences: Mapping[str, float] = field(default_factory=dict)
+
+    def as_dict(self) -> dict:
+        return {
+            "grounded": self.grounded,
+            "faithful_probability": round(self.faithful_probability, 4),
+            "fabricated_venue_probability": round(self.fabricated_venue_probability, 4),
+            "unsupported_detail_probability": round(
+                self.unsupported_detail_probability, 4
+            ),
+        }
+
+
+def build_verification_questions() -> dict[str, dict]:
+    """System One questions for the runtime faithfulness guardrail."""
+    return {
+        "faithful": noul(
+            "Is every factual claim in `answer` supported by `context`? "
+            "Treat the `[N]` citation markers and any crowd/busyness "
+            "statements as non-factual. Answer true only if no venue name, "
+            "zone, type, price, rating, or feature is asserted without "
+            "support in `context`.",
+            criteria={
+                "true": "Every factual claim is supported by the context",
+                "false": "At least one factual claim is unsupported or invented",
+            },
+        ),
+        "fabricated_venue": noul(
+            "Does `answer` name any specific venue that does NOT appear in "
+            "`context`?",
+            criteria={
+                "true": "The answer mentions a venue absent from the context",
+                "false": "Every venue named is present in the context",
+            },
+        ),
+        "unsupported_detail": noul(
+            "Does `answer` state a rating, price, address, or distinguishing "
+            "feature for a venue that is NOT present in `context`?",
+            criteria={
+                "true": "The answer asserts a detail the context does not contain",
+                "false": "All stated venue details appear in the context",
+            },
+        ),
+    }
+
+
+def _noul_probability(answer: Mapping[str, Any]) -> float:
+    try:
+        return float(answer.get("noul", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def verify_answer(
+    answer: str,
+    context: str,
+    *,
+    venue_names: Iterable[str] | None = None,
+    client: JevClient | None = None,
+    confidence_threshold: float | None = None,
+    enabled: bool | None = None,
+) -> AnswerVerification | None:
+    """Check whether *answer* is grounded in *context*.
+
+    Returns ``None`` whenever the guardrail is disabled or Jev cannot be
+    reached, so callers keep the generated answer. Callers must treat
+    ``None`` as "not verified" rather than "verified good".
+    """
+    from config import (
+        JEV_CONFIDENCE_THRESHOLD,
+        JEV_ENABLED,
+        JEV_GUARDRAIL_ENABLED,
+        JEV_TIMEOUT_SECONDS,
+    )
+
+    is_enabled = JEV_ENABLED if enabled is None else enabled
+    if not (is_enabled and JEV_GUARDRAIL_ENABLED):
+        _record_metric("disabled", 0.0, decision="answer_verification")
+        return None
+
+    if not answer or not answer.strip() or not context:
+        return None
+
+    active_client = client or JevClient(timeout=JEV_TIMEOUT_SECONDS)
+    if not active_client.available:
+        _record_metric("disabled", 0.0, decision="answer_verification")
+        return None
+
+    threshold = (
+        JEV_CONFIDENCE_THRESHOLD if confidence_threshold is None else confidence_threshold
+    )
+
+    state: dict[str, Any] = {"answer": answer, "context": context}
+    if venue_names:
+        state["known_venue_names"] = [str(name) for name in venue_names]
+
+    t0 = time.perf_counter()
+    try:
+        answers = active_client.system_one(state, build_verification_questions())
+    except JevError as exc:
+        elapsed = time.perf_counter() - t0
+        status = "timeout" if "timeout" in str(exc).lower() else "error"
+        logger.warning("jev_service: answer verification unavailable (%s): %s", status, exc)
+        _record_metric(status, elapsed, decision="answer_verification")
+        return None
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        logger.warning("jev_service: unexpected verification failure: %s", exc)
+        _record_metric("error", elapsed, decision="answer_verification")
+        return None
+
+    elapsed = time.perf_counter() - t0
+
+    faithful = _noul_probability(answers.get("faithful", {}) or {})
+    fabricated = _noul_probability(answers.get("fabricated_venue", {}) or {})
+    unsupported = _noul_probability(answers.get("unsupported_detail", {}) or {})
+
+    # Grounded requires a confident positive on `faithful` and confident
+    # negatives on both failure-detection questions.
+    negative_threshold = max(0.5, threshold)
+    grounded = (
+        faithful >= threshold
+        and fabricated < negative_threshold
+        and unsupported < negative_threshold
+    )
+
+    verification = AnswerVerification(
+        grounded=grounded,
+        faithful_probability=faithful,
+        fabricated_venue_probability=fabricated,
+        unsupported_detail_probability=unsupported,
+        confidences={
+            "faithful": faithful,
+            "fabricated_venue": fabricated,
+            "unsupported_detail": unsupported,
+        },
+    )
+    logger.info(
+        "jev_service: answer verification in %.0fms %s",
+        elapsed * 1000,
+        verification.as_dict(),
+    )
+    _record_metric("success", elapsed, decision="answer_verification")
+    return verification
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------

@@ -155,7 +155,9 @@ JEV_LATENCY_SECONDS = Histogram(
 # empty series before first traffic.
 for _jev_status in ("success", "fallback", "timeout", "error", "disabled"):
     JEV_REQUESTS_TOTAL.labels(decision="query_analysis", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="answer_verification", status=_jev_status)
 JEV_LATENCY_SECONDS.labels(decision="query_analysis")
+JEV_LATENCY_SECONDS.labels(decision="answer_verification")
 
 # Pre-initialize all 12 label combinations
 for _mode in MODE_VALUES:

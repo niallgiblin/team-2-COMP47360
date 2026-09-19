@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from jev_service import QueryAnalysis
+from jev_service import AnswerVerification, QueryAnalysis
 
 
 def _fake_search_recorder(record):
@@ -203,3 +203,112 @@ class TestNonStreamJevWiring:
         )
         assert calls
         assert calls[0]["location_filter"] == "harlem"
+
+
+# ---------------------------------------------------------------------------
+# Faithfulness guardrail wiring
+# ---------------------------------------------------------------------------
+
+
+class TestResolveAnswerVerification:
+    def test_disabled_when_guardrail_flag_off(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(chat_service, "JEV_ENABLED", True)
+        monkeypatch.setattr(chat_service, "JEV_GUARDRAIL_ENABLED", False)
+        assert chat_service.resolve_answer_verification(
+            "answer", "context", [{"name": "X"}]
+        ) is None
+
+    def test_none_without_citations(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(chat_service, "JEV_ENABLED", True)
+        monkeypatch.setattr(chat_service, "JEV_GUARDRAIL_ENABLED", True)
+        assert chat_service.resolve_answer_verification("answer", "context", []) is None
+
+    def test_failure_returns_none(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(chat_service, "JEV_ENABLED", True)
+        monkeypatch.setattr(chat_service, "JEV_GUARDRAIL_ENABLED", True)
+        monkeypatch.setattr(
+            "jev_service.verify_answer",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")),
+        )
+        assert chat_service.resolve_answer_verification(
+            "answer", "context", [{"name": "X"}]
+        ) is None
+
+
+class TestGuardrailNonStreaming:
+    def _hf(self, text="Try Test Bar [1]"):
+        def fake_hf(messages, max_tokens=400, timeout=30):
+            return {"choices": [{"message": {"content": text}}]}
+        return fake_hf
+
+    def test_ungrounded_answer_replaced_with_fallback(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answer_verification",
+            lambda *a, **k: AnswerVerification(
+                grounded=False, faithful_probability=0.1
+            ),
+        )
+        result = chat_service.get_ai_response_with_metadata(
+            query="bars in soho",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            hf_call=self._hf("Invented Venue [1] has amazing drinks"),
+            busyness_context="Live busyness: unavailable",
+        )
+        assert "couldn't verify every detail" in result.text
+        assert result.metadata.fallback_triggered is True
+        assert result.metadata.error_stage == "verification"
+        assert result.metadata.error_code == "ungrounded_answer"
+
+    def test_grounded_answer_kept(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answer_verification",
+            lambda *a, **k: AnswerVerification(grounded=True),
+        )
+        result = chat_service.get_ai_response_with_metadata(
+            query="bars in soho",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            hf_call=self._hf("Try Test Bar [1]"),
+            busyness_context="Live busyness: unavailable",
+        )
+        assert "Try Test Bar" in result.text
+        assert result.metadata.fallback_triggered is False
+
+
+class TestGuardrailStreaming:
+    def test_ungrounded_streamed_answer_replaced_in_done(self, monkeypatch):
+        import chat_service
+
+        monkeypatch.setattr("chat_service._stream_hf_response", _fake_stream)
+        monkeypatch.setattr(
+            chat_service,
+            "resolve_answer_verification",
+            lambda *a, **k: AnswerVerification(
+                grounded=False, faithful_probability=0.05
+            ),
+        )
+        events = list(chat_service.stream_chat_response(
+            query="bars in soho",
+            previous_questions=[],
+            previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+        ))
+        assert "event: done" in events[-1]
+        assert "couldn't verify every detail" in events[-1]
+        assert '"verified": false' in events[-1]
