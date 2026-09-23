@@ -46,7 +46,9 @@ _canonical_logger = structlog.get_logger("chat_request_event")
 
 # ── Finite taxonomies ───────────────────────────────────────────
 
-MODE_VALUES: tuple[str, ...] = ("unknown", "general_chat", "dense", "hybrid", "abstention")
+MODE_VALUES: tuple[str, ...] = (
+    "unknown", "general_chat", "dense", "hybrid", "abstention", "out_of_scope",
+)
 STATUS_VALUES: tuple[str, ...] = ("success", "fallback", "error")
 
 ERROR_STAGE_VALUES: tuple[str, ...] = (
@@ -344,7 +346,9 @@ class ChatRequestEvent(pydantic.BaseModel):
     event: Literal["chat_request"] = "chat_request"
     request_id: str
     query_hash: Optional[str] = pydantic.Field(default=None, pattern=r"^$|^[0-9a-f]{64}$")
-    mode: Literal["unknown", "general_chat", "dense", "hybrid"]
+    mode: Literal[
+        "unknown", "general_chat", "dense", "hybrid", "abstention", "out_of_scope",
+    ]
     status: Literal["success", "fallback", "error"]
     candidates: int = pydantic.Field(ge=0)
     latency_retrieval_ms: float = pydantic.Field(ge=0)

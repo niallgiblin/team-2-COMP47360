@@ -104,7 +104,9 @@ class TestChatRequestEvent:
 
     def test_accepts_all_valid_modes(self, obs_env):
         obs = _import_observability()
-        for mode in ["unknown", "general_chat", "dense", "hybrid"]:
+        # Iterate the canonical tuple so a mode added to MODE_VALUES but not to
+        # the event Literal is caught here (e.g. abstention / out_of_scope).
+        for mode in obs.MODE_VALUES:
             event = obs.ChatRequestEvent(
                 request_id=obs.uuid4(),
                 query_hash=None,
