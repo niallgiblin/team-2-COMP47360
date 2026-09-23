@@ -1,5 +1,15 @@
 # Demo Plan — RAG Chatbot Upgrade (urban-gala-v2)
 
+> **Status: historical v2 script.** This demo was written when the cross-encoder
+> was disabled and the retrieval benchmark scored ~0.29 Recall@5. Current status:
+> the cross-encoder is **enabled** (`CROSS_ENCODER_ENABLED=true`), hybrid retrieval
+> with the `jev`-branch fixes reaches **0.4988 Recall@5 without** and **0.5545
+> with** re-ranking on the 96-question benchmark, and three Jev layers (scope cap,
+> abstention, guardrail) are active. Where this script says
+> `CROSS_ENCODER_ENABLED=false` or quotes 41-question / ~0.29 numbers, treat it as
+> the older v2 position. See [JEV_INTEGRATION.md](JEV_INTEGRATION.md) and
+> [CROSS_ENCODER_TRADEOFF.md](CROSS_ENCODER_TRADEOFF.md) for current figures.
+
 This file plans a 5–10-minute demo video and three LinkedIn posts documenting the
 journey of upgrading Urban Gala's AI Concierge from a basic chatbot into a
 retrieval-augmented generation (RAG) pipeline.
@@ -248,7 +258,7 @@ User Query
 - [ ] Query 4: `"is it busy at the places you mentioned"` — show multi-turn context.
 - [ ] Query 5: `"add the first two to my plan"` — show itinerary integration.
 - [ ] Switch to code: show `_hybrid_collect()`, `_re_rank()`, `stream_chat_response()`.
-- [ ] Show `docker-compose.yml` — `CROSS_ENCODER_ENABLED=false`.
+- [ ] Show `docker-compose.yml` — `CROSS_ENCODER_ENABLED=true` (see the status note at the top).
 - [ ] Show `curl localhost:5000/metrics` — structured events.
 - [ ] Show evaluation table.
 - [ ] Wrap-up screen.
@@ -418,7 +428,7 @@ keep this thing honest.
 
 - Architecture diagram (the flowchart from section 3 of the demo).
 - Or a code screenshot of `_hybrid_collect()` showing BM25 + FAISS + RRF fusion.
-- Or the `docker-compose.yml` lines showing `CROSS_ENCODER_ENABLED=false`.
+- Or the `docker-compose.yml` lines showing `CROSS_ENCODER_ENABLED=true`.
 
 ---
 

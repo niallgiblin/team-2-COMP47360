@@ -21,6 +21,7 @@ from config import (
     CROSS_ENCODER_MODEL_NAME,
     DATA_PATH,
     EMBEDDINGS_PATH,
+    HF_QUERY_REWRITE_ENABLED,
     HYBRID_SEARCH_ENABLED,
     MODEL_PATH,
     QUERY_EXPANSION_ENABLED,
@@ -192,7 +193,50 @@ def _service_components_unavailable_response():
     ), 503
 
 
-def _chat_search_helper(query, limit=5, location_filter=None):
+def _resolve_search_query(query, query_analysis=None):
+    """Resolve the retrieval query string.
+
+    When a Jev ``QueryAnalysis`` is available, the HF ``rewrite_query`` call is
+    skipped: it measurably hurt retrieval (see docs/JEV_INTEGRATION.md) and
+    cost ~1 s per query. The analysis still drives the location filter and
+    category handling elsewhere. With ``JEV_SEARCH_COMPOSE_ENABLED`` the typed
+    location/price/category terms are appended instead. When there is no
+    analysis, ``HF_QUERY_REWRITE_ENABLED`` decides whether the rewrite runs
+    (default true keeps the legacy behaviour; false is the option-1 prototype,
+    which skips the rewrite even on the regex path). Static ``expand_query``
+    always runs last.
+    """
+    if query_analysis is not None:
+        search_query = query
+        from config import JEV_SEARCH_COMPOSE_ENABLED
+
+        if JEV_SEARCH_COMPOSE_ENABLED:
+            try:
+                from chat_service import compose_search_query
+
+                search_query = compose_search_query(query, query_analysis)
+            except Exception as exc:
+                logger.debug("Jev query composition failed; using original: %s", exc)
+                search_query = query
+    else:
+        search_query = query
+        if HF_QUERY_REWRITE_ENABLED:
+            # LLM-based rewriting (handles paraphrases, zone aliases). Disabled
+            # by default in the option-1 prototype because it hurt retrieval.
+            try:
+                search_query = rewrite_query(query) or query
+            except Exception as exc:
+                logger.debug("Query rewriting failed; using original: %s", exc)
+
+    if QUERY_EXPANSION_ENABLED:
+        try:
+            search_query = expand_query(search_query) or search_query
+        except Exception as exc:
+            logger.warning("Query expansion failed; falling back: %s", exc)
+    return search_query
+
+
+def _chat_search_helper(query, limit=5, location_filter=None, query_analysis=None):
     """Return top similar locations as raw location DTOs (list of dicts).
 
     The caller (chat_service) is responsible for formatting and citation
@@ -203,18 +247,7 @@ def _chat_search_helper(query, limit=5, location_filter=None):
         return []
 
     try:
-        search_query = query
-        # LLM-based rewriting first (handles paraphrases, zone aliases)
-        try:
-            search_query = rewrite_query(query) or query
-        except Exception as exc:
-            logger.debug("Query rewriting failed; using original: %s", exc)
-        if QUERY_EXPANSION_ENABLED:
-            try:
-                search_query = expand_query(search_query) or search_query
-            except Exception as exc:
-                logger.warning("Query expansion failed; falling back: %s", exc)
-
+        search_query = _resolve_search_query(query, query_analysis)
         results = search_service.search(search_query, limit=limit, location_filter=location_filter)
         return results  # list of location DTOs or empty list
     except Exception as exc:
@@ -222,7 +255,7 @@ def _chat_search_helper(query, limit=5, location_filter=None):
         return []
 
 
-def get_ai_response(query, previous_questions, previous_responses=None, location_filter=None):
+def get_ai_response(query, previous_questions, previous_responses=None, location_filter=None, query_analysis=None):
     """Route-owned wrapper returning ChatExecutionResult.
 
     Tests may monkeypatch this with a simple tuple-returning lambda for
@@ -234,22 +267,33 @@ def get_ai_response(query, previous_questions, previous_responses=None, location
         previous_questions,
         previous_responses=previous_responses,
         location_filter=location_filter,
+        query_analysis=query_analysis,
     )
 
 
-def _get_ai_response_with_metadata(query, previous_questions, previous_responses=None, location_filter=None):
+def _get_ai_response_with_metadata(query, previous_questions, previous_responses=None, location_filter=None, query_analysis=None):
     """Route-owned wrapper returning ChatExecutionResult with metadata."""
     from chat_service import get_ai_response_with_metadata as _svc_get_with_meta
+
+    def _search_helper(q, limit=5, location_filter=None):
+        # Bind the route-layer analysis so the search helper can skip the HF
+        # rewrite_query call (Jev supplies the retrieval terms instead).
+        return _chat_search_helper_with_metadata(
+            q, limit=limit, location_filter=location_filter,
+            query_analysis=query_analysis,
+        )
+
     return _svc_get_with_meta(
         query,
         previous_questions,
         previous_responses=previous_responses,
-        search_helper=_chat_search_helper_with_metadata,
+        search_helper=_search_helper,
         location_filter=location_filter,
+        query_analysis=query_analysis,
     )
 
 
-def _chat_search_helper_with_metadata(query, limit=5, location_filter=None):
+def _chat_search_helper_with_metadata(query, limit=5, location_filter=None, query_analysis=None):
     """Search helper returning list of location dicts.
 
     Wraps search_with_metadata() but unwraps the SearchExecutionResult
@@ -259,18 +303,7 @@ def _chat_search_helper_with_metadata(query, limit=5, location_filter=None):
         return []
 
     try:
-        search_query = query
-        # LLM-based rewriting first (handles paraphrases, zone aliases)
-        try:
-            search_query = rewrite_query(query) or query
-        except Exception as exc:
-            logger.debug("Query rewriting failed; using original: %s", exc)
-        if QUERY_EXPANSION_ENABLED:
-            try:
-                search_query = expand_query(search_query) or search_query
-            except Exception as exc:
-                logger.warning("Query expansion failed; falling back: %s", exc)
-
+        search_query = _resolve_search_query(query, query_analysis)
         result = search_service.search_with_metadata(
             search_query, limit=limit, location_filter=location_filter
         )
@@ -541,10 +574,15 @@ def chat_endpoint():
 
         state.query_hash = hash_query(query)
 
-        # Resolve location filter.
-        from chat_service import extract_location_from_query
+        # ---- Query understanding (route layer) ---------------------------
+        # Computed once here and passed down so chat_service does not repeat it.
+        from chat_service import extract_location_from_query, resolve_query_analysis
+
+        analysis = resolve_query_analysis(query, previous_questions)
 
         location_filter = (data.get("location") or "").strip() or None
+        if not location_filter and analysis is not None and analysis.location:
+            location_filter = analysis.location
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
@@ -553,6 +591,7 @@ def chat_endpoint():
             query, previous_questions,
             previous_responses=previous_responses,
             location_filter=location_filter,
+            query_analysis=analysis,
         )
 
         # Handle both ChatExecutionResult and backward-compatible tuple mock.
@@ -747,22 +786,33 @@ def chat_stream_endpoint():
 
         state.query_hash = hash_query(query)
 
-        # Resolve location filter.
-        from chat_service import extract_location_from_query
+        # ---- Query understanding (route layer) ---------------------------
+        from chat_service import extract_location_from_query, resolve_query_analysis
+
+        analysis = resolve_query_analysis(query, previous_questions)
 
         location_filter = (data.get("location") or "").strip() or None
+        if not location_filter and analysis is not None and analysis.location:
+            location_filter = analysis.location
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
         # Build the SSE generator.
         from chat_service import stream_chat_response
 
+        def _stream_search_helper(q, limit=5, location_filter=None):
+            return _chat_search_helper_with_metadata(
+                q, limit=limit, location_filter=location_filter,
+                query_analysis=analysis,
+            )
+
         generator = stream_chat_response(
             query,
             previous_questions,
             previous_responses=previous_responses,
-            search_helper=_chat_search_helper_with_metadata,
+            search_helper=_stream_search_helper,
             location_filter=location_filter,
+            query_analysis=analysis,
         )
 
         state.mode = "dense"

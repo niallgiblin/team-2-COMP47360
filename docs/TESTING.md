@@ -28,7 +28,7 @@ host runtimes; the audit host had Python 3.14 in one environment and Python
 | Spring Boot | 25 Java test classes | ✅ 285 run, 0 failures, 0 errors — BUILD SUCCESS |
 | Frontend Vitest | 14 test files | ✅ 133 passed |
 | Frontend production build | Vite build | Passed; large chunk warning around 945 KiB |
-| LLM pytest | 20 test modules, 470 collected | ✅ 438 passed, 32 skipped (Python 3.11) |
+| LLM pytest | 23 test modules, 594 collected | ✅ 562 passed, 32 skipped (Python 3.11) |
 | Busyness pytest | 3 test modules, 21 collected | ✅ 20 passed, 1 artifact test skipped |
 | Cypress E2E | 4 specs | ✅ All passing (2026-06-09) |
 | Compose smoke | 1 script | ✅ Passing with --teardown (2026-06-09) |
@@ -89,7 +89,7 @@ The four Cypress specifications are `auth.cy.js`, `basic.cy.js`,
 
 ### LLM service
 
-The 20 committed pytest modules cover:
+The 23 committed pytest modules cover:
 
 - BM25 creation and persistence.
 - FAISS index building and loading.

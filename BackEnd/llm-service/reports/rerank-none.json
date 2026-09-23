@@ -1,0 +1,17 @@
+{
+  "label": "none",
+  "strategy": "none",
+  "queries": 96,
+  "latency_ms": {
+    "mean": 22.7,
+    "p50": 22.5,
+    "p95": 25.1,
+    "p99": 25.8,
+    "max": 26.1
+  },
+  "quality": {
+    "recall_at_5": 0.4493,
+    "ndcg_at_5": 0.4357,
+    "hit_rate": 0.5938
+  }
+}

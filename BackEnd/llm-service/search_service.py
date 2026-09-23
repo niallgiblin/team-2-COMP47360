@@ -84,6 +84,60 @@ def build_vector_index(raw_embeddings, row_ids=None):
     return VectorIndex(index=index, row_ids=ids, dimensions=dimensions)
 
 
+def location_filter_group_terms(location_filter):
+    """Return the sub-zone terms covered by *location_filter*.
+
+    Accepts both canonical group keys (``"upper east side"``) and the corpus's
+    finer-grained zone names (``"upper east side south"``, ``"lenox hill
+    west"``). The latter narrowed retrieval once Jev began choosing from the
+    corpus zone list: ``"upper east side south"`` was treated as a literal
+    filter and excluded the rest of the Upper East Side (Lenox Hill, Yorkville,
+    Carnegie Hill). Matching a canonical group by substring restores the
+    intended broad-area semantics.
+    """
+    if not location_filter or not str(location_filter).strip():
+        return set()
+    normalized = str(location_filter).lower().strip()
+    terms = set(_LOCATION_FILTER_GROUPS.get(normalized, set()))
+    for key, group in _LOCATION_FILTER_GROUPS.items():
+        if key in normalized:
+            terms |= group
+    return terms
+
+
+def canonical_area_labels(zone):
+    """Map a corpus micro-zone to its canonical broad-area label(s).
+
+    ``"lenox hill west"`` -> ``["Upper East Side"]``. The reranker needs this
+    because the corpus stores ``Lenox Hill West`` while users ask for the
+    ``Upper East Side``; without it the cross-encoder treats the venue as
+    out-of-area and down-ranks it regardless of cuisine (e.g. Maya/Tacombi for
+    "mexican restaurant upper east side").
+    """
+    zone_lower = str(zone or "").lower()
+    labels: list[str] = []
+    for key, terms in _LOCATION_FILTER_GROUPS.items():
+        if key in {"ues", "uws"}:
+            continue
+        if any(term in zone_lower for term in terms):
+            labels.append(key.title())
+    return labels
+
+
+def compose_rerank_text(row):
+    """Document text for re-ranking, with canonical area labels appended.
+
+    The precomputed embeddings/BM25 index keep the raw zone wording; only the
+    on-the-fly re-ranking text is enriched, so no re-index is needed.
+    """
+    text = compose_document_text(row)
+    getter = row.get if hasattr(row, "get") else lambda k, d="": row[k] if k in row else d
+    labels = canonical_area_labels(getter("zone", ""))
+    if labels:
+        text = f"{text}\nArea: {', '.join(labels)}"
+    return text
+
+
 def _matches_location_filter(row, location_filter):
     if not location_filter:
         return True
@@ -92,7 +146,7 @@ def _matches_location_filter(row, location_filter):
     normalized_filter = str(location_filter).lower().strip()
     if normalized_filter in normalized_zone:
         return True
-    grouped_terms = _LOCATION_FILTER_GROUPS.get(normalized_filter, set())
+    grouped_terms = location_filter_group_terms(normalized_filter)
     return any(term in normalized_zone for term in grouped_terms)
 
 
@@ -229,6 +283,9 @@ class SearchService:
         rrf_k=60,
         cross_encoder=None,
         cross_encoder_overfetch=3,
+        jev_rerank=False,
+        jev_rerank_overfetch=5,
+        jev_rerank_max_candidates=50,
     ):
         self._df = df
         self._embeddings = np.asarray(embeddings, dtype="float32")
@@ -242,6 +299,17 @@ class SearchService:
         self._rrf_k = int(rrf_k)
         self._cross_encoder = cross_encoder
         self._cross_encoder_overfetch = max(1, int(cross_encoder_overfetch))
+        self._jev_rerank = bool(jev_rerank)
+        self._jev_rerank_overfetch = max(1, int(jev_rerank_overfetch))
+        self._jev_rerank_max = max(1, int(jev_rerank_max_candidates))
+
+    def _overfetch(self):
+        """Candidate over-fetch count for the active re-ranking strategy."""
+        if self._jev_rerank:
+            return self._jev_rerank_overfetch
+        if self._cross_encoder is not None:
+            return self._cross_encoder_overfetch
+        return self._over_fetch_multiplier
 
     @classmethod
     def from_startup(
@@ -453,6 +521,20 @@ class SearchService:
             if allow_torch_fallback is not None
             else ALLOW_TORCH_FULL_SCAN_FALLBACK
         )
+
+        from config import (
+            JEV_RERANK_ENABLED as _cfg_jev_rerank,
+            JEV_RERANK_MAX_CANDIDATES as _cfg_jev_rerank_max,
+            JEV_RERANK_OVERFETCH_MULTIPLIER as _cfg_jev_rerank_overfetch,
+        )
+        if _cfg_jev_rerank:
+            logger.info(
+                "JEV_RERANK_ENABLED=true — Jev re-ranking active "
+                "(overfetch=%d, max=%d)",
+                _cfg_jev_rerank_overfetch,
+                _cfg_jev_rerank_max,
+            )
+
         logger.info("SearchService index_source=%s", index_source)
         return cls(
             df=df,
@@ -466,6 +548,9 @@ class SearchService:
             rrf_k=rrf_k,
             cross_encoder=_cross_encoder,
             cross_encoder_overfetch=_ce_overfetch,
+            jev_rerank=_cfg_jev_rerank,
+            jev_rerank_overfetch=_cfg_jev_rerank_overfetch,
+            jev_rerank_max_candidates=_cfg_jev_rerank_max,
         )
 
     def _encode_query(self, query_text):
@@ -541,12 +626,8 @@ class SearchService:
         """Dense-only retrieval using FAISS index (original behaviour)."""
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
 
-        # Use cross-encoder overfetch multiplier when re-ranking is available.
-        overfetch = (
-            self._cross_encoder_overfetch
-            if self._cross_encoder is not None
-            else self._over_fetch_multiplier
-        )
+        # Candidate pool size depends on the active re-ranking strategy.
+        overfetch = self._overfetch()
         batch = min(
             len(self._df),
             max(limit * overfetch, limit + len(exclude_lower)),
@@ -573,38 +654,34 @@ class SearchService:
                 batch = min(len(self._df), batch * 2)
                 continue
 
-            # Re-rank candidates with cross-encoder when available.
-            candidates = self._re_rank(
-                query_text=query_text,
-                candidates=candidates,
-            )
-
-            # Stable tie-breaking uses the (now possibly cross-encoder) score.
-            candidates.sort(key=lambda item: (-item[1], item[0]))
-
-            filtered_in_this_batch = 0
+            # Filter BEFORE re-ranking so the cross-encoder only scores
+            # candidates that can actually be returned. The old order re-ranked
+            # the global top-K then filtered most of it away, so a few surviving
+            # in-zone venues filled the result set before deeper in-zone matches
+            # were ever scored.
+            eligible = []
             for row_idx, score in candidates:
-                if len(results) >= limit:
-                    break
                 row = self._df.iloc[row_idx]
-                name = str(row.get("name", ""))
-                if name.lower() in exclude_lower:
+                if str(row.get("name", "")).lower() in exclude_lower:
                     continue
                 if not _matches_location_filter(row, location_filter):
                     continue
                 if not _matches_price_range(row, price_range):
                     continue
-                results.append(create_location_dto(row, score))
-                filtered_in_this_batch += 1
+                eligible.append((row_idx, score))
 
-            # If we found candidates but none passed the filter, double the
-            # batch to search deeper into the corpus.  This fixes the
-            # empty-results problem on filtered queries where the top-K dense
-            # matches are all in the wrong zone/price tier.
-            if filtered_in_this_batch == 0 and results:
-                # At least one result from a prior batch — stop expanding.
-                pass
-            elif len(results) < limit:
+            eligible = self._re_rank(query_text=query_text, candidates=eligible)
+
+            # Stable tie-breaking uses the (now possibly cross-encoder) score.
+            eligible.sort(key=lambda item: (-item[1], item[0]))
+
+            for row_idx, score in eligible:
+                if len(results) >= limit:
+                    break
+                results.append(create_location_dto(self._df.iloc[row_idx], score))
+
+            # Search deeper while the filters still haven't produced `limit`.
+            if len(results) < limit:
                 if batch >= len(self._df):
                     break
                 batch = min(len(self._df), batch * 2)
@@ -620,65 +697,28 @@ class SearchService:
         price_range=None,
         exclude_names=None,
     ):
-        """Hybrid retrieval: BM25 + FAISS fused via RRF, then filtered."""
+        """Hybrid retrieval: BM25 + FAISS fused via SW-RRF, filtered, then ranked.
+
+        Candidates are filtered *before* re-ranking, and the fetch window grows
+        until enough in-filter candidates exist. That avoids the previous failure
+        mode where a small global top-K was re-ranked, the location filter
+        dropped most of it, and a few surviving in-zone venues filled the result
+        set before deeper matches (e.g. Maya/Tacombi for a UES Mexican query)
+        were ever scored. Both fusion passes normalize each ranker's scores, so
+        BM25's raw scale can no longer dominate the expanded pass.
+        """
         exclude_lower = {str(name).lower().strip() for name in (exclude_names or []) if name}
 
-        # Use cross-encoder overfetch multiplier when re-ranking is available.
-        overfetch = (
-            self._cross_encoder_overfetch
-            if self._cross_encoder is not None
-            else self._over_fetch_multiplier
-        )
-        fetch_k = min(len(self._df), limit * overfetch)
+        # Candidate pool size depends on the active re-ranking strategy.
+        overfetch = self._overfetch()
+        fetch_k = min(len(self._df), max(limit * overfetch, limit))
 
-        # 1. BM25 lexical search.
-        bm25_results = self._bm25_index.search(query_text, top_k=fetch_k)
-
-        # 2. FAISS dense search.
-        scores, positions = self._index.index.search(query_vector, fetch_k)
-        dense_results = []
-        seen_dense = set()
-        for position, score in zip(positions[0], scores[0]):
-            if position < 0:
-                continue
-            row_idx = int(self._index.row_ids[position])
-            if row_idx in seen_dense:
-                continue
-            seen_dense.add(row_idx)
-            dense_results.append((row_idx, float(score)))
-
-        # 3. Normalize scores before RRF fusion for calibrated combination.
-        bm25_normalized = _normalize_scores(bm25_results)
-        dense_normalized = _normalize_scores(dense_results)
-
-        # 4. RRF fuse on normalized scores.
-        fused = _rrf_fuse(bm25_normalized, dense_normalized, k=self._rrf_k)
-
-        # 4. Cross-encoder re-rank.
-        ranked = self._re_rank(query_text, fused)
-
-        # 5. Filter and build DTOs, expanding search if needed.
-        results = []
-        for doc_idx, score in ranked:
-            if len(results) >= limit:
-                break
-            row = self._df.iloc[doc_idx]
-            name = str(row.get("name", ""))
-            if name.lower() in exclude_lower:
-                continue
-            if not _matches_location_filter(row, location_filter):
-                continue
-            if not _matches_price_range(row, price_range):
-                continue
-            results.append(create_location_dto(row, score))
-
-        # If the fused+ranked results didn't fill the limit because too
-        # many were filtered out, expand the search window.
-        if len(results) < limit and fetch_k < len(self._df):
-            fetch_k = min(len(self._df), fetch_k * 2)
-            # Re-run BM25 with expanded fetch
+        eligible: list[tuple[int, float]] = []
+        while True:
+            # 1. BM25 lexical search.
             bm25_results = self._bm25_index.search(query_text, top_k=fetch_k)
-            # Re-run FAISS with expanded fetch
+
+            # 2. FAISS dense search.
             scores, positions = self._index.index.search(query_vector, fetch_k)
             dense_results = []
             seen_dense = set()
@@ -690,47 +730,89 @@ class SearchService:
                     continue
                 seen_dense.add(row_idx)
                 dense_results.append((row_idx, float(score)))
-            fused = _rrf_fuse(bm25_results, dense_results, k=self._rrf_k)
-            ranked = self._re_rank(query_text, fused)
-            for doc_idx, score in ranked:
-                if len(results) >= limit:
-                    break
+
+            # 3. Normalize each ranker before SW-RRF fusion.
+            fused = _rrf_fuse(
+                _normalize_scores(bm25_results),
+                _normalize_scores(dense_results),
+                k=self._rrf_k,
+            )
+
+            # 4. Apply location / price / exclude filters before re-ranking.
+            eligible = []
+            for doc_idx, score in fused:
                 row = self._df.iloc[doc_idx]
-                name = str(row.get("name", ""))
-                if name.lower() in exclude_lower:
+                if str(row.get("name", "")).lower() in exclude_lower:
                     continue
                 if not _matches_location_filter(row, location_filter):
                     continue
                 if not _matches_price_range(row, price_range):
                     continue
-                results.append(create_location_dto(row, score))
+                eligible.append((doc_idx, score))
 
-        return results
+            if len(eligible) >= limit or fetch_k >= len(self._df):
+                break
+            fetch_k = min(len(self._df), fetch_k * 2)
+
+        # 5. Re-rank the eligible candidates and build DTOs.
+        ranked = self._re_rank(query_text, eligible)
+        return [
+            create_location_dto(self._df.iloc[row_idx], score)
+            for row_idx, score in ranked[:limit]
+        ]
+
+    def _jev_re_rank(self, query_text, candidates):
+        """Re-rank candidates with Jev's calibrated relevance scores.
+
+        Returns a re-ordered ``[(row_idx, score), ...]`` list, or ``None``
+        when Jev re-ranking is disabled/unavailable so the caller can fall
+        through to the cross-encoder.
+        """
+        if not self._jev_rerank or not candidates:
+            return None
+
+        try:
+            from jev_service import rerank
+        except Exception:
+            return None
+
+        head = candidates[: self._jev_rerank_max]
+        tail = list(candidates[self._jev_rerank_max:])  # already ordered upstream
+        try:
+            docs = [compose_rerank_text(self._df.iloc[row_idx]) for row_idx, _ in head]
+            scores = rerank(query_text, docs, enabled=True)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Jev re-rank failed: %s", exc)
+            return None
+        if scores is None:
+            return None
+
+        ranked = [
+            (head[i][0], float(scores[i])) for i in range(len(head))
+        ]
+        ranked.sort(key=lambda item: item[1], reverse=True)
+        ranked.extend(tail)
+        return ranked
 
     def _re_rank(self, query_text, candidates):
-        """Cross-encoder re-rank of candidate documents.
+        """Re-rank candidate documents.
 
-        Takes a query string and list of (row_idx, score) tuples. If no
-        cross-encoder is loaded or candidates is empty, returns unchanged.
-        Otherwise scores each document pair with the cross-encoder, returns
-        results sorted by cross-encoder logit score descending.
-
-        Args:
-            query_text: The raw user query string.
-            candidates: [(row_idx, upstream_score), ...]
-
-        Returns:
-            [(row_idx, ce_score), ...] sorted by ce_score descending.
+        Jev calibrated relevance is preferred when enabled; otherwise the
+        cross-encoder is used; otherwise the upstream order is preserved.
         """
         import logging
         import time
 
         logger = logging.getLogger(__name__)
 
-        if self._cross_encoder is None:
+        if not candidates:
             return candidates
 
-        if not candidates:
+        jev_ranked = self._jev_re_rank(query_text, candidates)
+        if jev_ranked is not None:
+            return jev_ranked
+
+        if self._cross_encoder is None:
             return candidates
 
         t0 = time.perf_counter()
@@ -738,7 +820,7 @@ class SearchService:
         pairs = []
         for row_idx, _score in candidates:
             row = self._df.iloc[row_idx]
-            doc_text = compose_document_text(row)
+            doc_text = compose_rerank_text(row)
             pairs.append((query_text, doc_text))
 
         ce_scores = self._cross_encoder.predict(pairs)

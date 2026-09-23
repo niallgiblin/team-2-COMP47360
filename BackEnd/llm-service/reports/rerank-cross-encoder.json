@@ -1,0 +1,17 @@
+{
+  "label": "cross-encoder",
+  "strategy": "cross-encoder",
+  "queries": 96,
+  "latency_ms": {
+    "mean": 62.6,
+    "p50": 57.8,
+    "p95": 81.2,
+    "p99": 90.9,
+    "max": 97.6
+  },
+  "quality": {
+    "recall_at_5": 0.4899,
+    "ndcg_at_5": 0.4984,
+    "hit_rate": 0.6771
+  }
+}

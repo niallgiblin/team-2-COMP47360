@@ -14,6 +14,8 @@ from search_service import (
     SearchStartupError,
     _matches_location_filter,
     build_vector_index,
+    canonical_area_labels,
+    compose_rerank_text,
     create_location_dto,
 )
 
@@ -169,6 +171,35 @@ def test_upper_east_side_filter_includes_local_subareas():
     assert _matches_location_filter({"zone": "Yorkville West"}, "upper east side")
     assert _matches_location_filter({"zone": "Upper East Side North"}, "upper east side")
     assert not _matches_location_filter({"zone": "Greenwich Village"}, "upper east side")
+
+
+def test_canonical_area_labels_maps_micro_zones_to_macro_area():
+    assert canonical_area_labels("Lenox Hill West") == ["Upper East Side"]
+    assert canonical_area_labels("Yorkville East") == ["Upper East Side"]
+    assert canonical_area_labels("Lincoln Square West") == ["Upper West Side"]
+    assert canonical_area_labels("East Village") == []
+
+
+def test_compose_rerank_text_adds_area_label_for_micro_zones():
+    # The reranker must see "Upper East Side" for Lenox Hill venues, otherwise
+    # it treats them as out-of-area and down-ranks them (Maya/Tacombi bug).
+    row = {"name": "Tacombi", "loc_type": "mexican restaurant", "zone": "Lenox Hill West"}
+    text = compose_rerank_text(row)
+    assert "Zone: Lenox Hill West" in text
+    assert "Area: Upper East Side" in text
+
+    plain = {"name": "Corner Bar", "loc_type": "bar", "zone": "East Village"}
+    assert "Area:" not in compose_rerank_text(plain)
+
+
+def test_upper_east_side_microzone_filter_covers_the_group():
+    # Jev chooses from the corpus's finer-grained zones ("upper east side
+    # south"); that must still match the whole Upper East Side group.
+    assert _matches_location_filter({"zone": "Lenox Hill West"}, "upper east side south")
+    assert _matches_location_filter({"zone": "Yorkville West"}, "upper east side south")
+    assert _matches_location_filter({"zone": "Carnegie Hill"}, "upper east side south")
+    assert not _matches_location_filter({"zone": "Greenwich Village"}, "upper east side south")
+    assert not _matches_location_filter({"zone": "Upper West Side South"}, "upper east side south")
 
 
 def test_find_similar_excludes_source_name():

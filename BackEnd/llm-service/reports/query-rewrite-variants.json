@@ -1,0 +1,41 @@
+{
+  "n": 96,
+  "modes": {
+    "raw": {
+      "recall_at_5": 0.4899,
+      "ndcg_at_5": 0.4984,
+      "hit_rate": 0.6771,
+      "mean_query_ms": 97.4
+    },
+    "expand": {
+      "recall_at_5": 0.495,
+      "ndcg_at_5": 0.4966,
+      "hit_rate": 0.6667,
+      "mean_query_ms": 57.4
+    },
+    "hf_rewrite": {
+      "recall_at_5": 0.4137,
+      "ndcg_at_5": 0.4091,
+      "hit_rate": 0.5521,
+      "mean_query_ms": 1026.8
+    },
+    "jev_full": {
+      "recall_at_5": 0.4774,
+      "ndcg_at_5": 0.4871,
+      "hit_rate": 0.6562,
+      "mean_query_ms": 757.6
+    },
+    "jev_noloc": {
+      "recall_at_5": 0.478,
+      "ndcg_at_5": 0.4871,
+      "hit_rate": 0.6458,
+      "mean_query_ms": 754.6
+    },
+    "jev_cat": {
+      "recall_at_5": 0.478,
+      "ndcg_at_5": 0.4871,
+      "hit_rate": 0.6458,
+      "mean_query_ms": 754.1
+    }
+  }
+}

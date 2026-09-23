@@ -29,7 +29,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application modules into the container
-COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py query_expander.py bm25_index.py observability.py eval_service.py ./
+COPY app.py config.py cache_policy.py chat_service.py search_service.py loader.py dto.py prompt_loader.py google_places.py query_expander.py bm25_index.py observability.py eval_service.py jev_service.py ./
 COPY retrieval/ ./retrieval/
 COPY venue_corpus/ ./venue_corpus/
 COPY prompts/ ./prompts/
@@ -41,6 +41,7 @@ COPY gunicorn.conf.py docker-entrypoint.sh ./
 COPY models/ ./models/
 # Copy pre-baked cross-encoder model (run scripts/download_cross_encoder.py first)
 COPY models/cross-encoder/ ./models/cross-encoder/
+COPY query_rewriter.py ./
 
 # Use the entrypoint for Prometheus multiprocess directory cleanup
 ENTRYPOINT ["./docker-entrypoint.sh"]

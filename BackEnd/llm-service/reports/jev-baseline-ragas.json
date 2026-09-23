@@ -1,0 +1,2428 @@
+{
+  "total_questions": 96,
+  "ragas_scoring_failures": 72,
+  "retrieval": {
+    "aggregates": {
+      "recall": 0.3966,
+      "ndcg": 0.4071,
+      "mrr": 0.535,
+      "precision": 0.2128,
+      "hit_rate": 0.6282
+    },
+    "categories": {
+      "abstention": {
+        "recall_at_5": 1.0,
+        "ndcg_at_5": 1.0,
+        "mrr": 1.0,
+        "precision_at_5": 1.0,
+        "hit_rate": 1.0,
+        "total": 18
+      },
+      "adversarial": {
+        "recall_at_5": 1.0,
+        "ndcg_at_5": 0.9722,
+        "mrr": 0.963,
+        "precision_at_5": 0.3889,
+        "hit_rate": 1.0,
+        "total": 18
+      },
+      "conversational": {
+        "recall_at_5": 0.1639,
+        "ndcg_at_5": 0.209,
+        "mrr": 0.4074,
+        "precision_at_5": 0.1444,
+        "hit_rate": 0.4444,
+        "total": 18
+      },
+      "filtered": {
+        "recall_at_5": 0.3,
+        "ndcg_at_5": 0.3162,
+        "mrr": 0.435,
+        "precision_at_5": 0.17,
+        "hit_rate": 0.5,
+        "total": 20
+      },
+      "retrieval": {
+        "recall_at_5": 0.1811,
+        "ndcg_at_5": 0.1895,
+        "mrr": 0.3803,
+        "precision_at_5": 0.1636,
+        "hit_rate": 0.5909,
+        "total": 22
+      }
+    }
+  },
+  "ragas": {
+    "aggregates": {
+      "faithfulness": 0.7545,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9636
+    },
+    "categories": {
+      "abstention": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 0.9,
+        "context_precision": 1.0,
+        "scored": 2,
+        "failed": 16,
+        "total": 18
+      },
+      "adversarial": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0,
+        "scored": 2,
+        "failed": 16,
+        "total": 18
+      },
+      "conversational": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0,
+        "scored": 5,
+        "failed": 13,
+        "total": 18
+      },
+      "filtered": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0,
+        "scored": 5,
+        "failed": 15,
+        "total": 20
+      },
+      "retrieval": {
+        "faithfulness": 0.74,
+        "answer_relevancy": 1.0,
+        "context_precision": 0.92,
+        "scored": 10,
+        "failed": 12,
+        "total": 22
+      }
+    },
+    "scored_total": 24,
+    "failed_total": 72
+  },
+  "questions": [
+    {
+      "id": "Q001",
+      "category": "retrieval",
+      "query": "jazz clubs with live music in NYC",
+      "answer": "Based on your interest in jazz clubs with live music in NYC, I'd recommend the following options:\n\n**1. Blue Note [3]**\n  Located in Central Harlem, this historic jazz club offers live music and classic American dining. With a 4.5-star rating, it's a great spot to enjoy live jazz performances. (Zone: Central Harlem)\n\n**2. Birdland Jazz Club**\n  In Clinton East, this iconic jazz club features live performances and cocktails. With a 4.7-star rating, it's a must-visit for jazz enthusiasts. (Zone: Clinton East)\n\n**3. Dizzys Club**\n  Located in Lincoln Square East, this jazz club offers live music, dinner, and cocktails. With a 4.7-star rating, it's a great spot to enjoy live jazz and a meal. (Zone: Lincoln Square East)\n\nThese clubs offer a unique experience, with live music and a cozy atmosphere. If you're looking for a great jazz experience, I recommend checking out one of these options.",
+      "retrieved_ids": [
+        1288,
+        1377,
+        880,
+        606,
+        879
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.3191,
+        "mrr": 0.25,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null
+      },
+      "ragas_error": "judge_failed"
+    },
+    {
+      "id": "Q002",
+      "category": "retrieval",
+      "query": "rooftop bars with great views of the skyline",
+      "answer": "Based on the provided context, here are some rooftop bar recommendations with great views of the skyline:\n\n* **The Cantor Roof Garden Bar** [2] in Central Park is a great spot for skyline views and seasonal drinks. With a rating of 4.2, people praise its deep whiskey list and intimate space with amazing jazz on Thursday nights. (Central Park)\n* **Refinery Rooftop** [3] in Midtown South offers trendy cocktails and a lively atmosphere. With a rating of 4.4, people rave about its bottle service and great lineup of DJs. (Midtown South)\n* **Peak Lounge Bar** [5] in West Chelsea/Hudson Yards is a high-end cocktail lounge on the 101st floor, offering stunning Manhattan skyline views. With a rating of 4.3, people love its rooftop view, especially at sunset, and its best dirty martini in the city. (West Chelsea/Hudson Yards)\n\nThese rooftop bars offer great views of the skyline, and I recommend checking them out!",
+      "retrieved_ids": [
+        203,
+        976,
+        502,
+        2141,
+        2193
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.5087,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q003",
+      "category": "retrieval",
+      "query": "comedy clubs for a fun night out",
+      "answer": "Based on your request, I'd recommend the following comedy clubs for a fun night out:\n\n**1. Sesh Comedy [N]** in the Lower East Side is a great spot. It's got a casual vibe and features stand-up, showcases, and open mics. With a Google rating of 4.8, people love its great acoustics and intimate setting. (Zone: Lower East Side)\n\n**2. West Side Comedy Club [N]** in the Upper West Side South is another excellent option. It's a cozy comedy club with stand-up shows and a friendly vibe. With a Google rating of 4.4, it's a true NYC institution. (Zone: Upper West Side South)\n\n**3. Tribeca Comedy Club [N]** in TriBeCa/Civic Center is a great choice if you're in the area. It's a stand-up venue hosting established comedians and rising stars nightly. With a Google rating of 4.1, it's a fantastic venue with clean and well-staffed facilities. (Zone: TriBeCa/Civic Center)\n\nThese comedy clubs offer a fun night out with world-class performers and a lively atmosphere. Now, I'd suggest planning ahead and checking their schedules to catch a show that suits your taste.",
+      "retrieved_ids": [
+        2254,
+        1583,
+        2240,
+        1496,
+        1502
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.1461,
+        "mrr": 0.25,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q004",
+      "category": "retrieval",
+      "query": "hidden speakeasy bars with craft cocktails",
+      "answer": "You're looking for hidden speakeasy bars with craft cocktails! I've got just the recommendations for you.\n\n**1. Hidden Tiger [1]**\nLocated in the East Village, Hidden Tiger is a speakeasy-style cocktail bar with an Asian flair. Their incredible cocktail program features bespoke drinks that are balanced and expertly crafted. Don't miss their deep whiskey list and knowledgeable bartenders who can help you find the perfect pour.\n\n**2. Attaboy [2]**\nThis Lower East Side speakeasy is a must-visit for cocktail enthusiasts. With a 4.3-star rating, Attaboy serves up the best dirty martini in the city, and their staff is not stingy with the pour. The vibe is perfect for a night out with friends, and the entrance is hidden, adding to the speakeasy charm.\n\n**3. Prohibition [3]**\nLocated on the Upper West Side, Prohibition is a lively speakeasy-style bar with live music and classic cocktails. Their mezcal selection is impressive, and the staff really know their agave spirits. It's a great spot for a group night out without the chaos.\n\nThese hidden gems are sure to impress even the most discerning cocktail connoisseur. Now, if you're planning an outing, I recommend visiting one of these speakeasies on a weeknight to avoid the crowds.",
+      "retrieved_ids": [
+        345,
+        199,
+        1035,
+        832,
+        735
+      ],
+      "retrieval_metrics": {
+        "recall": 0.25,
+        "ndcg": 0.2463,
+        "mrr": 0.5,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null
+      },
+      "ragas_error": "judge_failed"
+    },
+    {
+      "id": "Q005",
+      "category": "retrieval",
+      "query": "wine bars for a date night",
+      "answer": "",
+      "retrieved_ids": [
+        157,
+        1185,
+        757,
+        1376,
+        884
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q006",
+      "category": "retrieval",
+      "query": "places to go dancing and hear electronic music",
+      "answer": "",
+      "retrieved_ids": [
+        275,
+        2170,
+        1890,
+        880,
+        226
+      ],
+      "retrieval_metrics": {
+        "recall": 0.3333,
+        "ndcg": 0.4693,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q007",
+      "category": "retrieval",
+      "query": "museums and art galleries worth visiting",
+      "answer": "",
+      "retrieved_ids": [
+        76,
+        43,
+        98,
+        1670,
+        93
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q008",
+      "category": "retrieval",
+      "query": "craft cocktail bars with creative drinks",
+      "answer": "",
+      "retrieved_ids": [
+        370,
+        2161,
+        281,
+        928,
+        407
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q009",
+      "category": "retrieval",
+      "query": "Italian restaurants for a romantic dinner",
+      "answer": "",
+      "retrieved_ids": [
+        277,
+        815,
+        259,
+        430,
+        679
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q010",
+      "category": "filtered",
+      "query": "bars and nightlife in East Village",
+      "answer": "The East Village has a great selection of bars and nightlife spots. Based on the venues I have, I'd recommend checking out **11th St Bar** [2] in the East Village. It's a neighborhood Irish pub with live music and a laid-back vibe, and it's great for a group night out without the chaos. If you're looking for something a bit more upscale, **The Bowery Hotel** [1] is also in the East Village and has a vintage feel with a popular lounge/bar. It's a great spot for a night out, but be prepared for a more upscale crowd.\n\nIf you're looking for something a bit more low-key, **Book Club Bar** [3] is also in the East Village and has a charming hybrid vibe of a bookstore and bar with cozy vibes. It's a great spot to grab a drink and browse the shelves.\n\nAs for now, I don't have any information on the live busyness data, but these spots are generally popular, so it's a good idea to check them out early if you want to avoid the crowds.\n\nFor a practical plan, I'd suggest starting the night at **11th St Bar** [2] for a drink and some live music, and then heading to **The Bowery Hotel** [1] for a more upscale night out. If you're feeling low-key, **Book Club Bar** [3] is a great spot to grab a drink and browse the shelves.",
+      "retrieved_ids": [
+        258,
+        315,
+        229,
+        347,
+        350
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q011",
+      "category": "filtered",
+      "query": "cocktail bars in Lower East Side",
+      "answer": "Based on the retrieval context, I highly recommend **Attaboy** [3] and **Clockwork Bar** [5] for cocktail bars in the Lower East Side. Both venues are highly rated and offer unique cocktail experiences.\n\n**Attaboy** [3] is a speakeasy-style cocktail bar with a bespoke drink menu, offering a wide range of creative cocktails. The vibe is intimate and sophisticated, making it a great spot for a night out.\n\n**Clockwork Bar** [5] is a casual dive bar with a jukebox and pool table, but don't let that fool you - they also serve up some of the best cocktails in the neighborhood. Their happy hour is a great deal, with $8 craft cocktails.\n\nIf you're looking for a more upscale experience, **Verlaine** [5] is also worth considering, with its stylish lounge vibe and Asian-inspired small plates. However, keep in mind that it's a bit pricier than the other two options.\n\nAs for now, it's unclear whether the Lower East Side is a busy area, so it's hard to say whether it's a good time to go to these venues. However, these recommendations should give you a great starting point for your cocktail bar crawl!",
+      "retrieved_ids": [
+        199,
+        202,
+        1501,
+        171,
+        233
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.6367,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q012",
+      "category": "filtered",
+      "query": "cheap eats and affordable food in Chinatown",
+      "answer": "You're looking for affordable food options in Chinatown. I've got you covered! Based on the venues I have, here are my top recommendations:\n\n**1. Great NY Noodletown [2]** in Chinatown is a great spot for affordable food. Their price level is cheap, and they have a 4.1-star rating on Google. People rave about their soup dumplings and mapo tofu, and it's a great place to grab a quick, delicious meal. (Zone: Chinatown)\n\n**2. Xian Famous Foods [1]** in Chinatown is another excellent option for affordable eats. Their price level is also cheap, and they have a 4.5-star rating on Google. Their soup dumplings are a must-try, and the atmosphere is lively and vibrant. (Zone: Chinatown)\n\n**3. Noodle Village [4]** in Chinatown is a great spot for affordable, tasty food. Their price level is cheap, and they have a 4.2-star rating on Google. Their hand-pulled noodles are made fresh in the window, and the soup dumplings are a highlight. (Zone: Chinatown)\n\nAll of these options are within the Chinatown area, so you can easily walk around and explore the neighborhood while you're there. Enjoy your meal!",
+      "retrieved_ids": [
+        1973,
+        1970,
+        1966,
+        1972,
+        1967
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q013",
+      "category": "filtered",
+      "query": "luxury fine dining restaurants in Midtown",
+      "answer": "Based on the provided context, I recommend the following luxury fine dining restaurants in Midtown:\n\n* The Modern [2] (Midtown Center) - a Michelin-starred restaurant serving contemporary cuisine, with a rating of 4.6 and reviews praising its flawless execution and elegant atmosphere.\n* 53 [1] (Midtown Center) - an upscale Asian restaurant blending global influences, with a rating of 4.3 and reviews highlighting its incredible sound system and attentive service.\n\nThese two options offer a luxurious fine dining experience in Midtown, with The Modern being a more formal and contemporary option, and 53 offering a more vibrant and globally-inspired atmosphere.",
+      "retrieved_ids": [
+        621,
+        620,
+        669,
+        557,
+        720
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q014",
+      "category": "filtered",
+      "query": "art galleries and museums in Lower East Side",
+      "answer": "Based on your interest in art galleries and museums in the Lower East Side, I'd recommend the following:\n\n* **New Museum [1]**: As a contemporary art museum, it's a must-visit in the Lower East Side. With a 4.2 Google rating, visitors praise its free admission on Thursdays and the well-presented permanent collection. (Zone: Lower East Side)\n* **Museum at Eldridge Street [5]**: This historic museum showcases Jewish culture and heritage, with a 4.7 Google rating. Visitors appreciate its interactive exhibits and beautifully presented collection. (Zone: Lower East Side)\n* **Entrance [2]**: This art gallery is a hidden gem in the Lower East Side, with a 4.9 Google rating. Visitors praise its welcoming staff, high ceilings, and natural light pouring in. (Zone: Lower East Side)\n\nThese recommendations are all located in the Lower East Side, so you can easily explore them without having to travel far.",
+      "retrieved_ids": [
+        18,
+        3,
+        1655,
+        1704,
+        0
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.4704,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": false,
+        "citation_detail": "citation 4: missing/zero venue_id"
+      },
+      "ragas_scores": {
+        "faithfulness": 1.0,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q015",
+      "category": "filtered",
+      "query": "comedy shows in Alphabet City",
+      "answer": "",
+      "retrieved_ids": [
+        1504,
+        1514,
+        28,
+        268,
+        290
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q016",
+      "category": "filtered",
+      "query": "affordable bars with good vibes",
+      "answer": "",
+      "retrieved_ids": [
+        1344,
+        1925,
+        371,
+        1932,
+        1358
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q017",
+      "category": "filtered",
+      "query": "upscale nightlife and clubs in Meatpacking",
+      "answer": "",
+      "retrieved_ids": [
+        2095,
+        2073,
+        2053,
+        2093,
+        2101
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q018",
+      "category": "conversational",
+      "query": "affordable budget bars and cheap eats",
+      "answer": "",
+      "retrieved_ids": [
+        1480,
+        1925,
+        371,
+        1494,
+        1492
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q019",
+      "category": "conversational",
+      "query": "bars and nightlife options in East Village",
+      "answer": "Based on the provided context, here are some recommendations for bars and nightlife options in the East Village area:\n\n* **The Bowery Hotel** [3] is a great option for a night out, with a cool underground vibe and a popular lounge/bar. It's located right in the heart of the East Village.\n* **11th St Bar** [2] is a neighborhood Irish pub with live music and a laid-back vibe. It's a great spot for a group night out or a casual drink with friends.\n* **Book Club Bar** [4] is a charming hybrid of a bookstore and bar, offering a cozy atmosphere and a great selection of mezcal and local beers.\n\nAll of these options are located in the East Village, making them perfect for a night out in this vibrant neighborhood. Now is a great time to visit any of these spots, as the East Village is always lively and bustling with activity.",
+      "retrieved_ids": [
+        258,
+        315,
+        350,
+        229,
+        347
+      ],
+      "retrieval_metrics": {
+        "recall": 0.25,
+        "ndcg": 0.1952,
+        "mrr": 0.3333,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q020",
+      "category": "conversational",
+      "query": "details and more information about the best matching venue",
+      "answer": "Based on the retrieval context, I'd like to provide more information about **Matcha 108** [1], which seems to be a great match for your interests.\n\n**Matcha 108** [1] is a creative cafe and space centered around matcha drinks, located in the heart of Chinatown. With a 4.7-star rating and over 18,000 reviews, it's clear that this venue is a favorite among locals and visitors alike.\n\nThe staff at Matcha 108 [1] are known for being welcoming and knowledgeable, not stuffy at all like some galleries. The current show features some really exciting emerging artists, and the cafe offers a wide range of matcha drinks and delicious food options.\n\nIf you're interested in learning more about this venue or would like to visit, I recommend checking out their current show and trying one of their signature matcha drinks. The vibe is creative and relaxed, making it a great spot to unwind and explore the local art scene.\n\nWould you like more information about this venue or would you like me to suggest other options?",
+      "retrieved_ids": [
+        1,
+        467,
+        52,
+        96,
+        1807
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q021",
+      "category": "conversational",
+      "query": "live music venues with bands and performances",
+      "answer": "Based on the provided context, here are some live music venue recommendations with bands and performances:\n\n**The Mercury Lounge** [3] in the Lower East Side is a legendary live music venue showcasing up-and-coming acts. It's a great place to see live bands and enjoy a moderate price level. (4.5/5 stars, 14,269 reviews) What people say: \"Great lineup of DJs, the dance floor is packed but there's room to breathe on the sides.\"\n\n**Pianos** [2] in the Lower East Side is a music venue and bar hosting live bands and DJs. It's a cool underground vibe with a moderate price level. (3.9/5 stars, 2,822 reviews) What people say: \"One of the few clubs where the crowd is there for the music, not just to be seen.\"\n\n**DROM** [1] in the East Village is a dance hall, concert hall, and auditorium hosting global music, dance parties, and performances. It's a great place to see live music with a moderate price level. (4.1/5 stars, 1,721 reviews) What people say: \"The sound system here is incredible \u2014 crystal clear bass that you feel in your chest.\"\n\nIf you're looking for a more upscale experience, **Sony Hall** [4] in Times Sq/Theatre District is a concert venue with live music and an upscale atmosphere. It's a great place to see live performances with a very affordable price level. (4.5/5 stars, 1,604 reviews) What people say: \"Best dirty martini in the city, and they're not stingy with the pour.\"\n\nFor a live music outing, consider heading to the Lower East Side, where you can visit **The Mercury Lounge** and **Pianos** for a night of live music and performances.",
+      "retrieved_ids": [
+        275,
+        226,
+        228,
+        609,
+        1578
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.5531,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q022",
+      "category": "conversational",
+      "query": "upscale expensive bars and fine dining restaurants",
+      "answer": "",
+      "retrieved_ids": [
+        621,
+        669,
+        355,
+        392,
+        883
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q023",
+      "category": "conversational",
+      "query": "restaurants and dining options in the area",
+      "answer": "",
+      "retrieved_ids": [
+        235,
+        1126,
+        1109,
+        587,
+        1262
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q024",
+      "category": "conversational",
+      "query": "top rated highest reviewed restaurants and bars",
+      "answer": "Based on the provided context, here are my top recommendations for highly-rated restaurants and bars:\n\n**1. Le Bilboquet** [8980] (Upper East Side South) - This upscale French bistro has an impressive 4.2-star rating and 8980 reviews. Guests praise its lively vibe, great beer list, and incredible cocktail program.\n\n**2. Quality Bistro** [1577] (Midtown North) - This upscale American-French bistro boasts a 4.5-star rating and 1577 reviews. Reviewers rave about its balanced cocktails, lively but not overwhelming atmosphere, and great speakeasy vibe.\n\n**3. Essex Restaurant** [2796] (Lower East Side) - This lively spot has a 4.8-star rating and 2796 reviews. Guests love its great lineup of DJs, cool underground vibe, and attentive hosts for bottle service.\n\nThese top-rated restaurants and bars are sure to provide an excellent dining experience. Now, if you're looking for an outing, I recommend checking out Le Bilboquet for a lively group night out or Quality Bistro for a more upscale, intimate evening.",
+      "retrieved_ids": [
+        732,
+        621,
+        1122,
+        235,
+        669
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q025",
+      "category": "conversational",
+      "query": "late night bars and venues open late in the area",
+      "answer": "Based on the retrieval context, here are some recommendations for late night bars and venues open late in the area:\n\nI don't have suggestions for bowling, but here are suggestions for the other things:\n\n* **Anytime Karaoke** [1] in Midtown South is a great option for a late night karaoke session. It's open late and has private rooms and drinks. (4.2/5 stars)\n* **Slate** [2] in Union Sq is another great spot for a late night drink or game. It's a spacious lounge and sports bar with games, billiards, and DJ nights. (4/5 stars)\n* **Parkside Lounge** [3] in Two Bridges/Seward Park is a relaxed neighborhood bar with pool tables and live music that's open late. (4.3/5 stars)\n\nAll of these options are open late and offer a fun atmosphere for a night out.",
+      "retrieved_ids": [
+        1528,
+        391,
+        238,
+        2242,
+        1576
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q026",
+      "category": "adversarial",
+      "query": "what time does the Jazz Gallery open on Saturdays?",
+      "answer": "I don't have information on the Jazz Gallery's specific hours of operation, including Saturday hours.",
+      "retrieved_ids": [
+        51,
+        1894,
+        2074,
+        1744,
+        606
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 1.0,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q027",
+      "category": "adversarial",
+      "query": "what's the phone number for Double Chicken Please?",
+      "answer": "",
+      "retrieved_ids": [
+        191,
+        214,
+        1067,
+        707,
+        932
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q028",
+      "category": "adversarial",
+      "query": "does Sour Mouse have a live band playing tonight?",
+      "answer": "",
+      "retrieved_ids": [
+        12,
+        226,
+        228,
+        275,
+        2252
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q029",
+      "category": "adversarial",
+      "query": "what's the best steakhouse in Manhattan?",
+      "answer": "",
+      "retrieved_ids": [
+        1992,
+        392,
+        557,
+        619,
+        2176
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q030",
+      "category": "adversarial",
+      "query": "is there parking available at Attaboy?",
+      "answer": "",
+      "retrieved_ids": [
+        199,
+        670,
+        2200,
+        203,
+        238
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q031",
+      "category": "adversarial",
+      "query": "what's the dress code at Le Bain?",
+      "answer": "",
+      "retrieved_ids": [
+        2095,
+        732,
+        674,
+        522,
+        809
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q032",
+      "category": "adversarial",
+      "query": "do they have a happy hour at Death and Co?",
+      "answer": "",
+      "retrieved_ids": [
+        273,
+        1905,
+        1308,
+        391,
+        409
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q033",
+      "category": "adversarial",
+      "query": "which art gallery has the highest rating on Google?",
+      "answer": "Based on the provided context, Fou Gallery has a Google rating of 4.8, which is the highest among the listed art galleries.",
+      "retrieved_ids": [
+        26,
+        1809,
+        58,
+        1735,
+        1734
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.2,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q034",
+      "category": "abstention",
+      "query": "best pizza in Chicago deep dish",
+      "answer": "I don't have suggestions for Chicago deep dish pizza, but here are suggestions for the other pizza styles:\n\nFor classic New York-style slices, I recommend **42nd Street Pizza** [2] on the Upper West Side. They do a proper New York fold, and the pepperoni cups are crispy on the edges. The margherita is simple but flawless, with fresh mozzarella and basil straight from the garden.\n\nIf you're in the mood for a casual Italian spot specializing in classic pizzas, I recommend **Pizza Napoli** [4] on the Upper East Side. The pizza here has that perfect charred crust you only get from a real wood-fired oven. They also serve incredible risotto and have a lovely atmosphere.\n\nFor a local pizza spot with classic New York-style slices, I recommend **150 Fresh Pizza** [5] in Midtown East. They do a proper New York fold, and the pepperoni cups are crispy on the edges. The margherita is simple but flawless, with fresh mozzarella and basil straight from the garden.\n\nAs for the best pizza in Chicago deep dish, I'd be happy to help with that question, but it seems we're discussing pizza in Manhattan, and I don't have information about Chicago deep dish pizza.",
+      "retrieved_ids": [
+        1165,
+        2215,
+        1204,
+        810,
+        530
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 0.8,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q035",
+      "category": "abstention",
+      "query": "hotels near Times Square with availability this weekend",
+      "answer": "Based on the provided context, I recommend the following hotels near Times Square with availability this weekend:\n\n**1. Hotel Riu Plaza Manhattan Times Square [1]**\n  Located in the heart of Times Square, this hotel offers modern accommodations and a lively atmosphere. Their happy hour is a great deal, with $8 craft cocktails.\n\n**2. YOTEL New York Times Square [4]**\n  This modern hotel has a vibrant vibe and a great speakeasy-style bar. They have a hidden entrance and perfect lighting, making it a great spot for a night out.\n\n**3. LUMA Hotel Times Square [2]**\n  This boutique hotel has a chic atmosphere and an incredible cocktail program. Their bartender knows their craft, and every drink is balanced.\n\nAs for availability, I suggest checking the hotels' websites or a hotel booking platform like Expedia or Booking.com for the most up-to-date information. Now is a good time to visit Times Square, as it's always lively, but you might want to consider avoiding the area during peak hours (Friday and Saturday nights) if you're looking for a more relaxed experience.",
+      "retrieved_ids": [
+        605,
+        563,
+        549,
+        652,
+        659
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q036",
+      "category": "abstention",
+      "query": "emergency plumbers in Brooklyn open now",
+      "answer": "",
+      "retrieved_ids": [
+        1931,
+        2172,
+        2043,
+        1981,
+        1066
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q037",
+      "category": "abstention",
+      "query": "dentists in Upper East Side accepting new patients",
+      "answer": "",
+      "retrieved_ids": [
+        905,
+        18,
+        842,
+        1892,
+        1847
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q038",
+      "category": "abstention",
+      "query": "car repair shops near me in Queens",
+      "answer": "",
+      "retrieved_ids": [
+        1195,
+        1754,
+        1736,
+        1450,
+        1395
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q039",
+      "category": "abstention",
+      "query": "public elementary schools in Manhattan with good ratings",
+      "answer": "",
+      "retrieved_ids": [
+        1537,
+        1614,
+        94,
+        1414,
+        1126
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q040",
+      "category": "abstention",
+      "query": "24 hour pharmacies in Midtown",
+      "answer": "",
+      "retrieved_ids": [
+        618,
+        797,
+        1195,
+        1189,
+        1407
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q041",
+      "category": "abstention",
+      "query": "best hiking trails and state parks near New York City",
+      "answer": "",
+      "retrieved_ids": [
+        670,
+        1581,
+        154,
+        1133,
+        111
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q042",
+      "category": "retrieval",
+      "query": "stand-up comedy shows in the East Village tonight",
+      "answer": "I'd recommend checking out **East Village Stand Up Comedy Club** or **St Marks Comedy Club**, both of which are located in the East Village and have great acoustics and intimate settings. **East Village Stand Up Comedy** is also a great option, but I'm not sure if they have any shows scheduled for tonight. I'd suggest checking their websites or social media for the latest information.\n\nIf you're looking for a more laid-back vibe, **East Village Stand Up Comedy Club** is a great choice, and they often have open mics and showcases. **St Marks Comedy Club** is also a great option, with a lively but not overwhelming atmosphere. \n\nAs for **Comedy Village**, it's actually located in Clinton East, which is a bit of a trek from the East Village. However, it's a great spot with a speakeasy vibe and an impressive mezcal selection. \n\nNo matching venues found for bowling, but I'm happy to recommend these comedy clubs for you to check out tonight!",
+      "retrieved_ids": [
+        1511,
+        1503,
+        1548,
+        1507,
+        1502
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.3452,
+        "mrr": 0.5,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 0.8
+      }
+    },
+    {
+      "id": "Q043",
+      "category": "retrieval",
+      "query": "live jazz performances in Manhattan",
+      "answer": "I've got some great options for you. Considering your interest in live jazz performances, I recommend the following venues:\n\n**1. JazzFest Gallery [N]**\n  Located in Clinton East, this gallery and event space celebrates jazz culture through photography, art, and live performance. With a 4.7-star rating, it's a hidden gem in the neighborhood. (Zone: Clinton East, Type: Culture, Price: very cheap)\n\n**2. Smalls Jazz Club [N]**\n  In the West Village, Smalls Jazz Club offers a unique experience with popular dishes and a notable sound system. With a 4.6-star rating, it's a great spot to enjoy live music and a meal. (Zone: West Village, Type: Night Club, Bar, Price: moderate)\n\n**3. Dizzys Club [N]**\n  Located in Lincoln Square East, Dizzys Club is a jazz club with live performances and dinner service. With a 4.7-star rating, it's one of the few clubs where the crowd is there for the music, not just to be seen. (Zone: Lincoln Square East, Type: Night Club, Bar, Price: expensive)\n\nAs for a plan, I suggest checking the schedule for these venues to catch a live jazz performance. You might want to consider visiting Smalls Jazz Club, which seems to have a more consistent live music scene.",
+      "retrieved_ids": [
+        1186,
+        2074,
+        879,
+        1894,
+        606
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.3462,
+        "mrr": 0.3333,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.6,
+        "answer_relevancy": 1.0,
+        "context_precision": 0.8
+      }
+    },
+    {
+      "id": "Q044",
+      "category": "retrieval",
+      "query": "contemporary art galleries with rotating exhibits",
+      "answer": "Based on your interest in contemporary art galleries with rotating exhibits, I'd recommend the following:\n\n* **Revelation Gallery [4]** in the West Village is a great option. They showcase experimental painting and sculpture by emerging artists, and their exhibits are always changing. According to their Google reviews, they have \"incredible value for the quality\" and \"excellent curation\" (Google rating: 4.6).\n* **Swivel Gallery [1]** in Hudson Square is another great choice. They're an artist-run space that features a rotating roster of contemporary experimental art. Their Google reviews praise the gallery space itself, saying it's \"gorgeous\" with \"high ceilings and natural light pouring in\" (Google rating: 4.9).\n* **Sojourner Gallery [2]** in Greenwich Village South is a smaller gallery space that showcases community-centered visual art and exhibitions. Their Google reviews highlight their welcoming staff and excellent curation, saying they have \"excellent curation\" and \"the staff are welcoming and knowledgeable\" (Google rating: 3.9).\n\nNow is a good time to visit these galleries, as their exhibits are always changing and you can catch a glimpse of the latest contemporary art trends.",
+      "retrieved_ids": [
+        1716,
+        1758,
+        82,
+        1803,
+        1619
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q045",
+      "category": "retrieval",
+      "query": "authentic Italian restaurants for a family dinner",
+      "answer": "",
+      "retrieved_ids": [
+        608,
+        679,
+        900,
+        555,
+        259
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.1312,
+        "mrr": 0.2,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q046",
+      "category": "retrieval",
+      "query": "upscale cocktail bars with creative mixology",
+      "answer": "",
+      "retrieved_ids": [
+        2161,
+        281,
+        407,
+        357,
+        1582
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q047",
+      "category": "retrieval",
+      "query": "best ramen and Japanese food in the city",
+      "answer": "Based on the provided context, I'd recommend the following top-rated ramen and Japanese food spots in Manhattan:\n\n* **Susukino Ramen [1]** in the Financial District South: This cozy Japanese ramen shop offers rich broths and traditional noodle dishes, with a 4.8-star rating and rave reviews for its fresh uni and fatty tuna. It's a great spot for a splurge.\n* **RAMEN KURAKU [3]** in Washington Heights South: This Japanese spot serves authentic ramen and small plates, with a 4.4-star rating and glowing reviews for its outstanding omakase experience and exceptional matcha desserts.\n* **Jin Ramen West Harlem [4]** in Morningside Heights: This Japanese restaurant specializes in ramen bowls and sake, with a 4.4-star rating and praise for its fresh uni and fatty tuna. It's a great spot for a casual, delicious meal.\n\nThese recommendations are all highly rated and offer a range of options for ramen and Japanese cuisine.",
+      "retrieved_ids": [
+        1909,
+        1000,
+        1473,
+        1356,
+        1451
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.4,
+        "answer_relevancy": 1.0,
+        "context_precision": 0.8
+      }
+    },
+    {
+      "id": "Q048",
+      "category": "retrieval",
+      "query": "history and art museums to visit on a rainy day",
+      "answer": "Considering the rainy day, I'd recommend the following history and art museums:\n\n* **New Museum [1]** in the Lower East Side is a great spot to explore contemporary art and exhibitions. Its vibe is innovative and engaging, and the permanent collection is well worth multiple visits (Google rating: 4.2). \n* **Grey Art Museum [2]** in Greenwich Village North is another excellent choice, offering a unique and interactive experience with its contemporary exhibitions and design or study artworks (Google rating: 4.5).\n* **Art Projects International [3]** in TriBeCa/Civic Center showcases a diverse range of international art, with a focus on Africa, Asia, and Latin America. Its thematic group shows are a highlight, and the atmosphere is less crowded than some of the bigger museums (Google rating: 4.5).\n\nThese museums offer a great combination of history, art, and culture to explore on a rainy day.",
+      "retrieved_ids": [
+        18,
+        1738,
+        1670,
+        979,
+        9
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.4704,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q049",
+      "category": "retrieval",
+      "query": "best brunch spots with pancakes and mimosas",
+      "answer": "Based on the provided context, I'd recommend the following brunch spots with pancakes and mimosas:\n\n**1. Clinton St Baking Company [1]**\n  Located in the Two Bridges/Seward Park area, this spot is famous for its pancakes and eggs. They offer a variety of pancake options, and their vibe is cozy and inviting. Don't forget to try their cortado, which is perfection according to their Google reviews!\n\n**2. Sarabeths Park Avenue South [2]**\n  In the Gramercy area, Sarabeths serves American comfort food and pastries. Their brunch is outstanding, and their pancakes are fluffy clouds of joy. They also offer a great selection of mimosas to pair with your meal.\n\n**3. Sarabeths Central Park South [3]**\n  In Midtown North, Sarabeths is a classic American spot known for brunch and comfort food. Their pancakes are a must-try, and their mimosas are a great way to start your day.\n\nIf you're looking for a more casual spot, **Toast 125 [4]** in Morningside Heights is a great option. They offer creative takes on classic brunch dishes, including pancakes, and have a great selection of mimosas during happy hour.\n\nNow, I'd suggest planning a visit to Clinton St Baking Company on a weekday morning to avoid the crowds. Enjoy your pancakes and mimosas!",
+      "retrieved_ids": [
+        221,
+        440,
+        671,
+        1340,
+        2218
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q050",
+      "category": "retrieval",
+      "query": "fine dining restaurants for a special anniversary dinner",
+      "answer": "",
+      "retrieved_ids": [
+        896,
+        620,
+        235,
+        557,
+        1047
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q051",
+      "category": "retrieval",
+      "query": "cozy and intimate bars for a quiet drink",
+      "answer": "Based on your request, I'd recommend the following cozy and intimate bars for a quiet drink:\n\n* es BAR [1] on the Upper West Side South (Zone: Upper West Side South) is a great spot for a quiet drink. With a moderate price level and a cozy cocktail bar vibe, it's perfect for a low-key evening. Google rating: 4.4 \u2014 What people say: \"Best dirty martini in the city, and they're not stingy with the pour.\"\n* es BAR [2] on the Upper West Side South (Zone: Upper West Side South) is another great option. Its intimate atmosphere and craft drinks make it an ideal spot for a quiet drink. Google rating: 4.4 \u2014 What people say: \"The rooftop view is stunning, especially at sunset \u2014 get there early for a good table.\"\n* Martinys [1] in Gramercy (Zone: Gramercy) is a refined and intimate Japanese-inspired cocktail bar. With a very cheap price level, it's a great spot for a quiet drink. Google rating: 4.2 \u2014 What people say: \"Great beer list with lots of local NYC breweries represented.\"\n\nAll of these bars offer a quiet and intimate atmosphere, perfect for a low-key drink. Now, I'd suggest planning your outing for a weekday evening when the Upper West Side South area is less crowded.",
+      "retrieved_ids": [
+        1582,
+        1034,
+        409,
+        371,
+        1528
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 0.8
+      }
+    },
+    {
+      "id": "Q052",
+      "category": "retrieval",
+      "query": "trendy nightlife spots for a night out with friends",
+      "answer": "Based on your request for trendy nightlife spots, I'd recommend the following:\n\n* **Le Bain** [3] in the Meatpacking/West Village West area. This trendy rooftop nightclub and bar offers stunning skyline views, dance parties, and a crowd that's there for the music. It's a great spot for a night out with friends, especially if you're looking for a lively atmosphere.\n* **Den Social Karaoke** [4] in Midtown South is another great option. This karaoke lounge has stylish rooms, a vibrant vibe, and a great lineup of DJs. It's a fun spot to sing your heart out and dance the night away with friends.\n* **The Skinny Bar and Lounge** [5] in the Lower East Side is also worth checking out. This trendy bar and lounge has creative cocktails, DJs, and a lively atmosphere. It's a great spot to grab a drink and enjoy some music with friends.\n\nNow, considering the live busyness data is not available, I'd suggest checking out these spots on a weeknight or a less busy night to avoid the crowds. However, if you're looking for a more low-key experience, you might want to consider visiting during off-peak hours or on a weekday.",
+      "retrieved_ids": [
+        2095,
+        1536,
+        1501,
+        1519,
+        1374
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": 0.8,
+        "answer_relevancy": 1.0,
+        "context_precision": 1.0
+      }
+    },
+    {
+      "id": "Q053",
+      "category": "retrieval",
+      "query": "authentic French bistros and brasseries",
+      "answer": "Based on your request, I'd recommend the following authentic French bistros and brasseries:\n\n* Jean Claude Bistro [1] in Sutton Place/Turtle Bay North is an intimate French bistro with authentic cuisine. Reviewers rave about their flawless execution on every dish, with the duck confit being a standout. (Google rating: 4.6)\n* Pastis [4] in Meatpacking/West Village West is a classic French bistro with vintage decor and Parisian charm. Reviewers praise its lively but not overwhelming atmosphere, great beer list, and speakeasy vibe. (Google rating: 4.6)\n* La Grande Boucherie [5] in Times Sq/Theatre District is an opulent French brasserie with art deco charm. Reviewers love its flawless execution on every dish, elegant atmosphere, and croissants that are better than what they had in Paris. (Google rating: 4.6)\n\nNow is a great time to visit these venues, as the live busyness data is currently unavailable. If you're looking for a more low-key experience, Jean Claude Bistro might be a good choice.",
+      "retrieved_ids": [
+        648,
+        801,
+        669,
+        2093,
+        665
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_scores": {
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null
+      },
+      "ragas_error": "judge_failed"
+    },
+    {
+      "id": "Q054",
+      "category": "retrieval",
+      "query": "Mexican restaurants with great tacos and margaritas",
+      "answer": "",
+      "retrieved_ids": [
+        942,
+        1095,
+        456,
+        637,
+        1176
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.1696,
+        "mrr": 0.3333,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q055",
+      "category": "filtered",
+      "query": "cheap eats and affordable food in East Village",
+      "answer": "",
+      "retrieved_ids": [
+        330,
+        307,
+        309,
+        347,
+        229
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.1312,
+        "mrr": 0.2,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q056",
+      "category": "filtered",
+      "query": "upscale restaurants in SoHo",
+      "answer": "",
+      "retrieved_ids": [
+        1998,
+        2000,
+        2028,
+        2038,
+        2042
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q057",
+      "category": "filtered",
+      "query": "moderate priced restaurants in Midtown",
+      "answer": "",
+      "retrieved_ids": [
+        564,
+        714,
+        668,
+        727,
+        793
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q058",
+      "category": "filtered",
+      "query": "nightlife and clubs in Meatpacking",
+      "answer": "",
+      "retrieved_ids": [
+        2095,
+        2102,
+        2051,
+        2255,
+        2054
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.6131,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q059",
+      "category": "filtered",
+      "query": "restaurants and bars in Upper West Side",
+      "answer": "",
+      "retrieved_ids": [
+        1034,
+        1122,
+        1126,
+        1017,
+        885
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q060",
+      "category": "filtered",
+      "query": "affordable cocktail bars with good vibes",
+      "answer": "",
+      "retrieved_ids": [
+        257,
+        291,
+        1344,
+        1925,
+        371
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q061",
+      "category": "filtered",
+      "query": "luxury venues for a special celebration",
+      "answer": "",
+      "retrieved_ids": [
+        467,
+        621,
+        1950,
+        258,
+        2095
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q062",
+      "category": "filtered",
+      "query": "art galleries in Chelsea",
+      "answer": "",
+      "retrieved_ids": [
+        1798,
+        1852,
+        1830,
+        1817,
+        1833
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q063",
+      "category": "filtered",
+      "query": "cheap eats and food in Chinatown",
+      "answer": "",
+      "retrieved_ids": [
+        1973,
+        1970,
+        1966,
+        1972,
+        1967
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q064",
+      "category": "filtered",
+      "query": "bars and pubs in Greenwich Village",
+      "answer": "",
+      "retrieved_ids": [
+        329,
+        2091,
+        2246,
+        2249,
+        2251
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q065",
+      "category": "filtered",
+      "query": "Japanese restaurants in East Village",
+      "answer": "",
+      "retrieved_ids": [
+        335,
+        328,
+        308,
+        269,
+        266
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.214,
+        "mrr": 0.5,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q066",
+      "category": "filtered",
+      "query": "wine bars in Lower East Side",
+      "answer": "",
+      "retrieved_ids": [
+        157,
+        202,
+        207,
+        199,
+        171
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 0.9197,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q067",
+      "category": "conversational",
+      "query": "bars and restaurants in a different Manhattan neighborhood",
+      "answer": "",
+      "retrieved_ids": [
+        1126,
+        1985,
+        1172,
+        1931,
+        1358
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q068",
+      "category": "conversational",
+      "query": "affordable budget friendly bars and restaurants",
+      "answer": "",
+      "retrieved_ids": [
+        1925,
+        341,
+        1051,
+        229,
+        355
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q069",
+      "category": "conversational",
+      "query": "Italian restaurants and authentic Italian food",
+      "answer": "",
+      "retrieved_ids": [
+        2228,
+        608,
+        259,
+        720,
+        1941
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q070",
+      "category": "conversational",
+      "query": "restaurants and bars with outdoor seating and patio",
+      "answer": "",
+      "retrieved_ids": [
+        903,
+        2200,
+        542,
+        2161,
+        391
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q071",
+      "category": "conversational",
+      "query": "late night bars and venues open past midnight",
+      "answer": "",
+      "retrieved_ids": [
+        1528,
+        1002,
+        391,
+        1501,
+        238
+      ],
+      "retrieval_metrics": {
+        "recall": 0.2,
+        "ndcg": 0.3392,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q072",
+      "category": "conversational",
+      "query": "live music bars and concert venues with performances",
+      "answer": "",
+      "retrieved_ids": [
+        275,
+        609,
+        228,
+        226,
+        238
+      ],
+      "retrieval_metrics": {
+        "recall": 0.4,
+        "ndcg": 0.5531,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q073",
+      "category": "conversational",
+      "query": "rooftop bars with skyline views and outdoor terraces",
+      "answer": "",
+      "retrieved_ids": [
+        976,
+        203,
+        502,
+        2141,
+        601
+      ],
+      "retrieval_metrics": {
+        "recall": 0.8,
+        "ndcg": 0.8304,
+        "mrr": 1.0,
+        "precision": 0.8,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q074",
+      "category": "conversational",
+      "query": "elegant upscale venues with great atmosphere and ambiance",
+      "answer": "",
+      "retrieved_ids": [
+        258,
+        1925,
+        621,
+        1950,
+        391
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q075",
+      "category": "conversational",
+      "query": "more bars and restaurants similar to the previous recommendation",
+      "answer": "",
+      "retrieved_ids": [
+        1034,
+        1122,
+        621,
+        735,
+        1445
+      ],
+      "retrieval_metrics": {
+        "recall": 0.0,
+        "ndcg": 0.0,
+        "mrr": 0.0,
+        "precision": 0.0,
+        "hit_rate": 0.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q076",
+      "category": "conversational",
+      "query": "nightclubs and dance clubs for going out dancing",
+      "answer": "",
+      "retrieved_ids": [
+        275,
+        180,
+        1495,
+        1501,
+        391
+      ],
+      "retrieval_metrics": {
+        "recall": 0.5,
+        "ndcg": 0.6131,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q077",
+      "category": "adversarial",
+      "query": "what time does The Stand open on Saturdays?",
+      "answer": "",
+      "retrieved_ids": [
+        409,
+        231,
+        361,
+        1002,
+        1632
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 0.5,
+        "mrr": 0.3333,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q078",
+      "category": "adversarial",
+      "query": "does Mr Purple have a dress code?",
+      "answer": "",
+      "retrieved_ids": [
+        222,
+        1232,
+        1383,
+        580,
+        934
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q079",
+      "category": "adversarial",
+      "query": "what is the capacity of the Tenement Museum?",
+      "answer": "",
+      "retrieved_ids": [
+        10,
+        1795,
+        18,
+        1594,
+        135
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q080",
+      "category": "adversarial",
+      "query": "does the Museum of Sex have student discounts?",
+      "answer": "",
+      "retrieved_ids": [
+        49,
+        429,
+        1840,
+        43,
+        1775
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q081",
+      "category": "adversarial",
+      "query": "what is the cheapest venue in all of Manhattan?",
+      "answer": "",
+      "retrieved_ids": [
+        2006,
+        1550,
+        2254,
+        1358,
+        609
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q082",
+      "category": "adversarial",
+      "query": "compare the food quality at Beauty and Essex vs Hotel Chantelle",
+      "answer": "",
+      "retrieved_ids": [
+        230,
+        205,
+        235,
+        808,
+        954
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.4,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q083",
+      "category": "adversarial",
+      "query": "does Nubeluz have a minimum spend requirement?",
+      "answer": "",
+      "retrieved_ids": [
+        432,
+        274,
+        469,
+        1773,
+        630
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q084",
+      "category": "adversarial",
+      "query": "what is the exact capacity of Pianos?",
+      "answer": "",
+      "retrieved_ids": [
+        226,
+        817,
+        2258,
+        1866,
+        1526
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q085",
+      "category": "adversarial",
+      "query": "which venue has the most Instagram followers?",
+      "answer": "",
+      "retrieved_ids": [
+        246,
+        2242,
+        275,
+        1625,
+        391
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q086",
+      "category": "adversarial",
+      "query": "does The Delancey Rooftop have a cover charge on Fridays?",
+      "answer": "",
+      "retrieved_ids": [
+        203,
+        2166,
+        854,
+        855,
+        2094
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 0.2,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q087",
+      "category": "abstention",
+      "query": "best restaurants in Los Angeles",
+      "answer": "",
+      "retrieved_ids": [
+        999,
+        212,
+        2070,
+        1474,
+        1940
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q088",
+      "category": "abstention",
+      "query": "bars in Brooklyn with live music",
+      "answer": "",
+      "retrieved_ids": [
+        817,
+        2170,
+        238,
+        226,
+        2060
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q089",
+      "category": "abstention",
+      "query": "hair salons and barbers in SoHo",
+      "answer": "",
+      "retrieved_ids": [
+        101,
+        1689,
+        2016,
+        2012,
+        2015
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q090",
+      "category": "abstention",
+      "query": "gyms and fitness studios near Central Park",
+      "answer": "",
+      "retrieved_ids": [
+        2121,
+        977,
+        793,
+        994,
+        902
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q091",
+      "category": "abstention",
+      "query": "what events are happening tonight in Manhattan",
+      "answer": "",
+      "retrieved_ids": [
+        2006,
+        2021,
+        1550,
+        2257,
+        1983
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q092",
+      "category": "abstention",
+      "query": "venues with free valet parking and waterfront views",
+      "answer": "",
+      "retrieved_ids": [
+        1929,
+        2213,
+        2200,
+        238,
+        1930
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q093",
+      "category": "abstention",
+      "query": "coworking spaces with fast wifi in Midtown",
+      "answer": "",
+      "retrieved_ids": [
+        52,
+        793,
+        583,
+        1342,
+        1943
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q094",
+      "category": "abstention",
+      "query": "best wedding venues in New Jersey",
+      "answer": "",
+      "retrieved_ids": [
+        1521,
+        258,
+        1983,
+        1962,
+        467
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q095",
+      "category": "abstention",
+      "query": "pet-friendly restaurants with dog menus",
+      "answer": "",
+      "retrieved_ids": [
+        1009,
+        701,
+        660,
+        2152,
+        2090
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    },
+    {
+      "id": "Q096",
+      "category": "abstention",
+      "query": "karaoke bars with private rooms for 20 people",
+      "answer": "",
+      "retrieved_ids": [
+        1529,
+        1533,
+        540,
+        1566,
+        1525
+      ],
+      "retrieval_metrics": {
+        "recall": 1.0,
+        "ndcg": 1.0,
+        "mrr": 1.0,
+        "precision": 1.0,
+        "hit_rate": 1.0,
+        "citation_ok": true,
+        "citation_detail": "all citations valid"
+      },
+      "ragas_error": "generation_failed"
+    }
+  ],
+  "benchmark_path": "/Users/ng/projects/UCD-CS/Summer25/team-2-COMP47360/BackEnd/llm-service/data/benchmark.jsonl"
+}

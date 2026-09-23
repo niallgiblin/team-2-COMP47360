@@ -128,6 +128,8 @@ def load_calls():
 
 def load_busyness_app(monkeypatch, tmp_path, extra_env=None, fail_load=False, load_calls=None):
     monkeypatch.setenv("FLASK_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+    # Background warmup would race the fake models' call counters.
+    monkeypatch.setenv("BUSYNESS_WARMUP_ENABLED", "false")
     artifact_env = make_model_artifacts(tmp_path)
     artifact_env.update(extra_env or {})
     for key, value in artifact_env.items():

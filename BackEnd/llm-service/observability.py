@@ -46,7 +46,7 @@ _canonical_logger = structlog.get_logger("chat_request_event")
 
 # ── Finite taxonomies ───────────────────────────────────────────
 
-MODE_VALUES: tuple[str, ...] = ("unknown", "general_chat", "dense", "hybrid")
+MODE_VALUES: tuple[str, ...] = ("unknown", "general_chat", "dense", "hybrid", "abstention")
 STATUS_VALUES: tuple[str, ...] = ("success", "fallback", "error")
 
 ERROR_STAGE_VALUES: tuple[str, ...] = (
@@ -137,6 +137,36 @@ CITATIONS_PER_RESPONSE = Histogram(
     buckets=(0, 1, 2, 3, 5, 8, 10),
 )
 
+# --- TypeSafe System One / Jev ---
+JEV_REQUESTS_TOTAL = Counter(
+    "jev_requests_total",
+    "Total Jev (System One) calls by decision and status",
+    labelnames=["decision", "status"],
+)
+
+JEV_LATENCY_SECONDS = Histogram(
+    "jev_latency_seconds",
+    "Jev (System One) end-to-end latency",
+    labelnames=["decision"],
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 8),
+)
+
+# Pre-initialize the query-analysis decision so dashboards never see an
+# empty series before first traffic.
+for _jev_status in ("success", "fallback", "timeout", "error", "disabled"):
+    JEV_REQUESTS_TOTAL.labels(decision="query_analysis", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="answer_verification", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="eval_judge", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="answerability", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="rerank", status=_jev_status)
+    JEV_REQUESTS_TOTAL.labels(decision="scope_gate", status=_jev_status)
+JEV_LATENCY_SECONDS.labels(decision="query_analysis")
+JEV_LATENCY_SECONDS.labels(decision="answer_verification")
+JEV_LATENCY_SECONDS.labels(decision="eval_judge")
+JEV_LATENCY_SECONDS.labels(decision="answerability")
+JEV_LATENCY_SECONDS.labels(decision="rerank")
+JEV_LATENCY_SECONDS.labels(decision="scope_gate")
+
 # Pre-initialize all 12 label combinations
 for _mode in MODE_VALUES:
     CHAT_LATENCY_SECONDS.labels(mode=_mode)
@@ -219,6 +249,7 @@ class ChatExecutionMetadata:
         "generation_elapsed_s",
         "error_stage",
         "error_code",
+        "guardrail_action",
     )
 
     def __init__(
@@ -232,6 +263,7 @@ class ChatExecutionMetadata:
         generation_elapsed_s: float = 0.0,
         error_stage: Optional[str] = None,
         error_code: Optional[str] = None,
+        guardrail_action: Optional[str] = None,
     ):
         self.mode = mode
         self.retrieval_started = retrieval_started
@@ -241,6 +273,7 @@ class ChatExecutionMetadata:
         self.generation_elapsed_s = generation_elapsed_s
         self.error_stage = error_stage
         self.error_code = error_code
+        self.guardrail_action = guardrail_action
 
 
 # ── Request state ────────────────────────────────────────────────
