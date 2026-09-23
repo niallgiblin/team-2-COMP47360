@@ -3,6 +3,15 @@
 Current evaluation design for committed `urban-gala-v2`, verified 2026-06-09.
 Updated with M004 evaluation hardening and M005 retrieval quality improvements.
 
+> **Update (`jev` branch, 2026-09-23).** With BM25+FAISS hybrid retrieval, the
+> filter-before-rerank fix, normalized SW-RRF on every pass, and canonical
+> `Area:` labels in the reranker text, the same 96-question benchmark reaches
+> **Recall@5 0.4988 / Hit 0.7292** without re-ranking and **0.5545 / 0.8021**
+> with the cross-encoder. The active cross-encoder and the Jev
+> scope/abstention/guardrail layers are described in
+> [JEV_INTEGRATION.md](JEV_INTEGRATION.md). The tables below are the historical
+> `urban-gala-v2` measurements.
+
 ## Current Results (2026-06-09, 96-question benchmark)
 
 | Metric | Value | Notes |
@@ -119,14 +128,15 @@ miss.
 
 ## Interpretation limits
 
-- Forty-one questions are enough for regression development, not for a strong
-  statistical claim about all users.
+- Ninety-six curated questions are enough for regression development, not for a
+  strong statistical claim about all users.
 - The cases are internally curated rather than independently labeled.
 - Expected IDs can reward a narrow set of acceptable answers even when other
   venues are reasonable.
-- The aggregate Recall@5 of 0.2874 is still low in absolute terms.
-- The improved configuration can include optional cross-encoder behavior, but
-  checked-in Compose sets `CROSS_ENCODER_ENABLED=false`.
+- The historical v2 aggregate Recall@5 of 0.2874 is low in absolute terms; the
+  `jev` hybrid configuration reaches 0.4988, or 0.5545 with the cross-encoder.
+- The `jev` Compose enables the cross-encoder (`CROSS_ENCODER_ENABLED=true`);
+  it adds ~63 ms p50 for +0.056 Recall@5 on the hybrid benchmark.
 - This is not a cross-encoder-only ablation. BM25/RRF, query expansion, and
   other changes are also present, so no metric delta can be attributed to
   re-ranking alone.

@@ -58,7 +58,11 @@ SEARCH_CACHE_MAX_ENTRIES = _env_int("SEARCH_CACHE_MAX_ENTRIES", 512)
 SEARCH_OVERFETCH_MULTIPLIER = _env_int("SEARCH_OVERFETCH_MULTIPLIER", 3)
 
 BUSYNESS_SERVICE_URL = os.getenv("BUSYNESS_SERVICE_URL", "http://busyness-service:5000")
-BUSYNESS_FETCH_TIMEOUT_SECONDS = _env_int("BUSYNESS_FETCH_TIMEOUT_SECONDS", 5)
+# The busyness service runs every DNN + LSTM on the cold path (~6 s). A 5 s
+# timeout silently discarded that first answer, so chat reported busyness as
+# unavailable until the service's own cache was warm. 15 s covers the cold
+# compute; connect is capped separately in `fetch_busyness_report`.
+BUSYNESS_FETCH_TIMEOUT_SECONDS = _env_int("BUSYNESS_FETCH_TIMEOUT_SECONDS", 15)
 
 # --- Hybrid search (BM25 + Dense) ---
 HYBRID_SEARCH_ENABLED = os.getenv(
@@ -86,6 +90,22 @@ QUERY_EXPANSION_ENABLED = os.getenv(
 # routing/verification in the chat path. Disabled by default; the existing
 # regex/LLM behaviour is the fallback whenever Jev is off or unavailable.
 JEV_ENABLED = os.getenv("JEV_ENABLED", "false").lower() in {"1", "true", "yes"}
+# Jev runtime query analysis (general-chat gate, location, categories,
+# answerability, rerank). The faithfulness guardrail is controlled separately
+# by JEV_GUARDRAIL_ENABLED and does not depend on this flag. Set false to keep
+# the regex gate/location extraction while still running the guardrail
+# ("option 1").
+JEV_QUERY_ANALYSIS_ENABLED = os.getenv(
+    "JEV_QUERY_ANALYSIS_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
+# HF ``rewrite_query`` call. The jev branch found it hurts retrieval
+# (Recall@5 0.495 -> 0.414) and costs ~1 s, so it is skipped whenever a Jev
+# analysis is present. This flag decouples the rewrite from Jev so the regex
+# path can skip it too. Default true preserves the legacy no-analysis
+# behaviour; set false for the option-1 prototype.
+HF_QUERY_REWRITE_ENABLED = os.getenv(
+    "HF_QUERY_REWRITE_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
 TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY", "")
 TYPESAFE_API_URL = os.getenv(
     "TYPESAFE_API_URL", "https://api.typesafe.ai/v1/systemone"
@@ -107,6 +127,19 @@ JEV_ABSTENTION_ENABLED = os.getenv(
 ).lower() in {"1", "true", "yes"}
 # Abstain when P(answerable) < threshold or P(out_of_scope) >= threshold.
 JEV_ABSTENTION_THRESHOLD = float(os.getenv("JEV_ABSTENTION_THRESHOLD", "0.5"))
+
+# --- Out-of-scope / abuse cap (pre-retrieval Jev gate) ---
+# Classifies the message as in-catalog, off-topic, or harmful and returns a
+# scoped refusal before retrieval/generation. Off by default (backward
+# compatible); enabled in Compose for the deployed assistant.
+CHAT_SCOPE_GATE_ENABLED = os.getenv(
+    "CHAT_SCOPE_GATE_ENABLED", "false"
+).lower() in {"1", "true", "yes"}
+# Decline as off-topic only when the gate is confident the message is not a
+# Manhattan-venue request (conservative: avoid over-declining legitimate asks).
+CHAT_SCOPE_OFFTOPIC_THRESHOLD = float(os.getenv("CHAT_SCOPE_OFFTOPIC_THRESHOLD", "0.4"))
+# Decline as harmful at/above this probability.
+CHAT_SCOPE_HARMFUL_THRESHOLD = float(os.getenv("CHAT_SCOPE_HARMFUL_THRESHOLD", "0.5"))
 
 # Guardrail tiers. A fabricated venue (or a severe unsupported detail) replaces
 # the answer with the grounded venue list; milder issues keep the answer and

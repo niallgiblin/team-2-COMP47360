@@ -146,6 +146,34 @@ class TestFormatBusynessContext:
         assert "Busiest zones:" in ctx
         assert "Quietest zones:" in ctx
 
+    def test_named_zones_replace_numeric_ids(self):
+        ctx = format_busyness_context(
+            {"237": 0.65},
+            zone_names={"237": "Upper East Side South"},
+        )
+        assert "Upper East Side South: 0.65 (busy)" in ctx
+        assert "Zone 237" not in ctx
+
+    def test_focus_zone_and_forecast_are_included(self):
+        ctx = format_busyness_context(
+            {"237": 0.65, "100": 0.2},
+            forecast=[
+                {
+                    "LocationID": "237 NET",
+                    "predictions": [
+                        {"timestamp": "2026-09-23T18:00:00-04:00", "busyness": -20.0},
+                        {"timestamp": "2026-09-23T19:00:00-04:00", "busyness": 10.0},
+                    ],
+                }
+            ],
+            zone_names={"237": "Upper East Side South", "100": "Garment District"},
+            focus_zone_ids={"237"},
+        )
+        assert "Requested area:" in ctx
+        assert "Upper East Side South: 0.65 (busy)" in ctx
+        assert "18:00: 0.00 (very quiet)" in ctx
+        assert "19:00: 1.00 (packed)" in ctx
+
 
 # ---------------------------------------------------------------------------
 # format_retrieval_context

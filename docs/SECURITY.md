@@ -53,6 +53,24 @@ openssl rand -base64 32
   network in the production-style topology.
 - The browser-reachable chat route requires the same JWT signing secret as
   Spring.
+
+### AI concierge input policy
+
+- The chat route requires a JWT and is rate limited by Spring before reaching
+  `llm-service`.
+- Before retrieval, `llm-service` runs a Jev **scope cap**
+  (`CHAT_SCOPE_GATE_ENABLED`) that classifies each message as in-catalog,
+  off-topic, unknown-attribute, or harmful. Off-topic and harmful messages get
+  a scoped refusal and never reach retrieval or generation; questions about a
+  named venue's unstored details get an "I don't have that detail" response.
+- A deterministic follow-up rule upgrades a query that names a catalog venue to
+  the unknown-attribute response even if the classifier lands on off-topic.
+- **Limits:** the cap fails open when Jev is unavailable, and it is a
+  scope/relevance control, not a content-moderation system. It does not catch
+  every harmful request, and provider-side model safety remains the backstop.
+- Retrieved context grounds generation and a post-generation faithfulness
+  guardrail (`JEV_GUARDRAIL_ENABLED`) replaces fabricated answers or appends a
+  caveat.
 - Both Flask services use `FLASK_CORS_ALLOWED_ORIGINS`.
 - Production/staging deployments must set explicit origins and must not use
   `*`.

@@ -106,6 +106,8 @@ services:
     build:
       context: ./BackEnd/llm-service
     container_name: urban-gala-llm
+    ports:
+      - "5002:5000"
     expose:
       - "5000"
     # Corpus catalog (read-only), precomputed embeddings, and chat logs
@@ -127,6 +129,12 @@ services:
       # whenever the key is absent or the flag is false.
       - TYPESAFE_API_KEY=${TYPESAFE_API_KEY:-}
       - JEV_ENABLED=${JEV_ENABLED:-false}
+      # Runtime Jev query analysis (gate/location/categories/answerability).
+      # Set false to keep only the guardrail ("option 1").
+      - JEV_QUERY_ANALYSIS_ENABLED=${JEV_QUERY_ANALYSIS_ENABLED:-false}
+      # HF rewrite_query. The branch skips it when a Jev analysis is present;
+      # false also skips it on the regex path (option 1).
+      - HF_QUERY_REWRITE_ENABLED=${HF_QUERY_REWRITE_ENABLED:-false}
       - JEV_MODEL=${JEV_MODEL:-jev-latest}
       - JEV_TIMEOUT_SECONDS=${JEV_TIMEOUT_SECONDS:-8}
       - JEV_CONFIDENCE_THRESHOLD=${JEV_CONFIDENCE_THRESHOLD:-0.5}
@@ -135,6 +143,10 @@ services:
       - JEV_GUARDRAIL_CAVEAT_THRESHOLD=${JEV_GUARDRAIL_CAVEAT_THRESHOLD:-0.5}
       - JEV_ABSTENTION_ENABLED=${JEV_ABSTENTION_ENABLED:-true}
       - JEV_ABSTENTION_THRESHOLD=${JEV_ABSTENTION_THRESHOLD:-0.5}
+      # Pre-retrieval out-of-scope / abuse cap (declines before retrieval).
+      - CHAT_SCOPE_GATE_ENABLED=${CHAT_SCOPE_GATE_ENABLED:-true}
+      - CHAT_SCOPE_OFFTOPIC_THRESHOLD=${CHAT_SCOPE_OFFTOPIC_THRESHOLD:-0.4}
+      - CHAT_SCOPE_HARMFUL_THRESHOLD=${CHAT_SCOPE_HARMFUL_THRESHOLD:-0.5}
       # Jev re-ranking replaces the CPU cross-encoder (kept off by default).
       - JEV_RERANK_ENABLED=${JEV_RERANK_ENABLED:-false}
       - JEV_RERANK_OVERFETCH_MULTIPLIER=${JEV_RERANK_OVERFETCH_MULTIPLIER:-5}
@@ -148,6 +160,9 @@ services:
       - MANIFEST_PATH=/app/corpus/v1/manifest.json
       - PYTHONUNBUFFERED=1
       - BUSYNESS_SERVICE_URL=http://busyness-service:5000
+      # Cold busyness compute is ~6 s; keep this above that or chat reports
+      # "unavailable" until the service cache warms.
+      - BUSYNESS_FETCH_TIMEOUT_SECONDS=${BUSYNESS_FETCH_TIMEOUT_SECONDS:-15}
       - CHAT_LOG_PATH=/app/logs/chat-requests.jsonl
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
     networks:
@@ -184,6 +199,9 @@ services:
       - BUSYNESS_LIVE_CACHE_TTL_SECONDS=${BUSYNESS_LIVE_CACHE_TTL_SECONDS:-1800}
       - BUSYNESS_FORECAST_CACHE_TTL_SECONDS=${BUSYNESS_FORECAST_CACHE_TTL_SECONDS:-1800}
       - BUSYNESS_CACHE_MAX_ENTRIES=${BUSYNESS_CACHE_MAX_ENTRIES:-512}
+      # Keep the ~6 s cold compute out of the request path.
+      - BUSYNESS_WARM_REFRESH_SECONDS=${BUSYNESS_WARM_REFRESH_SECONDS:-900}
+      - BUSYNESS_WARMUP_ENABLED=${BUSYNESS_WARMUP_ENABLED:-true}
       - FLASK_CORS_ALLOWED_ORIGINS=${FLASK_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
     networks:
       - app-network

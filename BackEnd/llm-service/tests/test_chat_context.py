@@ -144,6 +144,19 @@ def test_resolve_search_query_skips_rewrite_with_analysis(monkeypatch):
     assert "midtown" not in out
 
 
+def test_resolve_search_query_skips_rewrite_when_hf_flag_off(monkeypatch):
+    """Option-1 prototype: no analysis and rewrite disabled -> raw + expand."""
+    app_module = _ready_chat_app(monkeypatch)
+    monkeypatch.setattr(app_module, "HF_QUERY_REWRITE_ENABLED", False)
+
+    def _boom(*a, **k):
+        raise AssertionError("rewrite_query must not run when disabled")
+
+    monkeypatch.setattr(app_module, "rewrite_query", _boom)
+    out = app_module._resolve_search_query("jazz bars")
+    assert "jazz" in out
+
+
 def test_resolve_search_query_compose_flag_appends_jev_terms(monkeypatch):
     app_module = _ready_chat_app(monkeypatch)
     import config

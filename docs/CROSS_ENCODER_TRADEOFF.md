@@ -15,6 +15,11 @@ in the standard Docker Compose deploy.
 > sample overstated both the latency and the downside. `CROSS_ENCODER_ENABLED`
 > now defaults to `true` in `docker-compose.yml`. See
 > [Re-measurement (96 questions)](#re-measurement-96-questions).
+>
+> **Update 2026-09-23 — hybrid + reranker fix.** With hybrid retrieval and the
+> micro-zone reranker fix, the cross-encoder costs **+63 ms p50** for
+> **+0.056 Recall@5 / +0.050 NDCG@5 / +7.3 pp hit rate**. See
+> [Hybrid re-measurement](#hybrid-re-measurement-2026-09-23).
 
 ## Re-measurement (96 questions)
 
@@ -43,14 +48,34 @@ Interpretation:
 
 The older 10-question ablation is retained below for provenance.
 
+## Hybrid re-measurement (2026-09-23)
+
+Measured on the same 96-question benchmark with hybrid retrieval (BM25 + FAISS
++ SW-RRF) and the fixes from the `jev` branch: filter-before-rerank, normalized
+fusion on every pass, and canonical `Area:` labels in the reranker text.
+
+| Strategy | p50 | p95 | Recall@5 | NDCG@5 | Hit Rate |
+|---|---|---|---|---|---|
+| none | 25.7 ms | 31.9 ms | 0.4988 | 0.5077 | 0.7292 |
+| **cross-encoder** | **89.1 ms** | **106.6 ms** | **0.5545** | **0.5576** | **0.8021** |
+
+- Hybrid raises the no-rerank baseline from 0.4493 to 0.4988 Recall@5, so the
+  cross-encoder is now the smaller of the two retrieval wins — but still clearly
+  positive, and cheap relative to generation.
+- The reranker zone-text fix is what makes the cross-encoder consistent with
+  RRF for sub-zones (Maya/Tacombi for an Upper East Side Mexican query). Without
+  it the cross-encoder actively down-ranked venues whose corpus zone is
+  `Lenox Hill West` rather than `Upper East Side`.
+- Jev re-ranking remains non-competitive (~754 ms p50 on the same setup).
+
 ## Architecture
 
 ```
-Without cross-encoder (default):
-  BM25 → FAISS(MPNet) → RRF(k=60) → top-K results
+Without cross-encoder:
+  BM25 → FAISS(MPNet) → SW-RRF(k=60) → filter → top-K results
 
-With cross-encoder:
-  BM25 → FAISS(MPNet) → RRF(k=60) → cross-encoder re-rank → top-K results
+With cross-encoder (default in the jev Compose):
+  BM25 → FAISS(MPNet) → SW-RRF(k=60) → filter → cross-encoder re-rank → top-K results
 ```
 
 The cross-encoder scores every candidate document against the query jointly

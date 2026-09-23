@@ -1,5 +1,6 @@
 """Hugging Face chat integration and prompt/context assembly."""
 
+import json
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,10 +17,11 @@ from config import (
     JEV_ABSTENTION_ENABLED,
     JEV_ENABLED,
     JEV_GUARDRAIL_ENABLED,
+    JEV_QUERY_ANALYSIS_ENABLED,
 )
 from dto import create_citation_dto
 from prompt_loader import PromptLoadError, load_prompt_template
-from search_service import _LOCATION_FILTER_GROUPS
+from search_service import location_filter_group_terms
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +109,7 @@ def _load_known_zones():
 
 
 def _expand_zone_filter(zone_name):
-    """Expand a zone name to include sub-zones via ``_LOCATION_FILTER_GROUPS``.
+    """Expand a zone name to include sub-zones via the location filter groups.
 
     Returns a set containing the original zone name plus all sub-zones
     from the filter groups dictionary.  Unknown zones return a set containing
@@ -123,8 +125,7 @@ def _expand_zone_filter(zone_name):
     if not zone_name or not str(zone_name).strip():
         return set()
     normalized = str(zone_name).strip().lower()
-    sub_zones = _LOCATION_FILTER_GROUPS.get(normalized, set())
-    return {normalized} | sub_zones
+    return {normalized} | location_filter_group_terms(normalized)
 
 
 def extract_location_from_query(query):
@@ -191,6 +192,25 @@ UNVERIFIED_CAVEAT = (
 ABSTENTION_MESSAGE = (
     "I couldn't find a good match for that in Manhattan. "
     "Try a different neighborhood, vibe, or type of venue."
+)
+
+# Scoped refusals for the pre-retrieval scope gate. Kept short and on-brand so
+# an out-of-catalog or abusive message never reaches retrieval/generation.
+OUT_OF_SCOPE_MESSAGE = (
+    "I can only help with Manhattan nightlife — bars, clubs, lounges, "
+    "restaurants, cafes, museums, and galleries. Try a neighborhood, vibe, "
+    "or type of venue."
+)
+HARMFUL_SCOPE_MESSAGE = (
+    "I can't help with that. I can help you find Manhattan venues instead."
+)
+# In-catalog venue but a detail the catalog does not store (hours, capacity,
+# phone, dress code, cover charge, social following, schedules). The user asked
+# the right kind of question; we just do not have the datum.
+UNKNOWN_ATTRIBUTE_MESSAGE = (
+    "I don't have that detail about that venue. I can help with what the "
+    "catalog covers — venue type, price, vibe, neighborhood, and current "
+    "busyness. Want a recommendation instead?"
 )
 
 # ---------------------------------------------------------------------------
@@ -293,7 +313,7 @@ def resolve_query_analysis(query, previous_questions=None):
     and location extraction that regex currently approximates. This function
     never raises — any Jev failure degrades to the existing behaviour.
     """
-    if not JEV_ENABLED:
+    if not (JEV_ENABLED and JEV_QUERY_ANALYSIS_ENABLED):
         return None
     try:
         from jev_service import analyze_query
@@ -368,6 +388,88 @@ def resolve_answer_verification(answer, retrieval_context, citations):
         return None
 
 
+_KNOWN_VENUE_NAMES = None
+
+
+def _load_known_venue_names():
+    """Load catalog venue names (lowercased) for the follow-up scope rule."""
+    global _KNOWN_VENUE_NAMES
+    if _KNOWN_VENUE_NAMES is not None:
+        return _KNOWN_VENUE_NAMES
+    try:
+        import pandas as pd
+
+        csv_path = os.getenv("DATA_PATH", DATA_PATH)
+        df = pd.read_csv(csv_path, usecols=["name"])
+        # Names shorter than 5 chars ("Oso", "NR") match too many ordinary
+        # words; require something distinctive.
+        _KNOWN_VENUE_NAMES = {
+            str(n).strip().lower()
+            for n in df["name"].dropna()
+            if len(str(n).strip()) >= 5
+        }
+        logger.info("Loaded %d venue names for scope follow-up", len(_KNOWN_VENUE_NAMES))
+    except Exception as exc:
+        logger.warning("Cannot load venue names for scope follow-up: %s", exc)
+        _KNOWN_VENUE_NAMES = set()
+    return _KNOWN_VENUE_NAMES
+
+
+def _query_mentions_known_venue(query):
+    """True when *query* contains a catalog venue name."""
+    text = str(query or "").lower()
+    if not text:
+        return False
+    return any(name in text for name in _load_known_venue_names())
+
+
+def resolve_scope_decision(query, previous_questions=None):
+    """Classify *query* as in-scope / off-topic / unknown-attribute / harmful.
+
+    Returns a ``ScopeDecision`` or ``None`` (gate disabled, unavailable, or
+    failed). ``None`` means "do not block" — this cap fails open so a Jev
+    outage never takes the chat down.
+
+    Follow-up rule: a question about a *named catalog venue* is in-catalog
+    even when the classifier lands on ``off_topic`` (it is asking for a detail
+    we do not store, not asking about another topic), so it is upgraded to
+    ``decline_unknown_attribute`` and gets the "I don't have that detail"
+    response rather than the generic refusal.
+    """
+    try:
+        from jev_service import classify_scope
+
+        # ``enabled=None`` lets classify_scope honour JEV_ENABLED +
+        # CHAT_SCOPE_GATE_ENABLED and fail open if Jev is down.
+        decision = classify_scope(query, previous_questions=previous_questions)
+        if decision is not None and decision.action == "decline_off_topic":
+            try:
+                if _query_mentions_known_venue(query):
+                    from dataclasses import replace as _replace
+
+                    decision = _replace(decision, action="decline_unknown_attribute")
+                    logger.info(
+                        "Scope follow-up: off_topic -> unknown_attribute "
+                        "(known venue in query)"
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Scope follow-up rule failed: %s", exc)
+        return decision
+    except Exception as exc:  # defensive: never break the chat path
+        logger.debug("Scope gate unavailable: %s", exc)
+        return None
+
+
+def scope_refusal_message(scope):
+    """Return the refusal text for a declining ``ScopeDecision``."""
+    if scope is not None:
+        if scope.action == "decline_harmful":
+            return HARMFUL_SCOPE_MESSAGE
+        if scope.action == "decline_unknown_attribute":
+            return UNKNOWN_ATTRIBUTE_MESSAGE
+    return OUT_OF_SCOPE_MESSAGE
+
+
 def resolve_answerability(query, citations):
     """Decide whether retrieved citations can answer *query* (calibrated).
 
@@ -420,93 +522,200 @@ def _busyness_label(score):
     return "very quiet"
 
 
-def fetch_busyness_predictions(lat=40.7580, lon=-73.9855):
-    """Fetch live busyness predictions from the busyness service.
+_ZONE_NAMES: dict[str, str] | None = None
 
-    Parameters
-    ----------
-    lat : float
-        Latitude for the busyness query (default: Times Square).
-    lon : float
-        Longitude for the busyness query (default: Times Square).
 
-    Returns
-    -------
-    dict | None
-        Predictions dict keyed by zone ID, or ``None`` on failure.
+def _load_zone_names():
+    """Load the LocationID → zone-name map (bundled from manhattanZones.geojson).
+
+    The busyness model emits only numeric LocationIDs (e.g. ``237``), which are
+    meaningless to the LLM. This map restores the neighbourhood names. The file
+    is mounted at ``data/zone_names.json`` in the container.
+    """
+    global _ZONE_NAMES
+    if _ZONE_NAMES is not None:
+        return _ZONE_NAMES
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "zone_names.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            _ZONE_NAMES = {str(k): str(v) for k, v in json.load(fh).items()}
+        logger.info("Loaded %d zone names from %s", len(_ZONE_NAMES), path)
+    except Exception as exc:
+        logger.warning("Could not load zone names from %s: %s", path, exc)
+        _ZONE_NAMES = {}
+    return _ZONE_NAMES
+
+
+def fetch_busyness_report(lat=40.7580, lon=-73.9855):
+    """Fetch the full busyness report (live predictions + hourly forecast).
+
+    Returns the parsed response body (``predictions`` and ``forecast``) or
+    ``None`` on failure. The read timeout must exceed the busyness service's
+    cold-path latency (~6 s to run every DNN+LSTM), otherwise the first request
+    after a cache expiry is discarded as a timeout.
     """
     try:
         url = f"{BUSYNESS_SERVICE_URL}/busyness"
         resp = requests.get(
             url,
             params={"lat": lat, "lon": lon},
-            timeout=BUSYNESS_FETCH_TIMEOUT_SECONDS,
+            timeout=(3, BUSYNESS_FETCH_TIMEOUT_SECONDS),
         )
         resp.raise_for_status()
         body = resp.json()
-        if body.get("success") and body.get("predictions"):
-            return body["predictions"]
-        logger.warning("Busyness service returned success=false or empty predictions")
+        if body.get("success") and (body.get("predictions") or body.get("forecast")):
+            return body
+        logger.warning("Busyness service returned success=false or empty payload")
         return None
     except requests.exceptions.Timeout:
-        logger.warning("Busyness service request timed out after %ds", BUSYNESS_FETCH_TIMEOUT_SECONDS)
+        logger.warning(
+            "Busyness service request timed out after %ds",
+            BUSYNESS_FETCH_TIMEOUT_SECONDS,
+        )
         return None
     except requests.exceptions.ConnectionError:
         logger.warning("Busyness service unavailable at %s", BUSYNESS_SERVICE_URL)
         return None
     except Exception as exc:
-        logger.warning("Failed to fetch busyness predictions: %s", exc)
+        logger.warning("Failed to fetch busyness report: %s", exc)
         return None
 
 
-def format_busyness_context(predictions):
-    """Format raw busyness predictions into a concise text context for the LLM.
+def fetch_busyness_predictions(lat=40.7580, lon=-73.9855):
+    """Fetch live busyness predictions keyed by zone ID, or ``None`` on failure."""
+    report = fetch_busyness_report(lat, lon)
+    return report.get("predictions") if report else None
+
+
+def _forecast_by_zone(forecast):
+    """Group the busyness service forecast into ``{zone_id: [(ts, value), ...]}``."""
+    series: dict[str, list[tuple[str, float]]] = {}
+    for entry in forecast or ():
+        if not isinstance(entry, dict):
+            continue
+        raw_id = entry.get("LocationID")
+        if raw_id is None:
+            continue
+        zone_id = str(raw_id).split()[0]
+        points: list[tuple[str, float]] = []
+        for point in entry.get("predictions") or ():
+            if not isinstance(point, dict) or point.get("busyness") is None:
+                continue
+            try:
+                points.append((str(point.get("timestamp", "")), float(point["busyness"])))
+            except (TypeError, ValueError):
+                continue
+        if points:
+            series[zone_id] = points
+    return series
+
+
+def format_busyness_context(predictions, forecast=None, zone_names=None, focus_zone_ids=None):
+    """Format busyness predictions + forecast into text for the LLM prompt.
 
     Parameters
     ----------
     predictions : dict | None
-        Raw predictions dict (zone_id → score), or ``None``.
+        Live predictions (zone ID → normalized 0–1 score).
+    forecast : list | None
+        Raw forecast entries from the busyness service (per-zone hourly series).
+    zone_names : dict | None
+        LocationID → neighbourhood name. When omitted, zones are labelled
+        ``Zone <id>`` (backward-compatible behaviour).
+    focus_zone_ids : iterable | None
+        Zone IDs for the requested neighbourhood, highlighted first and given a
+        short hourly forecast.
 
     Returns
     -------
     str
-        Formatted busyness context string suitable for the prompt template
-        ``{busyness_context}`` placeholder.
+        Formatted busyness context for the ``{busyness_context}`` placeholder.
     """
     if not predictions:
         return NO_BUSYNESS_MESSAGE
 
+    names = zone_names or {}
+
+    def label(zone_id):
+        return names.get(str(zone_id)) or f"Zone {zone_id}"
+
     parts = [
         "Current Manhattan busyness levels (0.0=empty, 1.0=packed, source: ML forecast):"
     ]
-    # Show all zones sorted by busyness (busiest first) for a quick overview.
-    sorted_zones = sorted(predictions.items(), key=lambda kv: kv[1], reverse=True)
 
-    # Keep it compact: list the top 5 busiest and bottom 3 quietest.
+    def line(indent, zone_id, score):
+        return f"{indent}{label(zone_id)}: {float(score):.2f} ({_busyness_label(float(score))})"
+
+    focus = {str(z) for z in (focus_zone_ids or ())}
+    focus_present = [(z, s) for z, s in predictions.items() if str(z) in focus]
+    if focus_present:
+        parts.append("  Requested area:")
+        for zone_id, score in sorted(focus_present, key=lambda kv: kv[1], reverse=True):
+            parts.append(line("    ", zone_id, score))
+
+    # Keep it compact: list all when small, else the top 5 busiest and bottom 3.
+    sorted_zones = sorted(predictions.items(), key=lambda kv: kv[1], reverse=True)
     if len(sorted_zones) <= 10:
         for zone_id, score in sorted_zones:
-            parts.append(f"  Zone {zone_id}: {score:.2f} ({_busyness_label(score)})")
+            parts.append(line("  ", zone_id, score))
     else:
         parts.append("  Busiest zones:")
         for zone_id, score in sorted_zones[:5]:
-            parts.append(f"    Zone {zone_id}: {score:.2f} ({_busyness_label(score)})")
+            parts.append(line("    ", zone_id, score))
         parts.append("  Quietest zones:")
         for zone_id, score in sorted_zones[-3:]:
-            parts.append(f"    Zone {zone_id}: {score:.2f} ({_busyness_label(score)})")
+            parts.append(line("    ", zone_id, score))
+
+    # Hourly forecast for the requested area (relative to that zone's own day).
+    if focus_present and forecast:
+        series = _forecast_by_zone(forecast)
+        for zone_id, _score in sorted(focus_present, key=lambda kv: kv[1], reverse=True)[:2]:
+            points = series.get(str(zone_id))
+            if not points:
+                continue
+            values = [value for _ts, value in points]
+            lo, hi = min(values), max(values)
+            span = (hi - lo) or 1.0
+            parts.append(
+                f"  {label(zone_id)} next hours "
+                "(relative to its own forecast, 0=quietest, 1=busiest):"
+            )
+            for ts, value in points[:6]:
+                relative = (value - lo) / span
+                hour = ts[11:16] if len(ts) >= 16 else ts
+                parts.append(f"    {hour}: {relative:.2f} ({_busyness_label(relative)})")
 
     return "\n".join(parts)
 
 
-def build_busyness_context():
+def build_busyness_context(location_filter=None):
     """Fetch and format busyness context for RAG prompt injection.
 
-    Returns
-    -------
-    str
-        Formatted busyness context or the no-data fallback message.
+    When *location_filter* names a neighbourhood, that zone is highlighted and
+    its hourly forecast is included.
     """
-    predictions = fetch_busyness_predictions()
-    return format_busyness_context(predictions)
+    report = fetch_busyness_report()
+    if not report:
+        return NO_BUSYNESS_MESSAGE
+
+    names = _load_zone_names()
+    focus_zone_ids: set[str] = set()
+    if location_filter and names:
+        terms = location_filter_group_terms(location_filter)
+        terms.add(str(location_filter).lower().strip())
+        focus_zone_ids = {
+            str(zone_id)
+            for zone_id, name in names.items()
+            if any(term in name.lower() for term in terms if term)
+        }
+
+    return format_busyness_context(
+        report.get("predictions"),
+        forecast=report.get("forecast"),
+        zone_names=names,
+        focus_zone_ids=focus_zone_ids,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -745,7 +954,13 @@ def build_chat_messages(
 
     # ---- Resolve busyness context ------------------------------------------
     if busyness_context is None:
-        busyness_context = build_busyness_context()
+        # Highlight the requested neighbourhood when known. Keep the zero-arg
+        # call when there is no filter so callers/tests can patch it.
+        busyness_context = (
+            build_busyness_context(location_filter=location_filter)
+            if location_filter
+            else build_busyness_context()
+        )
 
     # ---- Load prompt template ------------------------------------------------
     if template is None:
@@ -1063,6 +1278,20 @@ def stream_chat_response(
             })
             return
 
+        # ---- Out-of-scope / abuse cap (optional) --------------------------
+        # Runs before retrieval so off-catalog and abusive messages never reach
+        # the retriever or generator. Fails open (None == do not block).
+        scope = resolve_scope_decision(query, previous_questions)
+        if scope is not None and scope.action != "allow":
+            logger.info("Scope gate declined (%s): %r", scope.action, query[:80])
+            yield _emit("done", {
+                "content": scope_refusal_message(scope),
+                "citations": [],
+                "out_of_scope": True,
+                "scope_action": scope.action,
+            })
+            return
+
         # ---- Venue query: retrieval + streaming generation -----------------
         retrieval_start = _time.perf_counter()
 
@@ -1108,6 +1337,7 @@ def stream_chat_response(
             retrieval_context=retrieval_context,
             search_helper=None,
             busyness_context=busyness_context,
+            location_filter=location_filter,
         )
 
         # Stream tokens from HF.
@@ -1713,6 +1943,20 @@ def get_ai_response_with_metadata(
                 ),
             )
 
+        # ---- Out-of-scope / abuse cap (optional) ------------------------
+        scope = resolve_scope_decision(query, previous_questions)
+        if scope is not None and scope.action != "allow":
+            logger.info("Scope gate declined (%s): %r", scope.action, query[:80])
+            return ChatExecutionResult(
+                scope_refusal_message(scope), [],
+                ChatExecutionMetadata(
+                    mode="out_of_scope", retrieval_started=False, candidates=0,
+                    fallback_triggered=False, retrieval_elapsed_s=0.0,
+                    generation_elapsed_s=0.0,
+                    error_stage=None, error_code=None,
+                ),
+            )
+
         # ---- Venue query: retrieval + generation ------------------------
         retrieval_start = _time.perf_counter()
         retrieval_started = True
@@ -1777,6 +2021,7 @@ def get_ai_response_with_metadata(
             retrieval_context=retrieval_context,
             search_helper=None,
             busyness_context=busyness_context,
+            location_filter=location_filter,
         )
         call = hf_call or huggingface_chat_api_call
         gen_start = _time.perf_counter()

@@ -6,9 +6,6 @@ natural-language “vibe,” inspect predicted busyness, plan routes, save and s
 plans with friends, and ask a retrieval-grounded AI concierge for venue
 recommendations.
 
-For the detailed `main` versus v2 comparison and interview notes, see
-[V2_UPGRADE_ANALYSIS.md](V2_UPGRADE_ANALYSIS.md).
-
 ## Verified capabilities
 
 - Browse a canonical catalog of 2,262 Manhattan venues.
@@ -56,11 +53,15 @@ flowchart LR
     J --> K["citation venue cards"]
 ```
 
-The cross-encoder implementation is optional. Python defaults it on, but the
-checked-in Compose stack sets `CROSS_ENCODER_ENABLED=false`; the normal Compose
-deployment therefore uses hybrid retrieval without cross-encoder re-ranking.
-Interactive testing found that its CPU inference cost added too much retrieval
-and first-token latency for the limited observed benefit. See
+The cross-encoder is enabled (`CROSS_ENCODER_ENABLED=true`): on the 96-question
+benchmark it adds ~63 ms at p50 for +0.056 Recall@5 and +0.050 NDCG@5. The
+`jev` runtime then layers three Jev decisions on top of retrieval: a
+pre-retrieval **scope cap** (declines off-topic and harmful messages before
+retrieval), **calibrated abstention** for out-of-catalog requests, and a
+**faithfulness guardrail** that replaces fabricated answers or appends a caveat.
+Runtime Jev query analysis and Jev re-ranking are disabled. The cross-encoder
+also receives canonical `Area:` labels so sub-zones such as Lenox Hill are
+recognised as the Upper East Side. See [Jev Integration](JEV_INTEGRATION.md) and
 [Cross-Encoder Re-Ranking Trade-off](CROSS_ENCODER_TRADEOFF.md).
 
 The generative LLM runs through the Hugging Face chat-completions API. It is not
@@ -68,31 +69,31 @@ hosted locally by this repository.
 
 ## Evaluation
 
-The offline retrieval harness uses 41 curated questions across five categories
-and computes Recall@5, NDCG@5, MRR, Precision@5, and Hit Rate. The recorded
-improved configuration raised aggregate Recall@5 from 0.2495 to 0.2874 and MRR
-from 0.3182 to 0.3747.
+The offline retrieval harness uses a 96-question benchmark across five
+categories and computes Recall@5, NDCG@5, MRR, Precision@5, and Hit Rate. With
+hybrid retrieval and the `jev` branch fixes, Recall@5 is 0.4988 without
+re-ranking and 0.5545 with the cross-encoder; hit rate is 0.7292 and 0.8021
+respectively.
 
-These results show directional improvement on a small internal benchmark. They
-are not a claim of production relevance quality. See
-[V2_UPGRADE_ANALYSIS.md](V2_UPGRADE_ANALYSIS.md#evaluation) for the full table
-and caveats.
+These results are directional measurements on a small internal benchmark, not a
+claim of production relevance quality. See
+[Jev Integration](JEV_INTEGRATION.md#measurements) for the full tables and
+caveats.
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
-| [v2 Upgrade Analysis](V2_UPGRADE_ANALYSIS.md) | Canonical comparison, limitations, verification results, interview narrative |
 | [Testing](TESTING.md) | Current test inventory and the latest observed results |
 | [Security](SECURITY.md) | Implemented controls, operator responsibilities, and explicit non-capabilities |
 | [Evaluation Strategy](EVALUATION_STRATEGY.md) | Retrieval benchmark, metrics, interpretation, and remaining evaluation work |
-| [Cross-Encoder Trade-off](CROSS_ENCODER_TRADEOFF.md) | Why optional re-ranking is disabled in the standard deployment |
+| [Jev Integration](JEV_INTEGRATION.md) | Jev scope cap, abstention, guardrail, retrieval/busyness fixes, and A/B results |
+| [Jev → v2 Merge Notes](jev-merge-notes.md) | What to carry into `urban-gala-v2`, what to leave behind, and the validation checklist |
+| [Cross-Encoder Trade-off](CROSS_ENCODER_TRADEOFF.md) | Cross-encoder quality/latency measurements and why it is enabled |
 | [Artifact Policy](artifacts.md) | Git LFS ownership, checksums, corpus and model artifacts |
 | [Index Pipeline](index-pipeline.md) | Building and validating FAISS/BM25 indexes |
-| [LLM Runtime](llm-runtime.md) | Gunicorn, memory, index loading, metrics, and operator commands |
-| [Cache Inventory](cache-inventory.md) | JVM, Python, and browser cache ownership |
+| [LLM Runtime](llm-runtime.md) | Gunicorn, memory, index loading, metrics, operator commands, and `jev` vs `urban-gala-v2` sidecar compare |
 | [Contract Fixtures](../BackEnd/contract-fixtures/README.md) | Flask/Spring and chat payload contracts |
-| [Baseline Verification](baseline-verification.md) | Historical v0.1 phase evidence, not current status |
 
 Files under `Organisation/` and `ModelExplain.ipynb` are historical project
 artifacts. Model-directory READMEs are upstream model cards.
@@ -134,11 +135,19 @@ Default host endpoints:
 |----------|---------|
 | Frontend development service | `http://localhost:5173` |
 | Spring API | `http://localhost:8080` |
+| `jev` llm-service (host) | `http://localhost:5002` |
+| `urban-gala-v2` llm-service sidecar | `http://localhost:5001` |
+| option-1 llm-service sidecar (query analysis off, cap on) | `http://localhost:5003` |
 | MySQL host mapping | `localhost:3307` |
 | Production Nginx profile | `http://localhost:80` |
 
-The two Flask work services are internal in the production-style topology. Use
-`docker compose exec` for health probes.
+`llm-service` and `busyness-service` are on the compose network. The `jev`
+service is also published on host port `5002` (macOS Control Center already
+binds `:5000`). Start the v2 sidecar with
+`docker compose -p urban-gala-v2 -f docker-compose.v2-sidecar.yml up -d --build`.
+See [LLM Runtime](llm-runtime.md#side-by-side-compare-jev-vs-urban-gala-v2).
+
+Use `docker compose exec` for in-network health probes.
 
 ```bash
 docker compose exec llm-service curl -f http://localhost:5000/health
@@ -169,9 +178,9 @@ Run the production-style smoke check when Docker is available:
 bash scripts/compose-smoke.sh --teardown
 ```
 
-As of 2026-06-09, frontend and busyness tests pass, while the committed v2 LLM
-and Spring suites still contain failures. Do not claim a fully green test
-suite. Exact results and failure classes are recorded in
+As of 2026-09-23 on the `jev` branch, the LLM pytest suite passes
+(562 passed, 32 skipped) and the busyness suite passes (20 passed, 1 skipped).
+The full inventory and the Spring/frontend results are recorded in
 [TESTING.md](TESTING.md).
 
 ## Operational qualifications

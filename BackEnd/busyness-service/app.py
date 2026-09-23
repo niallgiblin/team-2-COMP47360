@@ -212,6 +212,50 @@ def build_busyness_response(lat, lon, now=None):
         "cached": live_cached and forecast_cached,
     }
 
+
+# --- Cache warmup ---------------------------------------------------------
+# The cold path runs every DNN + the LSTM (~6 s). Without warming, the first
+# caller after a cache expiry pays that latency (the LLM chat fetch used to
+# time out at 5 s and report busyness as unavailable). A daemon thread keeps
+# the default-coordinate cache fresh so both the map and chat hit a warm cache.
+_warmup_started = False
+_WARMUP_LAT = 40.7580
+_WARMUP_LON = -73.9855
+
+
+def _warmup_once():
+    try:
+        started = time.time()
+        build_busyness_response(_WARMUP_LAT, _WARMUP_LON)
+        logger.info("Busyness cache warmed in %.1fs", time.time() - started)
+    except Exception as exc:  # never let warmup crash the service
+        logger.warning("Busyness cache warmup failed: %s", exc)
+
+
+def _warmup_loop(interval_seconds):
+    _warmup_once()
+    while True:
+        time.sleep(interval_seconds)
+        _warmup_once()
+
+
+def _start_warmup_thread():
+    global _warmup_started
+    if _warmup_started:
+        return
+    if os.getenv("BUSYNESS_WARMUP_ENABLED", "true").lower() not in {"1", "true", "yes"}:
+        logger.info("Busyness warmup disabled (BUSYNESS_WARMUP_ENABLED=false)")
+        return
+    interval = max(60, _env_int("BUSYNESS_WARM_REFRESH_SECONDS", 15 * 60))
+    _warmup_started = True
+    threading.Thread(
+        target=_warmup_loop,
+        args=(interval,),
+        daemon=True,
+        name="busyness-warmup",
+    ).start()
+    logger.info("Busyness warmup thread started (refresh=%ss)", interval)
+
 @app.route("/health")
 def health():
     """
@@ -316,6 +360,9 @@ def initialize_service():
     except Exception as e:
         initialization_error = "Initialization error during model loading"
         logger.error("Service initialization failed: %s", e, exc_info=True)
+
+    if initialized:
+        _start_warmup_thread()
 
 # Initialize the service when the module is imported
 if __name__ == "__main__":

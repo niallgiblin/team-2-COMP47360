@@ -21,6 +21,7 @@ from config import (
     CROSS_ENCODER_MODEL_NAME,
     DATA_PATH,
     EMBEDDINGS_PATH,
+    HF_QUERY_REWRITE_ENABLED,
     HYBRID_SEARCH_ENABLED,
     MODEL_PATH,
     QUERY_EXPANSION_ENABLED,
@@ -199,8 +200,10 @@ def _resolve_search_query(query, query_analysis=None):
     skipped: it measurably hurt retrieval (see docs/JEV_INTEGRATION.md) and
     cost ~1 s per query. The analysis still drives the location filter and
     category handling elsewhere. With ``JEV_SEARCH_COMPOSE_ENABLED`` the typed
-    location/price/category terms are appended instead. Without an analysis
-    (Jev disabled) the HF rewrite runs as before. Static ``expand_query``
+    location/price/category terms are appended instead. When there is no
+    analysis, ``HF_QUERY_REWRITE_ENABLED`` decides whether the rewrite runs
+    (default true keeps the legacy behaviour; false is the option-1 prototype,
+    which skips the rewrite even on the regex path). Static ``expand_query``
     always runs last.
     """
     if query_analysis is not None:
@@ -217,11 +220,13 @@ def _resolve_search_query(query, query_analysis=None):
                 search_query = query
     else:
         search_query = query
-        # LLM-based rewriting (handles paraphrases, zone aliases)
-        try:
-            search_query = rewrite_query(query) or query
-        except Exception as exc:
-            logger.debug("Query rewriting failed; using original: %s", exc)
+        if HF_QUERY_REWRITE_ENABLED:
+            # LLM-based rewriting (handles paraphrases, zone aliases). Disabled
+            # by default in the option-1 prototype because it hurt retrieval.
+            try:
+                search_query = rewrite_query(query) or query
+            except Exception as exc:
+                logger.debug("Query rewriting failed; using original: %s", exc)
 
     if QUERY_EXPANSION_ENABLED:
         try:

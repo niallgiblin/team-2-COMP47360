@@ -4,8 +4,6 @@ This document is the durable artifact policy for the current repository. It
 classifies repository artifacts by ownership, delivery mechanism, runtime
 consumer, and path expectations.
 
-For the tiered baseline verification matrix and requirement traceability record, see [baseline-verification.md](baseline-verification.md) (created in Phase 1 plan 01-03).
-
 ## Policy
 
 Urban Gala uses a **hybrid artifact policy**:
