@@ -1187,12 +1187,18 @@ def stream_chat_response(
     busyness_context=None,
     location_filter=None,
     query_analysis=_QUERY_ANALYSIS_UNSET,
+    obs_sink=None,
 ):
     """SSE generator that streams chat tokens and emits final citations.
 
     Follows the same retrieval → generation → post-processing pipeline as
     ``get_ai_response_with_metadata``, but yields SSE-formatted events so
     the frontend can render tokens incrementally.
+
+    When *obs_sink* is provided, the final branch mode is recorded into it
+    (``general_chat`` / ``out_of_scope`` / ``abstention``), plus a
+    ``fallback`` flag. The route uses it to emit an accurate observability
+    event after the stream completes.
 
     SSE event types
     ---------------
@@ -1245,6 +1251,8 @@ def stream_chat_response(
         # ---- General chat: skip retrieval ---------------------------------
         if _is_general_chat(query, analysis):
             logger.info("General chat query detected — streaming: %r", query[:80])
+            if obs_sink is not None:
+                obs_sink["mode"] = "general_chat"
             chat_history = _build_chat_history(previous_questions, previous_responses)
             user_content = f"User question: {query}"
             if chat_history:
@@ -1284,6 +1292,9 @@ def stream_chat_response(
         scope = resolve_scope_decision(query, previous_questions)
         if scope is not None and scope.action != "allow":
             logger.info("Scope gate declined (%s): %r", scope.action, query[:80])
+            if obs_sink is not None:
+                obs_sink["mode"] = "out_of_scope"
+                obs_sink["fallback"] = True
             yield _emit("done", {
                 "content": scope_refusal_message(scope),
                 "citations": [],
@@ -1322,6 +1333,9 @@ def stream_chat_response(
         assessment = resolve_answerability(search_query, citations)
         if assessment is not None and assessment.should_abstain:
             logger.info("Jev abstention (streaming): %s", assessment.as_dict())
+            if obs_sink is not None:
+                obs_sink["mode"] = "abstention"
+                obs_sink["candidates"] = len(citations)
             yield _emit("done", {
                 "content": ABSTENTION_MESSAGE,
                 "citations": [],
@@ -1388,6 +1402,8 @@ def stream_chat_response(
                 "Jev guardrail (replace): %s",
                 verification.as_dict(),
             )
+            if obs_sink is not None:
+                obs_sink["fallback"] = True
             fallback_text = build_retrieval_fallback_response(
                 retrieval_context, citations, intro=GROUNDED_FALLBACK_INTRO,
             )

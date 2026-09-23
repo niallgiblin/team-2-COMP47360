@@ -215,6 +215,52 @@ class TestStreamChatJevWiring:
         assert calls == [], "out-of-scope request must not reach retrieval"
         assert chat_service.OUT_OF_SCOPE_MESSAGE in events[-1]
 
+    def test_scope_decline_records_out_of_scope_mode(self, monkeypatch):
+        import chat_service
+        from jev_service import ScopeDecision
+
+        monkeypatch.setattr(
+            chat_service, "resolve_query_analysis", lambda query, prev=None: None
+        )
+        monkeypatch.setattr(
+            chat_service, "resolve_scope_decision",
+            lambda query, prev=None: ScopeDecision(
+                action="decline_off_topic", in_scope_probability=0.05,
+            ),
+        )
+        sink = {}
+        list(chat_service.stream_chat_response(
+            query="emergency plumbers in Brooklyn",
+            previous_questions=[], previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+            obs_sink=sink,
+        ))
+        assert sink["mode"] == "out_of_scope"
+        assert sink["fallback"] is True
+
+    def test_abstention_records_abstention_mode(self, monkeypatch):
+        import chat_service
+        from jev_service import AnswerabilityAssessment
+
+        monkeypatch.setattr(
+            chat_service, "resolve_query_analysis", lambda query, prev=None: None
+        )
+        monkeypatch.setattr(chat_service, "resolve_scope_decision", lambda query, prev=None: None)
+        monkeypatch.setattr(
+            chat_service, "resolve_answerability",
+            lambda query, citations: AnswerabilityAssessment(should_abstain=True),
+        )
+        sink = {}
+        list(chat_service.stream_chat_response(
+            query="best pizza in Chicago deep dish",
+            previous_questions=[], previous_responses=[],
+            search_helper=_fake_search_recorder([]),
+            busyness_context="Live busyness: unavailable",
+            obs_sink=sink,
+        ))
+        assert sink["mode"] == "abstention"
+
     def test_scope_gate_unknown_attribute_uses_dont_have_message(self, monkeypatch):
         import chat_service
         from jev_service import ScopeDecision
