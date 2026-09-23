@@ -246,6 +246,31 @@ gap is the abstention message, which scores a fixed ~0.16 relevancy — the judg
 has no "should have abstained" dimension, so this is a helpfulness result, not
 a safety result. Abstention is therefore kept for out-of-catalog requests.
 
+### RAGAS — v2 release pass, 96 questions
+
+`scripts/eval_ragas.py --jev` with the option-1 runtime and the Jev judge:
+96/96 scored, **0 judge failures**.
+
+| metric | value |
+|---|---|
+| faithfulness | 0.4069 |
+| answer_relevancy | 0.7225 |
+| context_precision | 0.6852 |
+
+By category (faithfulness / relevancy / context precision):
+
+| category | n | faithfulness | relevancy | context precision |
+|---|---|---|---|---|
+| retrieval | 22 | 0.3082 | 0.8077 | 0.8001 |
+| filtered | 20 | 0.2809 | 0.8076 | 0.7712 |
+| conversational | 18 | 0.3051 | 0.7975 | 0.7962 |
+| adversarial | 18 | 0.7693 | 0.4486 | 0.3382 |
+| abstention | 18 | 0.4144 | 0.1460 | 0.2537 |
+
+Guardrail actions: 26 triggered (3 replace, 23 caveat). The abstention category
+is low on relevancy because scoped refusals do not "answer" the question — the
+intended safety behaviour, not a regression. Report: `reports/ragas-v2.json`.
+
 ## Running the harnesses
 
 ```bash
