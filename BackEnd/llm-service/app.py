@@ -1,5 +1,6 @@
 import logging
 import base64
+import json
 import os
 import sys
 import threading
@@ -293,11 +294,17 @@ def _get_ai_response_with_metadata(query, previous_questions, previous_responses
     )
 
 
-def _chat_search_helper_with_metadata(query, limit=5, location_filter=None, query_analysis=None):
+def _chat_search_helper_with_metadata(
+    query, limit=5, location_filter=None, query_analysis=None, mode_sink=None,
+):
     """Search helper returning list of location dicts.
 
     Wraps search_with_metadata() but unwraps the SearchExecutionResult
     to return a plain list — build_retrieval_context() expects iterable results.
+
+    When *mode_sink* is provided it is updated with the effective retrieval
+    mode and candidate count so the route can record an accurate observability
+    event for streamed responses.
     """
     if not initialized or search_service is None:
         return []
@@ -307,6 +314,10 @@ def _chat_search_helper_with_metadata(query, limit=5, location_filter=None, quer
         result = search_service.search_with_metadata(
             search_query, limit=limit, location_filter=location_filter
         )
+        if mode_sink is not None:
+            mode_sink["mode"] = result.effective_mode
+            mode_sink["candidates"] = len(result.results)
+            mode_sink["degradation"] = result.degradation
         return result.results
     except Exception as exc:
         logger.error("Error in chat search helper: %s", exc)
@@ -797,13 +808,18 @@ def chat_stream_endpoint():
         if not location_filter:
             location_filter = extract_location_from_query(query)
 
-        # Build the SSE generator.
+        # Build the SSE generator. The retrieval mode is recorded by the search
+        # helper; the generator overrides it for general-chat / scope-decline /
+        # abstention branches. The observability event is finalized only after
+        # the stream completes so the recorded mode is accurate.
         from chat_service import stream_chat_response
+
+        stream_obs = {"mode": "unknown", "candidates": 0, "fallback": False}
 
         def _stream_search_helper(q, limit=5, location_filter=None):
             return _chat_search_helper_with_metadata(
                 q, limit=limit, location_filter=location_filter,
-                query_analysis=analysis,
+                query_analysis=analysis, mode_sink=stream_obs,
             )
 
         generator = stream_chat_response(
@@ -813,19 +829,35 @@ def chat_stream_endpoint():
             search_helper=_stream_search_helper,
             location_filter=location_filter,
             query_analysis=analysis,
+            obs_sink=stream_obs,
         )
 
-        state.mode = "dense"
-        state.status = "success"
-        state.retrieval_started = True
-        state.finish_after_response_construction()
-        finalize_chat_request(state, queue_sink=_queue_event)
+        def _instrumented_stream():
+            done_payload = {}
+            try:
+                for chunk in generator:
+                    if chunk.startswith("event: done"):
+                        try:
+                            data_line = chunk.split("data: ", 1)[1].split("\n", 1)[0]
+                            done_payload = json.loads(data_line)
+                        except Exception:
+                            done_payload = {}
+                    yield chunk
+            finally:
+                state.mode = stream_obs.get("mode") or "unknown"
+                state.status = "success"
+                state.retrieval_started = state.mode not in ("general_chat", "out_of_scope")
+                state.candidates = stream_obs.get("candidates", 0)
+                state.citations_count = len(done_payload.get("citations") or [])
+                state.fallback_triggered = bool(stream_obs.get("fallback"))
+                state.finish_after_response_construction()
+                finalize_chat_request(state, queue_sink=_queue_event)
 
         from flask import Response
         from flask import stream_with_context
 
         response = Response(
-            stream_with_context(generator),
+            stream_with_context(_instrumented_stream()),
             mimetype="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
