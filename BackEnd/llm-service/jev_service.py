@@ -767,12 +767,15 @@ def build_answerability_questions() -> dict[str, dict]:
     return {
         "answerable": noul(
             "Can the candidate venues in `candidates` plausibly satisfy "
-            "`query` in terms of venue type, vibe, and location? Answer "
-            "false when the request targets a different city or borough, a "
-            "non-venue service this app does not cover, or event listings "
-            "rather than a specific venue.",
+            "`query` in terms of venue type, vibe, and location? Also answer "
+            "true for questions about how busy, crowded, or lively a "
+            "Manhattan neighbourhood is: the assistant has live busyness "
+            "data for Manhattan zones, and the candidates establish the area. "
+            "Answer false when the request targets a different city or "
+            "borough, a non-venue service this app does not cover, or event "
+            "listings rather than a specific venue.",
             criteria={
-                "true": "A candidate plausibly fits the request",
+                "true": "A candidate plausibly fits, or the query asks how busy a covered area is",
                 "false": "No candidate fits or the request is out of scope",
             },
         ),
