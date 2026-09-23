@@ -10,10 +10,3 @@ scrape_configs:
       - targets: ["llm-service:5000"]
     scrape_interval: 15s
     scrape_timeout: 10s
-
-  - job_name: "llm-service-v2"
-    metrics_path: "/metrics"
-    static_configs:
-      - targets: ["urban-gala-llm-v2:5000"]
-    scrape_interval: 15s
-    scrape_timeout: 10s

@@ -82,11 +82,10 @@ regressions dormant. No code has to be excluded.
 - **Jev search composition** (`JEV_SEARCH_COMPOSE_ENABLED=true`).
 - The old **rerank-then-filter** order and the **unnormalized hybrid expansion**
   — these are replaced by the fixes, so nothing to do beyond merging.
-- Local sidecar files (`docker-compose.v2-sidecar.yml`,
-  `docker-compose.option1-sidecar.yml`, the `docs/llm-runtime.md` sidecar
-  section, `config/prometheus/prometheus.yml` scrape jobs) are development
-  scaffolding; carry only if the side-by-side comparison should remain
-  reproducible.
+- The local side-by-side comparison scaffolding (`docker-compose.v2-sidecar.yml`,
+  `docker-compose.option1-sidecar.yml`, the `llm-service-v2` Prometheus job)
+  has been **removed from `urban-gala-v2`**. It remains available in the `jev`
+  checkout for local comparison but is not part of the release branch.
 
 ## Merge procedure
 
@@ -121,9 +120,8 @@ docker compose up -d --build llm-service busyness-service
 
 **Conflict hotspots** (both branches touched): `chat_service.py`,
 `search_service.py`, `app.py`, `config.py`, `docker-compose.yml`,
-`docs/llm-runtime.md`, `docs/README.md`, tests. `docker-compose.yml` and
-`llm-runtime.md` were also edited locally for the side-by-side setup — resolve
-by hand, keeping the sidecar blocks and the new env passthroughs.
+`docs/llm-runtime.md`, `docs/README.md`, tests. Resolve by hand, keeping the
+new env passthroughs.
 
 ## Validation checklist
 

@@ -92,7 +92,7 @@ caveats.
 | [Cross-Encoder Trade-off](CROSS_ENCODER_TRADEOFF.md) | Cross-encoder quality/latency measurements and why it is enabled |
 | [Artifact Policy](artifacts.md) | Git LFS ownership, checksums, corpus and model artifacts |
 | [Index Pipeline](index-pipeline.md) | Building and validating FAISS/BM25 indexes |
-| [LLM Runtime](llm-runtime.md) | Gunicorn, memory, index loading, metrics, operator commands, and `jev` vs `urban-gala-v2` sidecar compare |
+| [LLM Runtime](llm-runtime.md) | Gunicorn, memory, index loading, metrics, and operator commands |
 | [Contract Fixtures](../BackEnd/contract-fixtures/README.md) | Flask/Spring and chat payload contracts |
 
 Files under `Organisation/` and `ModelExplain.ipynb` are historical project
@@ -135,19 +135,11 @@ Default host endpoints:
 |----------|---------|
 | Frontend development service | `http://localhost:5173` |
 | Spring API | `http://localhost:8080` |
-| `jev` llm-service (host) | `http://localhost:5002` |
-| `urban-gala-v2` llm-service sidecar | `http://localhost:5001` |
-| option-1 llm-service sidecar (query analysis off, cap on) | `http://localhost:5003` |
 | MySQL host mapping | `localhost:3307` |
 | Production Nginx profile | `http://localhost:80` |
 
-`llm-service` and `busyness-service` are on the compose network. The `jev`
-service is also published on host port `5002` (macOS Control Center already
-binds `:5000`). Start the v2 sidecar with
-`docker compose -p urban-gala-v2 -f docker-compose.v2-sidecar.yml up -d --build`.
-See [LLM Runtime](llm-runtime.md#side-by-side-compare-jev-vs-urban-gala-v2).
-
-Use `docker compose exec` for in-network health probes.
+`llm-service` and `busyness-service` are on the compose network. Use
+`docker compose exec` for in-network health probes.
 
 ```bash
 docker compose exec llm-service curl -f http://localhost:5000/health
