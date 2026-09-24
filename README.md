@@ -1,3 +1,7 @@
+Demo video of chatbot using LLM and Jev combination:
+
+https://github.com/user-attachments/assets/1e8ee742-8aa2-4d57-b660-cb75993a7c68
+
 # Urban Gala
 
 Urban Gala is a Manhattan venue-discovery and itinerary application built with
