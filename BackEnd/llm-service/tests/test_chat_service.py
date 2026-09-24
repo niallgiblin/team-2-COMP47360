@@ -809,6 +809,38 @@ class TestGetAiResponse:
         assert reply == "no matching venues found"
         assert citations == []
 
+    def test_no_match_reply_drops_retrieved_citations(self, monkeypatch):
+        """An out-of-catalog refusal must not keep the venues search returned."""
+        monkeypatch.setenv("HF_TOKEN", "test-token")
+
+        def fake_search(query, limit=5, location_filter=None):
+            return [
+                create_location_dto(
+                    {"id": 1, "name": "Slate", "zone": "Union Sq",
+                     "type": "Restaurant", "address": "54 W 21st St",
+                     "latitude": 40.74, "longitude": -73.99,
+                     "price": "", "rating": 4.5, "zoneId": 1},
+                    similarity_score=0.4,
+                )
+            ]
+
+        def fake_hf(messages, model=None, requests_module=None, **kwargs):
+            if kwargs.get("max_tokens") == 100:
+                last_msg = messages[-1]["content"]
+                return {"choices": [{"message": {"content": last_msg.split(": ", 1)[-1]}}]}
+            return {"choices": [{"message": {"content": "No matching venues found."}}]}
+
+        reply, citations = get_ai_response(
+            query="best restaurants in Los Angeles",
+            previous_questions=[],
+            search_helper=fake_search,
+            hf_call=fake_hf,
+            busyness_context=_STUB_BUSYNESS,
+        )
+
+        assert reply == "no matching venues found"
+        assert citations == []
+
     def test_main_hf_failure_returns_retrieval_fallback_with_citations(self, monkeypatch):
         """When retrieval succeeds but the main HF call fails, return venue cards."""
         monkeypatch.setenv("HF_TOKEN", "test-token")

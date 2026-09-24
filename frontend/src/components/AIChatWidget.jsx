@@ -197,8 +197,15 @@ const isCitationVenueNamed = (text = '', citation = {}) => {
   return matchedCount / significantTokens.length > 0.5;
 };
 
+const NO_VENUES_REPLY = 'no matching venues found';
+
+const replyDeclinesVenues = (text = '') => {
+  const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ').replace(/\.+$/, '');
+  return normalized === NO_VENUES_REPLY;
+};
+
 const getDisplayCitations = (text = '', citations = []) => {
-  if (!citations.length) return [];
+  if (!citations.length || replyDeclinesVenues(stripSourcesBlock(text))) return [];
 
   const referencedIndexes = getReferencedCitationIndexes(stripSourcesBlock(text), citations.length);
   const namedIndexes = citations

@@ -173,6 +173,20 @@ CHAT_RESPONSE_ERROR_MESSAGE = (
 NO_VENUES_MESSAGE = "no matching venues found"
 NO_BUSYNESS_MESSAGE = "Live busyness data is not available at the moment."
 
+
+def reply_declines_venues(text):
+    """True when the model refused to recommend venues.
+
+    The prompt tells the model to answer with exactly ``NO_VENUES_MESSAGE``
+    when nothing in the catalog fits (for example a city outside Manhattan).
+    Retrieval may still have returned unrelated venues; those must not be
+    shown as cards under a no-match reply.
+    """
+    if not text:
+        return False
+    normalized = " ".join(str(text).strip().lower().split()).rstrip(".")
+    return normalized == NO_VENUES_MESSAGE
+
 # Lead-in for the deterministic fallback used when the guardrail rejects an
 # ungrounded generated answer (distinct from the model-unavailable wording).
 GROUNDED_FALLBACK_INTRO = (
@@ -1390,6 +1404,16 @@ def stream_chat_response(
             generation_elapsed * 1000, len(full_text),
         )
 
+        # A no-match reply must not carry the venues retrieval happened to
+        # find. Those cards are a different city or a different request.
+        if reply_declines_venues(full_text):
+            logger.info("Model declined venues; omitting retrieved citations")
+            yield _emit("done", {
+                "content": NO_VENUES_MESSAGE,
+                "citations": [],
+            })
+            return
+
         # ---- Faithfulness guardrail (optional) --------------------------
         # The frontend replaces the streamed text with done.content, so a
         # replacement or caveat can be applied to the final content.
@@ -2076,6 +2100,20 @@ def get_ai_response_with_metadata(
                 )
         generation_elapsed = _time.perf_counter() - gen_start
         response_text = response["choices"][0]["message"]["content"]
+
+        # A no-match reply must not carry the venues retrieval happened to
+        # find. Those cards are a different city or a different request.
+        if reply_declines_venues(response_text):
+            logger.info("Model declined venues; omitting retrieved citations")
+            return ChatExecutionResult(
+                NO_VENUES_MESSAGE, [],
+                ChatExecutionMetadata(
+                    mode=mode, retrieval_started=True, candidates=candidates,
+                    fallback_triggered=False, retrieval_elapsed_s=retrieval_elapsed,
+                    generation_elapsed_s=generation_elapsed,
+                    error_stage=None, error_code=None,
+                ),
+            )
 
         # ---- Faithfulness guardrail (optional) --------------------------
         verification = resolve_answer_verification(

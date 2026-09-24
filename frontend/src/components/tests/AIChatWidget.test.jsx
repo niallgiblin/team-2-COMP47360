@@ -601,6 +601,29 @@ describe('AIChatWidget', () => {
     expect(screen.getByRole('button', { name: /add the comic strip to plan and view on map/i })).toBeInTheDocument();
   });
 
+  test('hides venue cards when the reply is a no-match refusal', async () => {
+    const user = userEvent.setup();
+    mockChatAPI.sendMessage.mockResolvedValue({
+      response: 'no matching venues found',
+      citations: [
+        { venue_id: 1, name: 'Slate', zone: 'Union Sq', rating: 4.5, address: '54 W 21st St' },
+        { venue_id: 2, name: 'Please Dont Tell', zone: 'East Village', rating: 4.6, address: '113 St Marks Pl' },
+      ],
+    });
+
+    renderWithProviders(<AIChatWidget />);
+
+    await user.click(screen.getByRole('button', { name: 'Open AI Concierge' }));
+    await user.type(screen.getByPlaceholderText('Type a message...'), 'best restaurants in Los Angeles');
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('no matching venues found')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /add slate to plan/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add please dont tell to plan/i })).not.toBeInTheDocument();
+  });
+
   test('shows returned venue links when response uses generic venue wording', async () => {
     const user = userEvent.setup();
     const citations = [
