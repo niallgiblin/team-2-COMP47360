@@ -44,56 +44,49 @@ flowchart LR
     B --> C["768-dimension<br/>MPNet-family encoder"]
     C --> D["FAISS IndexFlatIP"]
     B --> E["BM25"]
-    D --> F["RRF fusion, k=60"]
+    D --> F["score-weighted RRF, k=60"]
     E --> F
-    F --> G["optional cross-encoder"]
+    F --> G["cross-encoder re-rank"]
     G --> H["prompt + bounded history"]
     H --> I["Hugging Face chat model"]
     I --> J["text + structured citations"]
     J --> K["citation venue cards"]
 ```
 
-The cross-encoder is enabled (`CROSS_ENCODER_ENABLED=true`): on the 96-question
-benchmark it adds ~63 ms at p50 for +0.056 Recall@5 and +0.050 NDCG@5. The
-`jev` runtime then layers three Jev decisions on top of retrieval: a
-pre-retrieval **scope cap** (declines off-topic and harmful messages before
-retrieval), **calibrated abstention** for out-of-catalog requests, and a
-**faithfulness guardrail** that replaces fabricated answers or appends a caveat.
-Runtime Jev query analysis and Jev re-ranking are disabled. The cross-encoder
-also receives canonical `Area:` labels so sub-zones such as Lenox Hill are
-recognised as the Upper East Side. See [Jev Integration](JEV_INTEGRATION.md) and
-[Cross-Encoder Re-Ranking Trade-off](CROSS_ENCODER_TRADEOFF.md).
+The cross-encoder is enabled in Compose (`CROSS_ENCODER_ENABLED=true`). Jev
+re-ranking is off. On the committed 96-question rerank reports, hybrid
+retrieval with no reranker is Recall@5 0.4493 at a median of 22.5 ms, and the
+cross-encoder is 0.4899 at 57.8 ms. Jev re-ranking scored 0.4889 at a median
+of 888 ms, which is why it stays off the request path. Re-ranking text also
+gets canonical `Area:` labels, so a micro-zone such as Lenox Hill is visible
+to the cross-encoder as the Upper East Side.
+
+With `JEV_ENABLED=true` and query analysis left off, three Jev decisions still
+run: a pre-retrieval scope cap, calibrated abstention, and a tiered
+faithfulness guardrail. Each one fails open if TypeSafe is unavailable.
 
 The generative LLM runs through the Hugging Face chat-completions API. It is not
 hosted locally by this repository.
 
 ## Evaluation
 
-The offline retrieval harness uses a 96-question benchmark across five
-categories and computes Recall@5, NDCG@5, MRR, Precision@5, and Hit Rate. With
-hybrid retrieval and the `jev` branch fixes, Recall@5 is 0.4988 without
-re-ranking and 0.5545 with the cross-encoder; hit rate is 0.7292 and 0.8021
-respectively.
+The offline harness uses a 96-question benchmark across five categories and
+computes Recall@5, NDCG@5, MRR, Precision@5, and Hit Rate. A Jev judge then
+scores faithfulness, answer relevancy, and context precision. The release pass
+in `BackEnd/llm-service/reports/ragas-v2.json` scored 96/96 questions with 0
+judge failures: faithfulness 0.4069, answer relevancy 0.7225, context precision
+0.6852.
 
 These results are directional measurements on a small internal benchmark, not a
-claim of production relevance quality. See
-[Jev Integration](JEV_INTEGRATION.md#measurements) for the full tables and
-caveats.
+claim of production relevance quality. The score files live under
+`BackEnd/llm-service/reports/`.
 
 ## Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [Testing](TESTING.md) | Current test inventory and the latest observed results |
-| [Security](SECURITY.md) | Implemented controls, operator responsibilities, and explicit non-capabilities |
-| [Evaluation Strategy](EVALUATION_STRATEGY.md) | Retrieval benchmark, metrics, interpretation, and remaining evaluation work |
-| [Jev Integration](JEV_INTEGRATION.md) | Jev scope cap, abstention, guardrail, retrieval/busyness fixes, and A/B results |
-| [Jev → v2 Merge Notes](jev-merge-notes.md) | What to carry into `urban-gala-v2`, what to leave behind, and the validation checklist |
-| [Cross-Encoder Trade-off](CROSS_ENCODER_TRADEOFF.md) | Cross-encoder quality/latency measurements and why it is enabled |
-| [Artifact Policy](artifacts.md) | Git LFS ownership, checksums, corpus and model artifacts |
-| [Index Pipeline](index-pipeline.md) | Building and validating FAISS/BM25 indexes |
-| [LLM Runtime](llm-runtime.md) | Gunicorn, memory, index loading, metrics, and operator commands |
-| [Contract Fixtures](../BackEnd/contract-fixtures/README.md) | Flask/Spring and chat payload contracts |
+Long-form design notes are not tracked. Local notes, including the demo
+script, can live in `.docs/` (gitignored). Contract fixtures remain at
+`BackEnd/contract-fixtures/README.md`. Evaluation artifacts are under
+`BackEnd/llm-service/reports/`.
 
 Files under `Organisation/` and `ModelExplain.ipynb` are historical project
 artifacts. Model-directory READMEs are upstream model cards.
@@ -117,7 +110,7 @@ VITE_GOOGLE_API_KEY
 ```
 
 The browser-visible Google key must be restricted by HTTP referrer and API in
-Google Cloud Console. See [SECURITY.md](SECURITY.md).
+Google Cloud Console.
 
 ## Start the stack
 
@@ -172,8 +165,6 @@ bash scripts/compose-smoke.sh --teardown
 
 As of 2026-09-23 on the `jev` branch, the LLM pytest suite passes
 (562 passed, 32 skipped) and the busyness suite passes (20 passed, 1 skipped).
-The full inventory and the Spring/frontend results are recorded in
-[TESTING.md](TESTING.md).
 
 ## Operational qualifications
 
